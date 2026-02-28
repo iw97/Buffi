@@ -1,0 +1,10 @@
+---
+description: Use Firestore for persistence; do not use localStorage for data that must persist
+alwaysApply: true
+---
+
+# Persistence
+
+- **Do not use `localStorage` or `sessionStorage`** for anything that needs to persist (user data, preferences, saves, onboarding state, etc.).
+- **Use Firestore** for all persistent data. Firebase/Firestore client and helpers live under `src/lib/firebase/` (e.g. `firestore.ts`).
+- Use Firestore security rules (`firestore.rules`) and server/client separation as already set up in the project.

@@ -3,9 +3,11 @@
 @tailwind utilities;
 
 /* ---------------------------------------------------------------------------
-   Recit design tokens — CSS custom properties (not in Tailwind config).
-   Font families are assigned in layout.tsx via next/font and exposed as
-   --font-cormorant, --font-sans, --font-mono on the html element.
+   Recit design tokens — CSS custom properties (in globals.css only, not Tailwind).
+   Fonts: layout.tsx loads Google Fonts via next/font and sets on <html>:
+   --font-cormorant (Cormorant Garamond): headings, wordmark, verdicts (300, 400, 600, 700 + italic)
+   --font-mono (DM Mono): data labels, eyebrows, monospaced values (300, 400, 500)
+   --font-sans (DM Sans): body, buttons, UI text (300, 400, 500, 600)
    --------------------------------------------------------------------------- */
 :root {
   /* Backgrounds */
@@ -18,7 +20,7 @@
   --border-light: #2c2c28;
 
   /* Text */
-  --text-primary: #f2e8cc;
+  --text-primary: #f2e8cc;   /* Primary (ivory) */
   --ivory: #f2e8cc;
   --ivory-dim: #c4b88a;
   --text-secondary: #a89e86;
@@ -28,7 +30,7 @@
   /* Accent (teal) */
   --teal: #52d9d0;
   --teal-dim: #35aaa3;
-  --teal-glow: rgba(82, 217, 208, 0.1);
+  --teal-glow: rgba(82, 217, 208, 0.10);
 
   /* Status */
   --red: #e8604a;
@@ -52,7 +54,7 @@ body {
   min-height: 100%;
 }
 
-/* Mobile-first: single column, max 430px centered on desktop */
+/* Mobile-first: single column, max-width 430px centered on desktop */
 .app-shell {
   width: 100%;
   max-width: 430px;

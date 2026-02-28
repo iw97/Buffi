@@ -5,7 +5,7 @@ Recit — Next.js 14 (App Router) + Tailwind CSS + Firebase (Auth + Firestore).
 ## Getting started
 
 ```bash
-cd jiria
+cd recit
 npm install
 cp .env.example .env.local
 # Edit .env.local with your Firebase project config (see below)
