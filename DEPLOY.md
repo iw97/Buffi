@@ -1,6 +1,6 @@
-# Recit — Run & Deploy
+# Cyni — Run & Deploy
 
-How to run Recit locally and deploy to Vercel. No Jiria references; this doc is for the Recit app only.
+How to run Cyni locally and deploy to Vercel. No Jiria references; this doc is for the Cyni app only.
 
 ---
 
@@ -8,7 +8,7 @@ How to run Recit locally and deploy to Vercel. No Jiria references; this doc is 
 
 1. **Go to the project folder**
    ```bash
-   cd recit
+   cd cyni
    ```
    (If your folder is named something else, use that name.)
 
@@ -40,11 +40,11 @@ How to run Recit locally and deploy to Vercel. No Jiria references; this doc is 
 
 ## Deploy to Vercel
 
-1. **Push Recit to a Git repo** (GitHub, GitLab, or Bitbucket) if you haven’t already.
+1. **Push Cyni to a Git repo** (GitHub, GitLab, or Bitbucket) if you haven’t already.
 
 2. **Import in Vercel**
    - Go to [vercel.com](https://vercel.com) and sign in.
-   - **Add New** → **Project** and import your Recit repo.
+   - **Add New** → **Project** and import your Cyni repo.
    - Framework: **Next.js** (auto-detected). Root directory: leave as repo root (or set to the folder that contains `package.json` if the repo is a monorepo).
 
 3. **Environment variables**

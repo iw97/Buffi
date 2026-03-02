@@ -3,27 +3,50 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
+import { useScanResult } from "@/contexts/ScanResultContext";
 import { addSavedItem, removeSavedItem, setUserProfile } from "@/lib/firebase/firestore";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
+import type { ScanAnalysis } from "@/lib/scan/types";
 
 type InfoId = "material" | "cpw" | "markup";
 
-/** Current scan payload (matches SavedItem shape for this screen) */
-const CURRENT_SCAN = {
-  brand: "Zara · W/2024",
-  name: "Flowy Satin-Finish Blouse",
-  retailPrice: 89,
-  verdict: "trap" as const,
-  tags: [
-    { label: "Retail Trap", type: "trap" as const },
-    { label: "100% Plastic", type: "trap" as const }
-  ],
-  emoji: "👚"
-};
+const SYNTHETIC_FIBERS = ["polyester", "nylon", "elastane", "spandex", "acrylic", "viscose", "rayon", "polyamide"];
+
+function fiberKind(fiber: string): "plastic" | "natural" {
+  const lower = fiber.toLowerCase();
+  return SYNTHETIC_FIBERS.some((s) => lower.includes(s)) ? "plastic" : "natural";
+}
+
+function badgeForKind(kind: "plastic" | "natural"): string {
+  return kind === "plastic" ? "Plastic" : "Natural";
+}
+
+function analysisToSavedItem(a: ScanAnalysis) {
+  const verdictType = a.verdict === "Retail Trap" ? ("trap" as const) : ("win" as const);
+  const tags = a.tags.map((label) => ({
+    label,
+    type: label.toLowerCase().includes("trap") || label.toLowerCase().includes("plastic") || label.toLowerCase().includes("markup") ? ("trap" as const) : ("win" as const)
+  }));
+  return {
+    brand: a.brand,
+    name: a.name,
+    retailPrice: a.price,
+    verdict: verdictType,
+    tags,
+    emoji: "👚"
+  };
+}
 
 export function BreakdownScreen() {
   const router = useRouter();
   const auth = useAuthOptional();
+  const { result } = useScanResult();
+
+  useEffect(() => {
+    if (!result) router.replace("/scan");
+  }, [result, router]);
+
+  const scan = result ? analysisToSavedItem(result) : null;
   const [infoOpen, setInfoOpen] = useState<InfoId | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [premiumOpen, setPremiumOpen] = useState(false);
@@ -37,9 +60,9 @@ export function BreakdownScreen() {
   const isSaved = !!savedItemId;
   const [toast, setToast] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const isPro = false; // TODO: from profile or subscription
+  const [isPro, setIsPro] = useState(false); // TODO: from profile or subscription
 
-  const score = 25;
+  const score = 25; // TODO: derive from analysis
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -67,10 +90,10 @@ export function BreakdownScreen() {
   }
 
   async function doSave() {
-    if (!user || !isFirebaseConfigured()) return;
+    if (!user || !isFirebaseConfigured() || !scan) return;
     setSaveError(null);
     try {
-      const id = await addSavedItem(user.uid, CURRENT_SCAN);
+      const id = await addSavedItem(user.uid, scan);
       setSavedItemId(id);
       showToast();
       await setUserProfile(user.uid, { savedCount: (auth?.profile?.savedCount ?? 0) + 1 });
@@ -141,6 +164,14 @@ export function BreakdownScreen() {
     }
   }
 
+  if (!scan) return null;
+
+  const syntheticPct = result
+    ? result.materials
+        .filter((m) => fiberKind(m.fiber) === "plastic")
+        .reduce((sum, m) => sum + m.percentage, 0)
+    : 0;
+
   return (
     <div className="min-h-screen flex flex-col">
       <div className="breakdown-header">
@@ -148,7 +179,7 @@ export function BreakdownScreen() {
           ← Back
         </button>
         <div className="breakdown-wordmark">
-          Recit<span>.</span>
+          Cyni<span>.</span>
         </div>
         <div style={{ width: 60 }} />
       </div>
@@ -156,23 +187,23 @@ export function BreakdownScreen() {
       <div className="breakdown-scroll">
         <div className="item-hero">
           <div className="item-swatch" aria-hidden>
-            👚
+            {scan.emoji}
           </div>
           <div>
-            <div className="item-brand">Zara · W/2024</div>
-            <div className="item-name">Flowy Satin-Finish Blouse</div>
+            <div className="item-brand">{scan.brand}</div>
+            <div className="item-name">{scan.name}</div>
             <div className="item-price-row">
-              <div className="item-price">$89</div>
+              <div className="item-price">${scan.retailPrice}</div>
               <div className="item-price-label">Retail</div>
             </div>
           </div>
         </div>
 
         <div className="pad" style={{ paddingTop: 24 }}>
-          <div className="verdict-stamp trap">
+          <div className={`verdict-stamp ${scan.verdict}`}>
             <div>
               <div className="verdict-eyebrow">Our Verdict</div>
-              <div className="verdict-text">Retail Trap.</div>
+              <div className="verdict-text">{result!.verdict}.</div>
             </div>
           </div>
         </div>
@@ -182,7 +213,7 @@ export function BreakdownScreen() {
           <div className="receipt-card">
             <div className="receipt-row">
               <div className="receipt-key">You&apos;re paying</div>
-              <div className="receipt-val">$89.00</div>
+              <div className="receipt-val">${result!.price.toFixed(2)}</div>
             </div>
 
             <div className="receipt-row">
@@ -196,7 +227,7 @@ export function BreakdownScreen() {
                   ?
                 </button>
               </div>
-              <div className="receipt-val good">~$4.20</div>
+              <div className="receipt-val good">~${result!.estimatedMaterialCost.toFixed(2)}</div>
             </div>
             <div className={`info-popover ${infoOpen === "material" ? "visible" : ""}`}>
               How much it costs to <strong>actually make</strong> this item — fabric, thread, labour. Everything
@@ -205,7 +236,7 @@ export function BreakdownScreen() {
 
             <div className="receipt-row">
               <div className="receipt-key">% synthetic (plastic)</div>
-              <div className="receipt-val bad">100%</div>
+              <div className={`receipt-val ${syntheticPct > 50 ? "bad" : "good"}`}>{Math.round(syntheticPct)}%</div>
             </div>
 
             <div className="receipt-row">
@@ -219,10 +250,10 @@ export function BreakdownScreen() {
                   ?
                 </button>
               </div>
-              <div className="receipt-val bad">$4.45</div>
+              <div className={`receipt-val ${result!.costPerWear > 5 ? "bad" : "good"}`}>${result!.costPerWear.toFixed(2)}</div>
             </div>
             <div className={`info-popover ${infoOpen === "cpw" ? "visible" : ""}`}>
-              You&apos;d have to wear this item <strong>~20 times</strong> before you reached the value of what you
+              You&apos;d have to wear this item <strong>~{Math.round(result!.price / result!.costPerWear)} times</strong> before you reached the value of what you
               paid. The lower this number, the better the investment.
             </div>
 
@@ -237,10 +268,10 @@ export function BreakdownScreen() {
                   ?
                 </button>
               </div>
-              <div className="receipt-val big">2,019%</div>
+              <div className="receipt-val big">{result!.markup.toLocaleString()}%</div>
             </div>
             <div className={`info-popover ${infoOpen === "markup" ? "visible" : ""}`}>
-              The difference between the <strong>est. material cost (~$4.20)</strong> and what you paid ($89.00). This
+              The difference between the <strong>est. material cost (~${result!.estimatedMaterialCost.toFixed(2)})</strong> and what you paid (${result!.price.toFixed(2)}). This
               is how much extra you&apos;re paying above what it costs to make.
             </div>
           </div>
@@ -251,23 +282,22 @@ export function BreakdownScreen() {
         <div className="pad">
           <div className="section-eyebrow">— Fiber Composition</div>
           <div className="fiber-bars">
-            {[
-              { name: "Polyester", badge: "Plastic", pct: 78, kind: "plastic" },
-              { name: "Viscose", badge: "Synthetic", pct: 14, kind: "plastic" },
-              { name: "Elastane", badge: "Plastic", pct: 8, kind: "plastic" }
-            ].map((f) => (
-              <div key={f.name} className="fiber-row">
-                <div className="fiber-row-label">
-                  <div className="fiber-name">
-                    {f.name} <span className={`fiber-badge ${f.kind}`}>{f.badge}</span>
+            {result!.materials.map((f) => {
+              const kind = fiberKind(f.fiber);
+              return (
+                <div key={f.fiber} className="fiber-row">
+                  <div className="fiber-row-label">
+                    <div className="fiber-name">
+                      {f.fiber} <span className={`fiber-badge ${kind}`}>{badgeForKind(kind)}</span>
+                    </div>
+                    <div className="fiber-pct">{f.percentage}%</div>
                   </div>
-                  <div className="fiber-pct">{f.pct}%</div>
+                  <div className="fiber-track">
+                    <div className={`fiber-fill ${kind}`} data-width={f.percentage} />
+                  </div>
                 </div>
-                <div className="fiber-track">
-                  <div className={`fiber-fill ${f.kind}`} data-width={f.pct} />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -418,14 +448,14 @@ export function BreakdownScreen() {
       {/* Premium modal */}
       <div className={`premium-modal ${premiumOpen ? "open" : ""}`} onClick={() => setPremiumOpen(false)}>
         <div className="premium-modal-inner" onClick={(e) => e.stopPropagation()}>
-          <div className="premium-eyebrow">Recit Pro</div>
+          <div className="premium-eyebrow">Cyni Pro</div>
           <div className="premium-title">
             The full
             <br />
             <em>picture.</em>
           </div>
           <div className="premium-subtitle">
-            Unlock everything Recit has to offer — unlimited saves, deep analytics, and real-time price comparisons.
+            Unlock everything Cyni has to offer — unlimited saves, deep analytics, and real-time price comparisons.
           </div>
 
           <button
@@ -450,28 +480,28 @@ export function BreakdownScreen() {
       <div className={`share-modal ${shareOpen ? "open" : ""}`} onClick={() => setShareOpen(false)}>
         <div className="share-modal-inner" onClick={(e) => e.stopPropagation()}>
           <div className="share-card-preview">
-            <div className="share-card-eyebrow">recit · receipt</div>
+            <div className="share-card-eyebrow">cyni · receipt</div>
             <div className="share-card-headline">
-              Retail Trap.
+              {result!.verdict}.
               <br />
-              2,019% markup.
+              {result!.markup.toLocaleString()}% markup.
             </div>
             <div className="share-stats">
               <div className="share-stat">
-                <div className="share-stat-val">$89</div>
+                <div className="share-stat-val">${result!.price}</div>
                 <div className="share-stat-key">Retail</div>
               </div>
               <div className="share-stat">
-                <div className="share-stat-val">~$4</div>
+                <div className="share-stat-val">~${result!.estimatedMaterialCost.toFixed(0)}</div>
                 <div className="share-stat-key">Real Cost</div>
               </div>
               <div className="share-stat">
-                <div className="share-stat-val">100%</div>
+                <div className="share-stat-val">{Math.round(syntheticPct)}%</div>
                 <div className="share-stat-key">Plastic</div>
               </div>
             </div>
             <div className="share-card-brand">
-              Recit<span>.</span>
+              Cyni<span>.</span>
             </div>
           </div>
 

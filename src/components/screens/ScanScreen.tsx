@@ -2,17 +2,54 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { usePendingScan, useScanError, type ScanErrorCode } from "@/contexts/ScanResultContext";
+import { BarcodeScanner } from "@/components/scan/BarcodeScanner";
 
 export function ScanScreen() {
   const router = useRouter();
+  const { setPending } = usePendingScan();
+  const { lastError, setLastError } = useScanError();
   const [urlOpen, setUrlOpen] = useState(false);
+  const [urlValue, setUrlValue] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
+
+  const error = lastError;
+
+  function clearError() {
+    setLastError(null);
+  }
+
+  function handleUrlSubmit() {
+    const url = urlValue.trim();
+    if (!url) return;
+    clearError();
+    setPending({ url });
+    router.push("/analyzing");
+  }
+
+  function handleBarcodeDetected(code: string) {
+    setScannerOpen(false);
+    clearError();
+    setPending({ barcode: code });
+    router.push("/analyzing");
+  }
+
+  function handleScannerError(code: "camera_permission_denied" | "unknown", _message: string) {
+    setScannerOpen(false);
+    setLastError(code);
+  }
+
+  function handleScanButtonClick() {
+    clearError();
+    setScannerOpen(true);
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
       <div className="scan-header">
         <div>
           <div className="wordmark">
-            Recit<span>.</span>
+            Cyni<span>.</span>
           </div>
           <div className="header-tag">Material Intelligence</div>
         </div>
@@ -52,7 +89,13 @@ export function ScanScreen() {
           </p>
         </div>
 
-        <div className="viewfinder" onClick={() => router.push("/analyzing")} role="button" tabIndex={0}>
+        <div
+          className="viewfinder"
+          onClick={handleScanButtonClick}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === "Enter" && handleScanButtonClick()}
+        >
           <div className="viewfinder-inner">
             <div className="vf-corners" />
             <div className="vf-corners-b" />
@@ -64,22 +107,58 @@ export function ScanScreen() {
           </div>
         </div>
 
+        {error && (
+          <div
+            className="scan-error"
+            role="alert"
+            style={{
+              width: "100%",
+              padding: "12px 16px",
+              background: "rgba(232, 96, 74, 0.1)",
+              border: "1px solid var(--red)",
+              borderRadius: 4,
+              fontFamily: "var(--font-sans)",
+              fontSize: 12,
+              color: "var(--red)"
+            }}
+          >
+            {error === "camera_permission_denied" && "Camera access was denied. Enable it in your browser settings to scan barcodes."}
+            {error === "product_not_found" && "Product not found in barcode database. Try pasting the product URL instead."}
+            {error === "url_scrape_failed" && "Could not extract product data from that URL. Try a different product page."}
+            {error === "claude_timeout" && "Analysis timed out. Please try again."}
+            {error === "unknown" && "Something went wrong. Please try again."}
+          </div>
+        )}
+
         <div className="scan-actions">
-          <button className="btn-primary" type="button" onClick={() => router.push("/analyzing")}>
+          <button className="btn-primary" type="button" onClick={handleScanButtonClick}>
             ↑ Scan Clothing Tag
           </button>
           <button className="btn-secondary" type="button" onClick={() => setUrlOpen((v) => !v)}>
             Paste Product URL
           </button>
           <div className={`url-input-row ${urlOpen ? "visible" : ""}`}>
-            <input className="url-input" type="url" placeholder="https://zara.com/product..." />
-            <button className="btn-go" type="button" onClick={() => router.push("/analyzing")}>
+            <input
+              className="url-input"
+              type="url"
+              placeholder="https://zara.com/product..."
+              value={urlValue}
+              onChange={(e) => setUrlValue(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleUrlSubmit()}
+            />
+            <button className="btn-go" type="button" onClick={handleUrlSubmit} disabled={!urlValue.trim()}>
               →
             </button>
           </div>
         </div>
       </div>
+
+      <BarcodeScanner
+        open={scannerOpen}
+        onDetected={handleBarcodeDetected}
+        onCancel={() => setScannerOpen(false)}
+        onError={handleScannerError}
+      />
     </div>
   );
 }
-

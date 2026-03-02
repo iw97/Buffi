@@ -1,11 +1,11 @@
-# Recit (Next.js)
+# Cyni (Next.js)
 
-Recit — Next.js 14 (App Router) + Tailwind CSS + Firebase (Auth + Firestore).
+Cyni — Next.js 14 (App Router) + Tailwind CSS + Firebase (Auth + Firestore).
 
 ## Getting started
 
 ```bash
-cd recit
+cd cyni
 npm install
 cp .env.example .env.local
 # Edit .env.local with your Firebase project config (see below)

@@ -7,20 +7,20 @@ type Item = { q: string; a: string };
 
 const ITEMS: Item[] = [
   {
-    q: "What is Recit's mission?",
-    a: "Recit focuses on two things: value and transparency. We believe in the informed consumer, and we're using material intelligence to show you exactly what you're paying for and whether it aligns with your values."
+    q: "What is Cyni's mission?",
+    a: "Cyni focuses on two things: value and transparency. We believe in the informed consumer, and we're using material intelligence to show you exactly what you're paying for and whether it aligns with your values."
   },
   {
-    q: "How do I use Recit?",
+    q: "How do I use Cyni?",
     a: "Just scan your product's tag if you have it in front of you, or if you're an online shopper, paste the URL. You'll receive a breakdown of the materials in plain English, and our verdict on whether you're paying for the item's true value."
   },
   {
     q: "I'm a premium member — can I get a refund?",
-    a: "Yes! Reach out to us at support@recit.app and we'll take care of you."
+    a: "Yes! Reach out to us at support@cyni.app and we'll take care of you."
   },
   {
     q: "I have another question.",
-    a: "We'd love to hear from you. Send us an email at hello@recit.app and we'll get back to you as soon as we can."
+    a: "We'd love to hear from you. Send us an email at hello@cyni.app and we'll get back to you as soon as we can."
   }
 ];
 

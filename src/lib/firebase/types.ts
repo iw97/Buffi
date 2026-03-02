@@ -1,5 +1,5 @@
 /**
- * Firestore document types and collection names for Recit.
+ * Firestore document types and collection names for Cyni.
  */
 
 export const COLLECTIONS = {
