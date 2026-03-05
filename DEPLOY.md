@@ -1,6 +1,6 @@
 # Buffi — Run & Deploy
 
-How to run Buffi locally and deploy to Vercel. No Jiria references; this doc is for the Buffi app only.
+How to run Buffi locally and deploy to Netlify.
 
 ---
 
@@ -38,32 +38,36 @@ How to run Buffi locally and deploy to Vercel. No Jiria references; this doc is 
 
 ---
 
-## Deploy to Vercel
+## Deploy to Netlify
 
 1. **Push Buffi to a Git repo** (GitHub, GitLab, or Bitbucket) if you haven’t already.
 
-2. **Import in Vercel**
-   - Go to [vercel.com](https://vercel.com) and sign in.
-   - **Add New** → **Project** and import your Buffi repo.
-   - Framework: **Next.js** (auto-detected). Root directory: leave as repo root (or set to the folder that contains `package.json` if the repo is a monorepo).
+2. **Add the site in Netlify**
+   - Go to [netlify.com](https://www.netlify.com) and sign in.
+   - **Add new site** → **Import an existing project** and connect your repo.
+   - Netlify will detect Next.js; build command and publish directory are set via `netlify.toml` and `@netlify/plugin-nextjs`.
 
 3. **Environment variables**
-   - In the project → **Settings** → **Environment Variables**, add the same vars as in `.env.local`:
+   - In the site → **Site configuration** → **Environment variables**, add the same vars as in `.env.local`:
      - `NEXT_PUBLIC_FIREBASE_API_KEY`
      - `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
      - `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
      - `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
      - `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
      - `NEXT_PUBLIC_FIREBASE_APP_ID`
-   - Apply to **Production** (and Preview if you want).
+   - Also set `ANTHROPIC_API_KEY` for the `/api/scan` route (Claude).
+   - Apply to **Production** (and other contexts if needed).
 
-4. **Deploy**
-   - Click **Deploy**. Vercel will run `npm run build` and host the app.
-   - Optional: connect the repo so every push to your main branch triggers a new deployment.
+4. **Function timeout for `/api/scan`**
+   - The scan API calls Claude and can take 15+ seconds. Netlify’s default function timeout is 10 seconds.
+   - In Netlify: **Site configuration** → **Build & deploy** → **Continuous deployment** → **Build settings** → **Edit settings** → **Post processing** (or **Functions**), set **Function timeout** to at least **15** seconds (Pro accounts can request up to 26 seconds from support if needed).
+
+5. **Deploy**
+   - Trigger a deploy (e.g. push to the production branch). Netlify will run `npm run build` and use the Next.js plugin to build and deploy the app and API routes.
 
 ---
 
 ## Firestore in production
 
 - Deploy Firestore rules and indexes from your Firebase project (see README).
-- In Firebase Console, add your Vercel domain (e.g. `your-app.vercel.app`) to **Authentication** → **Authorized domains** so sign-in works in production.
+- In Firebase Console, add your Netlify domain (e.g. `your-site.netlify.app`) to **Authentication** → **Authorized domains** so sign-in works in production.

@@ -1,0 +1,14 @@
+# Buffi — Netlify deployment
+# Next.js is built and deployed via @netlify/plugin-nextjs (OpenNext).
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Function timeout: Netlify default is 10s. For /api/scan (Claude) we need at least 15s.
+# Set in Netlify UI: Site settings → Build & deploy → Continuous deployment →
+# Build settings → Post processing → Functions → Function timeout (set to 15 or 26).
+# On Pro, support can increase the limit to 26 seconds if needed.

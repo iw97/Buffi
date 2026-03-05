@@ -137,7 +137,7 @@ export function BarcodeScanner({ open, onDetected, onCancel, onError }: BarcodeS
       <p
         style={{
           position: "absolute",
-          bottom: 120,
+          top: "calc(50% - 130px)",
           left: 0,
           right: 0,
           textAlign: "center",
@@ -148,7 +148,7 @@ export function BarcodeScanner({ open, onDetected, onCancel, onError }: BarcodeS
           textTransform: "uppercase"
         }}
       >
-        Align barcode within the frame
+        Align composition label within the frame
       </p>
       <button
         type="button"
