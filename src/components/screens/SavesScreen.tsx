@@ -6,12 +6,45 @@ import { useAuthOptional } from "@/contexts/AuthContext";
 import { subscribeSavedItems } from "@/lib/firebase/firestore";
 import type { SavedItem } from "@/lib/firebase/types";
 
+/** Set to true to always show the logged-in saves UI (for testing). */
+const TESTING_ALWAYS_SHOW_LOGGED_IN = true;
+
+/** Mock saved items for testing the logged-in layout. */
+const MOCK_SAVED_ITEMS: SavedItem[] = [
+  {
+    id: "mock-1",
+    userId: "testing-uid",
+    brand: "Zara · W/2024",
+    name: "Flowy Satin-Finish Blouse",
+    retailPrice: 89,
+    verdict: "trap",
+    tags: [{ label: "Retail Trap", type: "trap" }, { label: "100% Plastic", type: "trap" }],
+    emoji: "👚",
+    savedAt: new Date().toISOString()
+  },
+  {
+    id: "mock-2",
+    userId: "testing-uid",
+    brand: "Everlane",
+    name: "Organic Cotton Crew",
+    retailPrice: 38,
+    verdict: "win",
+    tags: [{ label: "Worth It", type: "win" }, { label: "Natural Fibers", type: "win" }],
+    emoji: "👕",
+    savedAt: new Date().toISOString()
+  }
+];
+
 export function SavesScreen() {
   const router = useRouter();
   const auth = useAuthOptional();
-  const [items, setItems] = useState<SavedItem[]>([]);
+  const [items, setItems] = useState<SavedItem[]>(TESTING_ALWAYS_SHOW_LOGGED_IN ? MOCK_SAVED_ITEMS : []);
 
   useEffect(() => {
+    if (TESTING_ALWAYS_SHOW_LOGGED_IN && (!auth?.user?.uid || !auth?.isConfigured)) {
+      setItems(MOCK_SAVED_ITEMS);
+      return;
+    }
     if (!auth?.user?.uid || !auth?.isConfigured) {
       setItems([]);
       return;
@@ -20,8 +53,8 @@ export function SavesScreen() {
     return () => unsub();
   }, [auth?.user?.uid, auth?.isConfigured]);
 
-  const isLoggedIn = !!auth?.user;
-  const loading = auth?.loading ?? false;
+  const isLoggedIn = TESTING_ALWAYS_SHOW_LOGGED_IN || !!auth?.user;
+  const loading = !TESTING_ALWAYS_SHOW_LOGGED_IN && (auth?.loading ?? false);
 
   if (loading) {
     return (
@@ -31,7 +64,7 @@ export function SavesScreen() {
     );
   }
 
-  if (!isLoggedIn || !auth?.isConfigured) {
+  if (!isLoggedIn || (!auth?.isConfigured && !TESTING_ALWAYS_SHOW_LOGGED_IN)) {
     return (
       <div className="min-h-screen flex flex-col">
         <div className="saves-header">

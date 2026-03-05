@@ -1,11 +1,11 @@
-# Cyni (Next.js)
+# Buffi (Next.js)
 
-Cyni — Next.js 14 (App Router) + Tailwind CSS + Firebase (Auth + Firestore).
+Buffi — Next.js 14 (App Router) + Tailwind CSS + Firebase (Auth + Firestore).
 
 ## Getting started
 
 ```bash
-cd cyni
+cd buffi
 npm install
 cp .env.example .env.local
 # Edit .env.local with your Firebase project config (see below)

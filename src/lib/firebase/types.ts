@@ -1,5 +1,5 @@
 /**
- * Firestore document types and collection names for Cyni.
+ * Firestore document types and collection names for Buffi.
  */
 
 export const COLLECTIONS = {

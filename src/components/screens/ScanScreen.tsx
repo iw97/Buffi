@@ -1,9 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { usePendingScan, useScanError, type ScanErrorCode } from "@/contexts/ScanResultContext";
-import { BarcodeScanner } from "@/components/scan/BarcodeScanner";
+import { usePendingScan, useScanError } from "@/contexts/ScanResultContext";
+
+const BarcodeScanner = dynamic(
+  () => import("@/components/scan/BarcodeScanner").then((m) => ({ default: m.BarcodeScanner })),
+  { ssr: false }
+);
 
 export function ScanScreen() {
   const router = useRouter();
@@ -49,7 +54,7 @@ export function ScanScreen() {
       <div className="scan-header">
         <div>
           <div className="wordmark">
-            Cyni<span>.</span>
+            Buffi<span>.</span>
           </div>
           <div className="header-tag">Material Intelligence</div>
         </div>

@@ -9,7 +9,7 @@ export function SplashScreen() {
     <div className="min-h-screen flex flex-col items-center justify-center px-9">
       <div className="splash-identity">
         <div className="splash-wordmark">
-          Cyni
+          Buffi
           <span className="text-[var(--teal)]">.</span>
         </div>
         <div className="splash-eyebrow">Material Intelligence</div>

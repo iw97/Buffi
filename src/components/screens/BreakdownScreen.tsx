@@ -179,7 +179,7 @@ export function BreakdownScreen() {
           ← Back
         </button>
         <div className="breakdown-wordmark">
-          Cyni<span>.</span>
+          Buffi<span>.</span>
         </div>
         <div style={{ width: 60 }} />
       </div>
@@ -448,14 +448,14 @@ export function BreakdownScreen() {
       {/* Premium modal */}
       <div className={`premium-modal ${premiumOpen ? "open" : ""}`} onClick={() => setPremiumOpen(false)}>
         <div className="premium-modal-inner" onClick={(e) => e.stopPropagation()}>
-          <div className="premium-eyebrow">Cyni Pro</div>
+          <div className="premium-eyebrow">Buffi Pro</div>
           <div className="premium-title">
             The full
             <br />
             <em>picture.</em>
           </div>
           <div className="premium-subtitle">
-            Unlock everything Cyni has to offer — unlimited saves, deep analytics, and real-time price comparisons.
+            Unlock everything Buffi has to offer — unlimited saves, deep analytics, and real-time price comparisons.
           </div>
 
           <button
@@ -480,7 +480,7 @@ export function BreakdownScreen() {
       <div className={`share-modal ${shareOpen ? "open" : ""}`} onClick={() => setShareOpen(false)}>
         <div className="share-modal-inner" onClick={(e) => e.stopPropagation()}>
           <div className="share-card-preview">
-            <div className="share-card-eyebrow">cyni · receipt</div>
+            <div className="share-card-eyebrow">buffi · receipt</div>
             <div className="share-card-headline">
               {result!.verdict}.
               <br />
@@ -501,7 +501,7 @@ export function BreakdownScreen() {
               </div>
             </div>
             <div className="share-card-brand">
-              Cyni<span>.</span>
+              Buffi<span>.</span>
             </div>
           </div>
 

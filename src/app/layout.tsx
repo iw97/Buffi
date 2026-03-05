@@ -24,7 +24,7 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cyni",
+  title: "Buffi",
   description: "Material intelligence"
 };
 

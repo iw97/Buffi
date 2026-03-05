@@ -37,19 +37,31 @@ interface AuthActions {
 
 const AuthContext = createContext<AuthState & AuthActions | null>(null);
 
+/** For testing: when true, act as if user is always logged in (mock user when none). */
+const TESTING_FORCE_LOGGED_IN = true;
+
+const MOCK_USER = {
+  uid: "testing-uid",
+  displayName: "Test User",
+  email: "test@buffi.app",
+  photoURL: null as string | null,
+  metadata: { creationTime: new Date().toISOString() }
+} as unknown as User;
+
 export function FirebaseAuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(TESTING_FORCE_LOGGED_IN ? MOCK_USER : null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!TESTING_FORCE_LOGGED_IN);
   const isConfigured = isFirebaseConfigured();
 
   useEffect(() => {
     if (!isConfigured || !firebaseAuth) {
       setLoading(false);
+      if (TESTING_FORCE_LOGGED_IN) setUser(MOCK_USER);
       return;
     }
     const unsub = onAuthStateChanged(firebaseAuth, (u) => {
-      setUser(u);
+      setUser(TESTING_FORCE_LOGGED_IN && !u ? MOCK_USER : u);
       setProfile(null);
       setLoading(false);
     });

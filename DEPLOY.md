@@ -1,6 +1,6 @@
-# Cyni — Run & Deploy
+# Buffi — Run & Deploy
 
-How to run Cyni locally and deploy to Vercel. No Jiria references; this doc is for the Cyni app only.
+How to run Buffi locally and deploy to Vercel. No Jiria references; this doc is for the Buffi app only.
 
 ---
 
@@ -8,7 +8,7 @@ How to run Cyni locally and deploy to Vercel. No Jiria references; this doc is f
 
 1. **Go to the project folder**
    ```bash
-   cd cyni
+   cd buffi
    ```
    (If your folder is named something else, use that name.)
 
@@ -40,11 +40,11 @@ How to run Cyni locally and deploy to Vercel. No Jiria references; this doc is f
 
 ## Deploy to Vercel
 
-1. **Push Cyni to a Git repo** (GitHub, GitLab, or Bitbucket) if you haven’t already.
+1. **Push Buffi to a Git repo** (GitHub, GitLab, or Bitbucket) if you haven’t already.
 
 2. **Import in Vercel**
    - Go to [vercel.com](https://vercel.com) and sign in.
-   - **Add New** → **Project** and import your Cyni repo.
+   - **Add New** → **Project** and import your Buffi repo.
    - Framework: **Next.js** (auto-detected). Root directory: leave as repo root (or set to the folder that contains `package.json` if the repo is a monorepo).
 
 3. **Environment variables**
