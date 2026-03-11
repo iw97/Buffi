@@ -9,10 +9,17 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
     const body = await req.json();
     const url = typeof body?.url === "string" ? body.url.trim() : undefined;
     const barcode = typeof body?.barcode === "string" ? body.barcode.trim() : undefined;
+    const composition = typeof body?.composition === "string" ? body.composition.trim() : undefined;
+    const brand = typeof body?.brand === "string" ? body.brand.trim() || undefined : undefined;
+    const price = typeof body?.price === "number" && body.price > 0 ? body.price : undefined;
 
-    if (url && barcode) {
+    const hasUrl = !!url;
+    const hasBarcode = !!barcode;
+    const hasTag = !!composition;
+
+    if ([hasUrl, hasBarcode, hasTag].filter(Boolean).length > 1) {
       return NextResponse.json(
-        { ok: false, code: "invalid_input", message: "Provide either url or barcode, not both" },
+        { ok: false, code: "invalid_input", message: "Provide only one of: url, barcode, or composition (tag)" },
         { status: 400 }
       );
     }
@@ -43,9 +50,16 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
         );
       }
       raw = { ...lookedUp, barcode, source: "barcode" };
+    } else if (composition) {
+      raw = {
+        materials: composition,
+        brand,
+        price,
+        source: "tag"
+      };
     } else {
       return NextResponse.json(
-        { ok: false, code: "invalid_input", message: "Provide url or barcode in request body" },
+        { ok: false, code: "invalid_input", message: "Provide url, barcode, or composition in request body" },
         { status: 400 }
       );
     }

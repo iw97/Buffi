@@ -1,4 +1,4 @@
-/** Raw product data from URL scrape or barcode lookup, before Claude analysis */
+/** Raw product data from URL scrape, barcode lookup, or tag (OCR) flow, before Claude analysis */
 export interface RawProductData {
   brand?: string;
   name?: string;
@@ -7,7 +7,7 @@ export interface RawProductData {
   description?: string;
   url?: string;
   barcode?: string;
-  source: "url" | "barcode";
+  source: "url" | "barcode" | "tag";
 }
 
 /** Claude analysis output — exact fields from the prompt */

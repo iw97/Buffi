@@ -17,9 +17,11 @@ function toErrorCode(status: number, body?: { code?: string }): ScanErrorCode {
   if (body?.code === "product_not_found") return "product_not_found";
   if (body?.code === "url_scrape_failed") return "url_scrape_failed";
   if (body?.code === "claude_timeout") return "claude_timeout";
+  if (body?.code === "invalid_input") return "invalid_input";
   if (status === 404) return "product_not_found";
   if (status === 422) return "url_scrape_failed";
   if (status === 504) return "claude_timeout";
+  if (status === 400) return "invalid_input";
   return "unknown";
 }
 
@@ -38,12 +40,21 @@ export function AnalyzingScreen() {
   const items = useMemo(() => ORDER, []);
 
   useEffect(() => {
-    if (!pending?.url && !pending?.barcode) {
+    const hasInput = pending?.url || pending?.barcode || pending?.tag;
+    if (!hasInput) {
       router.replace("/scan");
       return;
     }
 
-    const body = pending.url ? { url: pending.url } : { barcode: pending.barcode };
+    const body = pending.url
+      ? { url: pending.url }
+      : pending.tag
+        ? {
+            composition: pending.tag.composition,
+            ...(pending.tag.brand && { brand: pending.tag.brand }),
+            ...(pending.tag.price != null && pending.tag.price > 0 && { price: pending.tag.price })
+          }
+        : { barcode: pending.barcode };
     const controller = new AbortController();
 
     fetch("/api/scan", {

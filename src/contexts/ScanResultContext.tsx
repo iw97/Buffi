@@ -32,6 +32,12 @@ export function useScanResult() {
 export interface PendingScan {
   url?: string;
   barcode?: string;
+  /** Tag photo flow: composition from OCR + optional brand/price before analysis */
+  tag?: {
+    composition: string;
+    brand?: string;
+    price?: number;
+  };
 }
 
 const PendingScanContext = createContext<{
@@ -60,6 +66,7 @@ export type ScanErrorCode =
   | "product_not_found"
   | "url_scrape_failed"
   | "claude_timeout"
+  | "invalid_input"
   | "unknown";
 
 const ScanErrorContext = createContext<{

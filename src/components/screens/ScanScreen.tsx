@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { usePendingScan, useScanError } from "@/contexts/ScanResultContext";
+import { TagDetailsStep } from "@/components/scan/TagDetailsStep";
 
 const BarcodeScanner = dynamic(
   () => import("@/components/scan/BarcodeScanner").then((m) => ({ default: m.BarcodeScanner })),
@@ -17,6 +18,9 @@ export function ScanScreen() {
   const [urlOpen, setUrlOpen] = useState(false);
   const [urlValue, setUrlValue] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [tagStepComposition, setTagStepComposition] = useState<string | null>(null);
+  const [ocrStatus, setOcrStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const error = lastError;
 
@@ -47,6 +51,60 @@ export function ScanScreen() {
   function handleScanButtonClick() {
     clearError();
     setScannerOpen(true);
+  }
+
+  function handleUploadLabelClick() {
+    clearError();
+    fileInputRef.current?.click();
+  }
+
+  async function handleLabelFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !file.type.startsWith("image/")) return;
+    setOcrStatus("loading");
+    try {
+      const Tesseract = (await import("tesseract.js")).default;
+      const worker = await Tesseract.createWorker("eng");
+      const { data } = await worker.recognize(file);
+      await worker.terminate();
+      setTagStepComposition(data.text.trim() || " ");
+      setOcrStatus("done");
+    } catch {
+      setOcrStatus("error");
+      setLastError("unknown");
+    }
+  }
+
+  function handleTagDetailsBack() {
+    setTagStepComposition(null);
+    setOcrStatus("idle");
+  }
+
+  function handleTagDetailsSubmit(payload: { composition: string; brand?: string; price?: number }) {
+    clearError();
+    setPending({ tag: payload });
+    setTagStepComposition(null);
+    setOcrStatus("idle");
+    router.push("/analyzing");
+  }
+
+  if (tagStepComposition !== null) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <div className="scan-header">
+          <div>
+            <div className="wordmark">Buffi<span>.</span></div>
+            <div className="header-tag">Material Intelligence</div>
+          </div>
+        </div>
+        <TagDetailsStep
+          initialComposition={tagStepComposition}
+          onBack={handleTagDetailsBack}
+          onSubmit={handleTagDetailsSubmit}
+        />
+      </div>
+    );
   }
 
   return (
@@ -131,15 +189,38 @@ export function ScanScreen() {
             {error === "product_not_found" && "Product not found in barcode database. Try pasting the product URL instead."}
             {error === "url_scrape_failed" && "Could not extract product data from that URL. Try a different product page."}
             {error === "claude_timeout" && "Analysis timed out. Please try again."}
+            {error === "invalid_input" && "Invalid request. Please check your input and try again."}
             {error === "unknown" && "Something went wrong. Please try again."}
           </div>
         )}
 
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="sr-only"
+          aria-hidden
+          onChange={handleLabelFile}
+        />
+        {ocrStatus === "loading" && (
+          <p className="scan-ocr-status" role="status">
+            Reading label…
+          </p>
+        )}
         <div className="scan-actions">
-          <button className="btn-primary" type="button" onClick={handleScanButtonClick}>
+          <button className="btn-primary" type="button" onClick={handleScanButtonClick} disabled={ocrStatus === "loading"}>
             ↑ Scan Clothing Tag
           </button>
-          <button className="btn-secondary" type="button" onClick={() => setUrlOpen((v) => !v)}>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={handleUploadLabelClick}
+            disabled={ocrStatus === "loading"}
+          >
+            📷 Upload label photo
+          </button>
+          <button className="btn-secondary" type="button" onClick={() => setUrlOpen((v) => !v)} disabled={ocrStatus === "loading"}>
             Paste Product URL
           </button>
           <div className={`url-input-row ${urlOpen ? "visible" : ""}`}>
