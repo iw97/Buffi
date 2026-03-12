@@ -30,6 +30,18 @@ export interface ScanResult {
   analysis: ScanAnalysis;
 }
 
+/** Minimal scan response (brandName + fibers + price + confidenceTier → Claude) */
+export interface MinimalScanResponse {
+  estimatedMaterialCost: number;
+  markup: number;
+  markupBand: string;
+  verdict: "Retail Trap" | "Worth It";
+  verdictReason: string;
+  tags: string[];
+  isEstimated: boolean;
+  isSmallBusiness: boolean;
+}
+
 /** Error codes for explicit handling */
 export type ScanErrorCode =
   | "camera_permission_denied"

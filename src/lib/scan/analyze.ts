@@ -1,8 +1,20 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { RawProductData } from "./types";
-import type { ScanAnalysis } from "./types";
+import type { ScanAnalysis, MinimalScanResponse } from "./types";
 
 const CLAUDE_TIMEOUT_MS = 45000;
+
+const MINIMAL_SCAN_SYSTEM_PROMPT = `You are a material intelligence analyst for clothing and apparel. You will receive JSON input with: brandName, fibers (array of strings, e.g. "Cotton 100%" or "Polyester 80%, Elastane 20%"), price (retail price in USD), and confidenceTier (number).
+
+Respond with only valid JSON and nothing else. No markdown, no code fence, no explanation. The JSON must have exactly these fields:
+- estimatedMaterialCost (number, USD)
+- markup (number, percentage e.g. 50 for 50%)
+- markupBand (string: "low", "medium", or "high" based on markup)
+- verdict (string: "Retail Trap" or "Worth It")
+- verdictReason (string, one sentence)
+- tags (array of strings, e.g. "Synthetic Heavy", "High Markup", "Natural Fibers", "Fair Value")
+- isEstimated (boolean)
+- isSmallBusiness (boolean, infer from brand if possible)`;
 
 export async function analyzeWithClaude(raw: RawProductData): Promise<ScanAnalysis> {
   const client = new Anthropic({
@@ -81,6 +93,79 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
       !Array.isArray(parsed.tags)
     ) {
       throw new Error("Invalid Claude response structure");
+    }
+
+    return parsed;
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err instanceof Error && err.name === "AbortError") {
+      const timeoutErr = new Error("Claude API timeout") as Error & { code?: string };
+      timeoutErr.code = "claude_timeout";
+      throw timeoutErr;
+    }
+    throw err;
+  }
+}
+
+/** Minimal scan: brandName + fibers + price + confidenceTier → Claude Sonnet 4.5 → structured JSON response. */
+export async function analyzeMinimalScan(input: {
+  brandName: string;
+  fibers: string[];
+  price: number;
+  confidenceTier: number;
+}): Promise<MinimalScanResponse> {
+  const client = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY
+  });
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CLAUDE_TIMEOUT_MS);
+
+  try {
+    const message = await client.messages.create(
+      {
+        model: "claude-sonnet-4-5",
+        max_tokens: 1024,
+        system: MINIMAL_SCAN_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: JSON.stringify({
+              brandName: input.brandName,
+              fibers: input.fibers,
+              price: input.price,
+              confidenceTier: input.confidenceTier
+            })
+          }
+        ]
+      },
+      { signal: controller.signal }
+    );
+
+    clearTimeout(timeout);
+
+    const text = (message.content as Array<{ type?: string; text?: string }>)
+      .filter((c) => c.type === "text" && c.text)
+      .map((c) => c.text!)
+      .join("")
+      .trim() || "";
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("No JSON in Claude response");
+
+    const parsed = JSON.parse(jsonMatch[0]) as MinimalScanResponse;
+
+    if (
+      typeof parsed.estimatedMaterialCost !== "number" ||
+      typeof parsed.markup !== "number" ||
+      typeof parsed.markupBand !== "string" ||
+      !["Retail Trap", "Worth It"].includes(parsed.verdict) ||
+      typeof parsed.verdictReason !== "string" ||
+      !Array.isArray(parsed.tags) ||
+      typeof parsed.isEstimated !== "boolean" ||
+      typeof parsed.isSmallBusiness !== "boolean"
+    ) {
+      throw new Error("Invalid minimal scan response structure");
     }
 
     return parsed;

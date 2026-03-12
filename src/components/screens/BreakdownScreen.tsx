@@ -21,19 +21,28 @@ function badgeForKind(kind: "plastic" | "natural"): string {
   return kind === "plastic" ? "Plastic" : "Natural";
 }
 
+function markupToBand(markup: number): string {
+  if (markup < 50) return "low";
+  if (markup < 150) return "medium";
+  return "high";
+}
+
 function analysisToSavedItem(a: ScanAnalysis) {
   const verdictType = a.verdict === "Retail Trap" ? ("trap" as const) : ("win" as const);
-  const tags = a.tags.map((label) => ({
-    label,
-    type: label.toLowerCase().includes("trap") || label.toLowerCase().includes("plastic") || label.toLowerCase().includes("markup") ? ("trap" as const) : ("win" as const)
-  }));
+  const fibers = a.materials.map((m) => `${m.fiber} ${m.percentage}%`);
   return {
-    brand: a.brand,
-    name: a.name,
-    retailPrice: a.price,
+    brandName: a.brand,
+    itemName: a.name,
+    price: a.price,
+    estimatedMaterialCost: a.estimatedMaterialCost,
+    markup: a.markup,
+    markupBand: markupToBand(a.markup),
+    fibers,
     verdict: verdictType,
-    tags,
-    emoji: "👚"
+    verdictReason: a.verdictReason,
+    tags: a.tags,
+    isEstimated: true,
+    confidenceTier: 1
   };
 }
 
@@ -190,10 +199,10 @@ export function BreakdownScreen() {
             {scan.emoji}
           </div>
           <div>
-            <div className="item-brand">{scan.brand}</div>
-            <div className="item-name">{scan.name}</div>
+            <div className="item-brand">{scan.brandName}</div>
+            <div className="item-name">{scan.itemName}</div>
             <div className="item-price-row">
-              <div className="item-price">${scan.retailPrice}</div>
+              <div className="item-price">${scan.price}</div>
               <div className="item-price-label">Retail</div>
             </div>
           </div>

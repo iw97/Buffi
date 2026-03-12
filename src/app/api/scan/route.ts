@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { scrapeProductFromUrl } from "@/lib/scan/scrape";
 import { lookupBarcode } from "@/lib/scan/barcode";
-import { analyzeWithClaude } from "@/lib/scan/analyze";
+import { analyzeWithClaude, analyzeMinimalScan } from "@/lib/scan/analyze";
 import type { RawProductData, ScanResult, ScanError } from "@/lib/scan/types";
 
-export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | ScanError>> {
+export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | ScanError | unknown>> {
   try {
     const body = await req.json();
     const url = typeof body?.url === "string" ? body.url.trim() : undefined;
@@ -13,9 +13,30 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
     const brand = typeof body?.brand === "string" ? body.brand.trim() || undefined : undefined;
     const price = typeof body?.price === "number" && body.price > 0 ? body.price : undefined;
 
+    const brandName = typeof body?.brandName === "string" ? body.brandName.trim() : undefined;
+    const fibers = Array.isArray(body?.fibers) ? (body.fibers as string[]).filter((f) => typeof f === "string") : undefined;
+    const minimalPrice = typeof body?.price === "number" ? body.price : undefined;
+    const confidenceTier = typeof body?.confidenceTier === "number" ? body.confidenceTier : undefined;
+
     const hasUrl = !!url;
     const hasBarcode = !!barcode;
     const hasTag = !!composition;
+    const hasMinimal =
+      !!brandName &&
+      !!fibers?.length &&
+      minimalPrice !== undefined &&
+      minimalPrice >= 0 &&
+      confidenceTier !== undefined;
+
+    if (hasMinimal && !hasUrl && !hasBarcode && !hasTag) {
+      const result = await analyzeMinimalScan({
+        brandName,
+        fibers,
+        price: minimalPrice,
+        confidenceTier
+      });
+      return NextResponse.json(result);
+    }
 
     if ([hasUrl, hasBarcode, hasTag].filter(Boolean).length > 1) {
       return NextResponse.json(

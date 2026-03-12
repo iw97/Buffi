@@ -14,23 +14,35 @@ const MOCK_SAVED_ITEMS: SavedItem[] = [
   {
     id: "mock-1",
     userId: "testing-uid",
-    brand: "Zara · W/2024",
-    name: "Flowy Satin-Finish Blouse",
-    retailPrice: 89,
+    brandName: "Zara · W/2024",
+    itemName: "Flowy Satin-Finish Blouse",
+    price: 89,
+    estimatedMaterialCost: 12,
+    markup: 85,
+    markupBand: "high",
+    fibers: ["Polyester 100%"],
     verdict: "trap",
-    tags: [{ label: "Retail Trap", type: "trap" }, { label: "100% Plastic", type: "trap" }],
-    emoji: "👚",
+    verdictReason: "High markup on synthetic fabric.",
+    tags: ["Retail Trap", "100% Plastic"],
+    isEstimated: true,
+    confidenceTier: 1,
     savedAt: new Date().toISOString()
   },
   {
     id: "mock-2",
     userId: "testing-uid",
-    brand: "Everlane",
-    name: "Organic Cotton Crew",
-    retailPrice: 38,
+    brandName: "Everlane",
+    itemName: "Organic Cotton Crew",
+    price: 38,
+    estimatedMaterialCost: 14,
+    markup: 45,
+    markupBand: "medium",
+    fibers: ["Organic Cotton 100%"],
     verdict: "win",
-    tags: [{ label: "Worth It", type: "win" }, { label: "Natural Fibers", type: "win" }],
-    emoji: "👕",
+    verdictReason: "Fair value for natural fibers.",
+    tags: ["Worth It", "Natural Fibers"],
+    isEstimated: true,
+    confidenceTier: 1,
     savedAt: new Date().toISOString()
   }
 ];
@@ -111,20 +123,20 @@ export function SavesScreen() {
               onKeyDown={(e) => e.key === "Enter" && router.push("/breakdown")}
             >
               <div className="save-swatch" aria-hidden>
-                {item.emoji ?? "👕"}
+                👕
               </div>
               <div className="save-meta">
-                <div className="save-brand">{item.brand}</div>
-                <div className="save-name">{item.name}</div>
+                <div className="save-brand">{item.brandName}</div>
+                <div className="save-name">{item.itemName}</div>
                 <div className="save-tags">
                   {item.tags.map((t) => (
-                    <span key={t.label} className={`save-tag ${t.type}`}>
-                      {t.label}
+                    <span key={t} className={`save-tag ${item.verdict}`}>
+                      {t}
                     </span>
                   ))}
                 </div>
               </div>
-              <div className="save-price">${item.retailPrice}</div>
+              <div className="save-price">${item.price}</div>
             </div>
           ))
         )}

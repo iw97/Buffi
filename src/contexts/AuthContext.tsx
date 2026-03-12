@@ -18,7 +18,7 @@ import {
   signOut as firebaseSignOut
 } from "firebase/auth";
 import { firebaseAuth, isFirebaseConfigured } from "@/lib/firebase/client";
-import { setUserProfile, getUserProfile } from "@/lib/firebase/firestore";
+import { setUserProfile, getUserProfile, ensureUserDocument } from "@/lib/firebase/firestore";
 import type { UserProfile } from "@/lib/firebase/types";
 
 interface AuthState {
@@ -64,6 +64,9 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
       setUser(TESTING_FORCE_LOGGED_IN && !u ? MOCK_USER : u);
       setProfile(null);
       setLoading(false);
+      if (u) {
+        ensureUserDocument(u.uid, u.email ?? null, u.displayName ?? null, u.photoURL ?? null).catch(() => {});
+      }
     });
     return () => unsub();
   }, [isConfigured]);
