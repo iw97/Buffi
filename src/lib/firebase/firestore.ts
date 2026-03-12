@@ -17,7 +17,7 @@ import {
 } from "firebase/firestore";
 import type { Unsubscribe } from "firebase/firestore";
 import type { Timestamp } from "firebase/firestore";
-import { firestore } from "./client";
+import { firestore, firebaseAuth } from "./client";
 import { COLLECTIONS, type UserProfile, type SavedItem, type ScanHistoryEntry, type ProductMapping } from "./types";
 
 function timestampToIso(t: unknown): string {
@@ -31,13 +31,35 @@ function getDb() {
   return firestore;
 }
 
+function requireAuth(operation: string): boolean {
+  if (typeof window === "undefined") return false;
+  if (!firebaseAuth?.currentUser) {
+    console.warn("[Firestore] skipped (not authenticated):", operation);
+    return false;
+  }
+  return true;
+}
+
+async function withFirestoreLog<T>(operation: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    console.error("[Firestore] error on operation:", operation, e);
+    throw e;
+  }
+}
+
 /** Get user profile doc */
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
-  const db = getDb();
-  const ref = doc(db, COLLECTIONS.USERS, uid);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return null;
-  return snap.data() as UserProfile;
+  const op = "getUserProfile(users/" + uid + ")";
+  if (!requireAuth(op)) return null;
+  return withFirestoreLog(op, async () => {
+    const db = getDb();
+    const ref = doc(db, COLLECTIONS.USERS, uid);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null;
+    return snap.data() as UserProfile;
+  });
 }
 
 /**
@@ -51,22 +73,25 @@ export async function ensureUserDocument(
   displayName: string | null,
   photoURL?: string | null
 ): Promise<void> {
-  const db = getDb();
-  const ref = doc(db, COLLECTIONS.USERS, uid);
-  const snap = await getDoc(ref);
-  if (snap.exists()) return;
-
-  await setDoc(ref, {
-    email: email ?? null,
-    displayName: displayName ?? "",
-    photoURL: photoURL ?? null,
-    createdAt: serverTimestamp(),
-    isPro: false,
-    scanCount: 0,
-    scanCountResetAt: serverTimestamp(),
-    saveCount: 0,
-    savedCount: 0,
-    scannedCount: 0
+  const op = "ensureUserDocument(users/" + uid + ")";
+  if (!requireAuth(op)) return;
+  return withFirestoreLog(op, async () => {
+    const db = getDb();
+    const ref = doc(db, COLLECTIONS.USERS, uid);
+    const snap = await getDoc(ref);
+    if (snap.exists()) return;
+    await setDoc(ref, {
+      email: email ?? null,
+      displayName: displayName ?? "",
+      photoURL: photoURL ?? null,
+      createdAt: serverTimestamp(),
+      isPro: false,
+      scanCount: 0,
+      scanCountResetAt: serverTimestamp(),
+      saveCount: 0,
+      savedCount: 0,
+      scannedCount: 0
+    });
   });
 }
 
@@ -103,16 +128,20 @@ function toSavedItem(docId: string, data: Record<string, unknown>): SavedItem {
 
 /** Saved items: top-level collection with userId */
 export async function getSavedItems(uid: string): Promise<SavedItem[]> {
-  const db = getDb();
-  const ref = collection(db, COLLECTIONS.SAVED_ITEMS);
-  const q = query(
-    ref,
-    where("userId", "==", uid),
-    orderBy("savedAt", "desc"),
-    limit(100)
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => toSavedItem(d.id, d.data()));
+  const op = "getSavedItems(savedItems?userId=" + uid + ")";
+  if (!requireAuth(op)) return [];
+  return withFirestoreLog(op, async () => {
+    const db = getDb();
+    const ref = collection(db, COLLECTIONS.SAVED_ITEMS);
+    const q = query(
+      ref,
+      where("userId", "==", uid),
+      orderBy("savedAt", "desc"),
+      limit(100)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => toSavedItem(d.id, d.data()));
+  });
 }
 
 /** Subscribe to saved items for real-time list */
@@ -120,6 +149,8 @@ export function subscribeSavedItems(
   uid: string,
   onItems: (items: SavedItem[]) => void
 ): Unsubscribe {
+  const op = "subscribeSavedItems(savedItems?userId=" + uid + ")";
+  if (!requireAuth(op)) return () => {};
   const db = getDb();
   const ref = collection(db, COLLECTIONS.SAVED_ITEMS);
   const q = query(
@@ -128,10 +159,14 @@ export function subscribeSavedItems(
     orderBy("savedAt", "desc"),
     limit(100)
   );
-  return onSnapshot(q, (snap) => {
-    const items = snap.docs.map((d) => toSavedItem(d.id, d.data()));
-    onItems(items);
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      const items = snap.docs.map((d) => toSavedItem(d.id, d.data()));
+      onItems(items);
+    },
+    (err) => console.error("[Firestore] error on operation:", op, err)
+  );
 }
 
 /** Add a saved item */
@@ -139,21 +174,29 @@ export async function addSavedItem(
   uid: string,
   item: Omit<SavedItem, "id" | "userId" | "savedAt">
 ): Promise<string> {
-  const db = getDb();
-  const ref = collection(db, COLLECTIONS.SAVED_ITEMS);
-  const docRef = await addDoc(ref, {
-    ...item,
-    userId: uid,
-    savedAt: serverTimestamp()
+  const op = "addSavedItem(savedItems)";
+  if (!requireAuth(op)) return "";
+  return withFirestoreLog(op, async () => {
+    const db = getDb();
+    const ref = collection(db, COLLECTIONS.SAVED_ITEMS);
+    const docRef = await addDoc(ref, {
+      ...item,
+      userId: uid,
+      savedAt: serverTimestamp()
+    });
+    return docRef.id;
   });
-  return docRef.id;
 }
 
 /** Remove a saved item */
 export async function removeSavedItem(itemId: string): Promise<void> {
-  const db = getDb();
-  const ref = doc(db, COLLECTIONS.SAVED_ITEMS, itemId);
-  await deleteDoc(ref);
+  const op = "removeSavedItem(savedItems/" + itemId + ")";
+  if (!requireAuth(op)) return;
+  return withFirestoreLog(op, async () => {
+    const db = getDb();
+    const ref = doc(db, COLLECTIONS.SAVED_ITEMS, itemId);
+    await deleteDoc(ref);
+  });
 }
 
 /** Add a scan history entry (e.g. after a scan). expiresAt is set to 90 days from now. */
@@ -161,36 +204,44 @@ export async function addScanHistoryEntry(
   uid: string,
   entry: Omit<ScanHistoryEntry, "id" | "userId" | "scannedAt" | "expiresAt">
 ): Promise<string> {
-  const db = getDb();
-  const ref = collection(db, COLLECTIONS.SCAN_HISTORY);
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
-  const docRef = await addDoc(ref, {
-    ...entry,
-    userId: uid,
-    scannedAt: serverTimestamp(),
-    expiresAt: expiresAt.toISOString()
+  const op = "addScanHistoryEntry(scanHistory)";
+  if (!requireAuth(op)) return "";
+  return withFirestoreLog(op, async () => {
+    const db = getDb();
+    const ref = collection(db, COLLECTIONS.SCAN_HISTORY);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+    const docRef = await addDoc(ref, {
+      ...entry,
+      userId: uid,
+      scannedAt: serverTimestamp(),
+      expiresAt: expiresAt.toISOString()
+    });
+    return docRef.id;
   });
-  return docRef.id;
 }
 
 /** Get product mappings (read-only). For write, use server-side API with Firebase Admin SDK. */
 export async function getProductMappings(gtin?: string): Promise<ProductMapping[]> {
-  const db = getDb();
-  const ref = collection(db, COLLECTIONS.PRODUCT_MAPPINGS);
-  const q = gtin
-    ? query(ref, where("gtin", "==", gtin), limit(20))
-    : query(ref, limit(100));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => {
-    const data = d.data();
-    return {
-      id: d.id,
-      gtin: (data.gtin as string) ?? "",
-      productUrl: (data.productUrl as string) ?? "",
-      brand: (data.brand as string) ?? "",
-      confirmedAt: timestampToIso(data.confirmedAt),
-      confirmedByUserId: (data.confirmedByUserId as string) ?? ""
-    } as ProductMapping;
+  const op = "getProductMappings(productMappings" + (gtin ? "?gtin=" + gtin : "") + ")";
+  if (!requireAuth(op)) return [];
+  return withFirestoreLog(op, async () => {
+    const db = getDb();
+    const ref = collection(db, COLLECTIONS.PRODUCT_MAPPINGS);
+    const q = gtin
+      ? query(ref, where("gtin", "==", gtin), limit(20))
+      : query(ref, limit(100));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        gtin: (data.gtin as string) ?? "",
+        productUrl: (data.productUrl as string) ?? "",
+        brand: (data.brand as string) ?? "",
+        confirmedAt: timestampToIso(data.confirmedAt),
+        confirmedByUserId: (data.confirmedByUserId as string) ?? ""
+      } as ProductMapping;
+    });
   });
 }

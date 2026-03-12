@@ -28,7 +28,9 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
 NEXT_PUBLIC_FIREBASE_APP_ID=...
 ```
 
-5. Deploy Firestore rules and indexes (optional; the first query will prompt you to create the index via console):
+5. (Optional) For secondhand search on the breakdown screen, add an eBay Finding API App ID to `.env.local`: `EBAY_APP_ID=YourAppId`. Get one at [eBay Developers](https://developer.ebay.com/). Without it, only ThredUp and Depop search links are shown.
+
+6. Deploy Firestore rules and indexes (optional; the first query will prompt you to create the index via console):
 
 ```bash
 firebase deploy --only firestore

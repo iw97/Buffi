@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
-import { useScanResult } from "@/contexts/ScanResultContext";
+import { useScanResult, getStoredScanResult, isValidScanResult, normalizeScanResult } from "@/contexts/ScanResultContext";
 import { addSavedItem, removeSavedItem, setUserProfile } from "@/lib/firebase/firestore";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import type { ScanAnalysis } from "@/lib/scan/types";
@@ -49,13 +49,46 @@ function analysisToSavedItem(a: ScanAnalysis) {
 export function BreakdownScreen() {
   const router = useRouter();
   const auth = useAuthOptional();
-  const { result } = useScanResult();
+  const { result, setResult, clearResult } = useScanResult();
+  const [waitingForData, setWaitingForData] = useState(true);
+  const [hasCheckedStorage, setHasCheckedStorage] = useState(false);
+
+  const validResult = normalizeScanResult(result) ?? null;
 
   useEffect(() => {
-    if (!result) router.replace("/scan");
-  }, [result, router]);
+    console.log("[breakdown] effect run – result (raw)", result === null ? "null" : JSON.stringify({ keys: Object.keys(result as object), verdict: (result as Record<string, unknown>)?.verdict, estimatedMaterialCost: (result as Record<string, unknown>)?.estimatedMaterialCost }));
 
-  const scan = result ? analysisToSavedItem(result) : null;
+    if (isValidScanResult(result)) {
+      setWaitingForData(false);
+      return;
+    }
+    if (!hasCheckedStorage) {
+      setHasCheckedStorage(true);
+      const storedRaw = getStoredScanResult();
+      console.log("[breakdown] stored (raw)", storedRaw === null ? "null" : JSON.stringify({ keys: Object.keys(storedRaw as object), verdict: (storedRaw as Record<string, unknown>)?.verdict }));
+      const stored = normalizeScanResult(storedRaw);
+      if (stored) {
+        setResult(stored);
+        setWaitingForData(false);
+        return;
+      }
+    }
+    const t = window.setTimeout(() => {
+      setWaitingForData(false);
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [result, hasCheckedStorage, setResult]);
+
+  useEffect(() => {
+    if (waitingForData) return;
+    const current = normalizeScanResult(result) ?? normalizeScanResult(getStoredScanResult());
+    if (!current) {
+      console.log("[breakdown] no valid scan result, redirecting to /scan");
+      router.replace("/scan");
+    }
+  }, [waitingForData, result, router]);
+
+  const scan = validResult ? analysisToSavedItem(validResult) : null;
   const [infoOpen, setInfoOpen] = useState<InfoId | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [premiumOpen, setPremiumOpen] = useState(false);
@@ -69,7 +102,9 @@ export function BreakdownScreen() {
   const isSaved = !!savedItemId;
   const [toast, setToast] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [isPro, setIsPro] = useState(false); // TODO: from profile or subscription
+  const isProFromProfile = auth?.profile?.isPro ?? false;
+  const [isProOverride, setIsProOverride] = useState(false);
+  const isPro = isProFromProfile || isProOverride;
 
   const score = 25; // TODO: derive from analysis
 
@@ -173,6 +208,17 @@ export function BreakdownScreen() {
     }
   }
 
+  if (waitingForData) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-10">
+        <div className="analyzing-label">Loading</div>
+        <div className="analyzing-title" style={{ fontSize: 18, fontStyle: "normal" }}>
+          Pulling your breakdown…
+        </div>
+      </div>
+    );
+  }
+
   if (!scan) return null;
 
   const syntheticPct = result
@@ -184,7 +230,14 @@ export function BreakdownScreen() {
   return (
     <div className="min-h-screen flex flex-col">
       <div className="breakdown-header">
-        <button className="back-btn" type="button" onClick={() => router.push("/scan")}>
+<button
+          className="back-btn"
+          type="button"
+          onClick={() => {
+            clearResult();
+            router.push("/scan");
+          }}
+        >
           ← Back
         </button>
         <div className="breakdown-wordmark">
@@ -352,23 +405,28 @@ export function BreakdownScreen() {
         <div className="section-divider" />
 
         <div className="pad">
-          <div className="section-eyebrow">— Find It Secondhand Instead</div>
-          {[
-            { platform: "ThredUp", price: "$12", savings: "Save $77 · 86% less" },
-            { platform: "Depop", price: "$18", savings: "Save $71 · 80% less" },
-            { platform: "eBay", price: "$9", savings: "Save $80 · 90% less" }
-          ].map((row) => (
-            <div key={row.platform} className="secondhand-card">
-              <div>
-                <div className="sh-platform">{row.platform}</div>
-                <div className="sh-price">{row.price}</div>
-                <div className="sh-savings">{row.savings}</div>
+          <div className="section-eyebrow">— Find it secondhand</div>
+          <div className="secondhand-pro-wrap">
+            <div className="secondhand-pro-placeholder">
+              <div className="secondhand-pro-placeholder-inner">
+                <div className="secondhand-pro-image" aria-hidden />
+                <div className="secondhand-pro-content">
+                  <div className="secondhand-pro-platform" />
+                  <div className="secondhand-pro-title" />
+                  <div className="secondhand-pro-price" />
+                </div>
+                <div className="secondhand-pro-arrow" aria-hidden>→</div>
               </div>
-              <div className="sh-arrow" aria-hidden>
-                →
+              <div className="secondhand-pro-overlay" aria-hidden>
+                <svg className="secondhand-pro-lock" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <span>Buffi Pro</span>
               </div>
             </div>
-          ))}
+          </div>
+          <p className="secondhand-pro-caption">Secondhand alternatives are available on Buffi Pro</p>
         </div>
 
         <div className="save-btn-row">
@@ -472,7 +530,7 @@ export function BreakdownScreen() {
             type="button"
             style={{ width: "100%" }}
             onClick={() => {
-              setIsPro(true);
+              setIsProOverride(true);
               setPremiumOpen(false);
               showToast();
             }}

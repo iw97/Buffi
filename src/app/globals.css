@@ -1784,10 +1784,108 @@ input[type="range"]::-webkit-slider-thumb:hover {
   background: var(--panel);
   margin-bottom: 8px;
   transition: all 0.2s;
+  text-decoration: none;
+  color: inherit;
 }
 .secondhand-card:hover {
   border-color: var(--teal);
   background: rgba(82, 217, 208, 0.12);
+}
+.secondhand-loading,
+.secondhand-empty {
+  padding: 16px 20px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.secondhand-empty {
+  font-style: italic;
+}
+
+/* Locked Pro secondhand preview */
+.secondhand-pro-wrap {
+  margin-bottom: 8px;
+}
+.secondhand-pro-placeholder {
+  position: relative;
+  border: 1px solid var(--border-light);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--panel);
+  min-height: 72px;
+}
+.secondhand-pro-placeholder-inner {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  filter: blur(4px);
+  opacity: 0.5;
+  pointer-events: none;
+}
+.secondhand-pro-image {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  background: var(--border-light);
+  border-radius: 4px;
+}
+.secondhand-pro-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.secondhand-pro-platform,
+.secondhand-pro-title,
+.secondhand-pro-price {
+  height: 10px;
+  background: var(--border-light);
+  border-radius: 2px;
+}
+.secondhand-pro-platform {
+  width: 48px;
+  height: 8px;
+}
+.secondhand-pro-title {
+  width: 85%;
+  height: 12px;
+}
+.secondhand-pro-price {
+  width: 56px;
+  height: 14px;
+}
+.secondhand-pro-arrow {
+  font-size: 18px;
+  color: var(--text-dim);
+}
+.secondhand-pro-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--teal);
+  pointer-events: none;
+}
+.secondhand-pro-lock {
+  flex-shrink: 0;
+  color: var(--teal);
+}
+.secondhand-pro-caption {
+  font-family: var(--font-sans, sans-serif);
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 0;
+  margin-top: 8px;
+  line-height: 1.4;
 }
 .sh-platform {
   font-family: var(--font-mono, monospace);
@@ -1796,6 +1894,16 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--text-secondary);
   text-transform: uppercase;
   margin-bottom: 4px;
+}
+.sh-title {
+  font-size: 14px;
+  color: var(--text);
+  margin-bottom: 4px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .sh-price {
   font-family: var(--font-cormorant, serif);
