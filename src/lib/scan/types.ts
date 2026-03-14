@@ -5,12 +5,19 @@ export interface RawProductData {
   price?: number;
   materials?: string;
   description?: string;
+  imageUrl?: string | null;
   url?: string;
   barcode?: string;
   source: "url" | "barcode" | "tag";
 }
 
-/** Claude analysis output — exact fields from the prompt */
+/** Context for whether markup is justified; used to nuance verdict presentation. */
+export type MarkupContext = "justified" | "partially justified" | "unjustified";
+
+/** Three-tier verdict for display (teal / amber / red). */
+export type VerdictTier = "Worth It" | "Think Twice" | "Retail Trap";
+
+/** Claude analysis output — exact fields from the prompt; verdict/verdictReason are computed. */
 export interface ScanAnalysis {
   brand: string;
   name: string;
@@ -19,9 +26,15 @@ export interface ScanAnalysis {
   estimatedMaterialCost: number;
   markup: number;
   costPerWear: number;
-  verdict: "Retail Trap" | "Worth It";
+  verdict: VerdictTier;
   verdictReason: string;
   tags: string[];
+  /** Small/indie brand; higher markups are normal for sustainability. */
+  isSmallBusiness?: boolean;
+  /** Nuance for verdict: justified | partially justified | unjustified */
+  markupContext: MarkupContext;
+  /** Product image URL from scraper (og:image or Shopify), when source was URL. */
+  imageUrl?: string | null;
 }
 
 /** Full scan result returned by /api/scan */
@@ -35,11 +48,12 @@ export interface MinimalScanResponse {
   estimatedMaterialCost: number;
   markup: number;
   markupBand: string;
-  verdict: "Retail Trap" | "Worth It";
+  verdict: VerdictTier;
   verdictReason: string;
   tags: string[];
   isEstimated: boolean;
   isSmallBusiness: boolean;
+  markupContext: MarkupContext;
 }
 
 /** Error codes for explicit handling */

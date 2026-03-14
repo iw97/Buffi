@@ -21,7 +21,7 @@ export function isValidScanResult(value: unknown): value is ScanAnalysis {
   const r = value as Record<string, unknown>;
   const verdict = r.verdict;
   const hasVerdict =
-    verdict === "Retail Trap" || verdict === "Worth It";
+    verdict === "Retail Trap" || verdict === "Worth It" || verdict === "Think Twice";
   const hasEstimatedMaterialCost =
     typeof r.estimatedMaterialCost === "number";
   return hasVerdict && hasEstimatedMaterialCost;

@@ -23,7 +23,7 @@ const MOCK_SAVED_ITEMS: SavedItem[] = [
     fibers: ["Polyester 100%"],
     verdict: "trap",
     verdictReason: "High markup on synthetic fabric.",
-    tags: ["Retail Trap", "100% Plastic"],
+    tags: ["Retail Trap", "100% Synthetic"],
     isEstimated: true,
     confidenceTier: 1,
     savedAt: new Date().toISOString()

@@ -122,6 +122,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
 
     console.log("[api/scan] calling analyzeWithClaude");
     const analysis = await analyzeWithClaude(raw);
+    if (raw.imageUrl != null) analysis.imageUrl = raw.imageUrl;
     console.log("[api/scan] Claude analysis received, returning 200");
     return NextResponse.json({ ok: true, analysis });
   } catch (err) {

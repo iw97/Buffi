@@ -41,7 +41,7 @@ export interface SavedItem {
   markup: number;
   markupBand: string;
   fibers: string[];
-  verdict: "trap" | "win";
+  verdict: "trap" | "win" | "think_twice";
   verdictReason: string;
   tags: string[];
   isEstimated: boolean;
@@ -55,7 +55,7 @@ export interface ScanHistoryEntry {
   userId: string;
   brandName: string;
   itemName: string;
-  verdict: "trap" | "win";
+  verdict: "trap" | "win" | "think_twice";
   confidenceTier: number;
   scannedAt: string;
   expiresAt: string;

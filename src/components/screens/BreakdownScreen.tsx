@@ -12,13 +12,13 @@ type InfoId = "material" | "cpw" | "markup";
 
 const SYNTHETIC_FIBERS = ["polyester", "nylon", "elastane", "spandex", "acrylic", "viscose", "rayon", "polyamide"];
 
-function fiberKind(fiber: string): "plastic" | "natural" {
+function fiberKind(fiber: string): "synthetic" | "natural" {
   const lower = fiber.toLowerCase();
-  return SYNTHETIC_FIBERS.some((s) => lower.includes(s)) ? "plastic" : "natural";
+  return SYNTHETIC_FIBERS.some((s) => lower.includes(s)) ? "synthetic" : "natural";
 }
 
-function badgeForKind(kind: "plastic" | "natural"): string {
-  return kind === "plastic" ? "Plastic" : "Natural";
+function badgeForKind(kind: "synthetic" | "natural"): string {
+  return kind === "synthetic" ? "Synthetic" : "Natural";
 }
 
 function markupToBand(markup: number): string {
@@ -27,8 +27,53 @@ function markupToBand(markup: number): string {
   return "high";
 }
 
+/** Map analysis verdict to stamp CSS class (trap | win | think-twice). */
+function verdictToStampClass(verdict: string): "trap" | "win" | "think-twice" {
+  if (verdict === "Retail Trap") return "trap";
+  if (verdict === "Think Twice") return "think-twice";
+  return "win";
+}
+
+/** Small copy shown under each verdict. */
+function verdictSubtitle(verdict: string) {
+  switch (verdict) {
+    case "Worth It":
+      return (
+        <p className="verdict-subtitle">
+          The price is fair for what you&apos;re getting — markup is in line with the materials and brand.
+        </p>
+      );
+    case "Think Twice":
+      return (
+        <p className="verdict-subtitle">
+          You&apos;re paying a premium here. The markup may be softened by genuine quality materials and cost per wear
+          — decide if that&apos;s worth it to you.
+        </p>
+      );
+    case "Retail Trap":
+      return (
+        <>
+          <p className="verdict-subtitle">
+            Steep markup on synthetic materials — the price is not supported by what you are getting.
+          </p>
+          <p className="verdict-subtitle">
+            Fast fashion pricing on low-quality fibers — brand recognition is doing most of the work here.
+          </p>
+        </>
+      );
+    default:
+      return null;
+  }
+}
+
+/** Map analysis verdict to saved item verdict (trap | win | think_twice). */
+function verdictToSavedVerdict(verdict: string): "trap" | "win" | "think_twice" {
+  if (verdict === "Retail Trap") return "trap";
+  if (verdict === "Think Twice") return "think_twice";
+  return "win";
+}
+
 function analysisToSavedItem(a: ScanAnalysis) {
-  const verdictType = a.verdict === "Retail Trap" ? ("trap" as const) : ("win" as const);
   const fibers = a.materials.map((m) => `${m.fiber} ${m.percentage}%`);
   return {
     brandName: a.brand,
@@ -38,7 +83,7 @@ function analysisToSavedItem(a: ScanAnalysis) {
     markup: a.markup,
     markupBand: markupToBand(a.markup),
     fibers,
-    verdict: verdictType,
+    verdict: verdictToSavedVerdict(a.verdict),
     verdictReason: a.verdictReason,
     tags: a.tags,
     isEstimated: true,
@@ -110,8 +155,11 @@ export function BreakdownScreen() {
   // allow user to enter price manually and recompute markup / cost-per-wear client-side.
   const [manualPriceInput, setManualPriceInput] = useState("");
   const [manualPriceApplied, setManualPriceApplied] = useState<number | null>(null);
+  const [imageError, setImageError] = useState(false);
 
   const score = 25; // TODO: derive from analysis
+  const imageUrl = result?.imageUrl ?? null;
+  const showProductImage = imageUrl && !imageError;
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -228,7 +276,7 @@ export function BreakdownScreen() {
 
   const syntheticPct = result
     ? result.materials
-        .filter((m) => fiberKind(m.fiber) === "plastic")
+        .filter((m) => fiberKind(m.fiber) === "synthetic")
         .reduce((sum, m) => sum + m.percentage, 0)
     : 0;
 
@@ -283,7 +331,18 @@ export function BreakdownScreen() {
       <div className="breakdown-scroll">
         <div className="item-hero">
           <div className="item-swatch" aria-hidden>
-            {scan.emoji}
+            {showProductImage ? (
+              <img
+                src={imageUrl!}
+                alt=""
+                className="item-swatch-img"
+                onError={() => setImageError(true)}
+              />
+            ) : (
+              <div className="item-swatch-placeholder">
+                <span className="item-swatch-monogram">B</span>
+              </div>
+            )}
           </div>
           <div>
             <div className="item-brand">{scan.brandName}</div>
@@ -298,10 +357,11 @@ export function BreakdownScreen() {
         </div>
 
         <div className="pad" style={{ paddingTop: 24 }}>
-          <div className={`verdict-stamp ${scan.verdict}`}>
+          <div className={`verdict-stamp ${verdictToStampClass(result!.verdict)}`}>
             <div>
               <div className="verdict-eyebrow">Our Verdict</div>
               <div className="verdict-text">{result!.verdict}.</div>
+              <div className="verdict-subtitle-wrap">{verdictSubtitle(result!.verdict)}</div>
             </div>
           </div>
         </div>
@@ -362,7 +422,7 @@ export function BreakdownScreen() {
             </div>
 
             <div className="receipt-row">
-              <div className="receipt-key">% synthetic (plastic)</div>
+              <div className="receipt-key">% synthetic</div>
               <div className={`receipt-val ${syntheticPct > 50 ? "bad" : "good"}`}>{Math.round(syntheticPct)}%</div>
             </div>
 
@@ -641,7 +701,7 @@ export function BreakdownScreen() {
               </div>
               <div className="share-stat">
                 <div className="share-stat-val">{Math.round(syntheticPct)}%</div>
-                <div className="share-stat-key">Plastic</div>
+                <div className="share-stat-key">Synthetic</div>
               </div>
             </div>
             <div className="share-card-brand">

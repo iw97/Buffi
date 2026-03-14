@@ -51,6 +51,7 @@ async function fetchShopifyProductJson(productUrl: string): Promise<{
   price?: number;
   materials?: string;
   description?: string;
+  imageUrl?: string | null;
 } | null> {
   try {
     const u = new URL(productUrl);
@@ -74,6 +75,11 @@ async function fetchShopifyProductJson(productUrl: string): Promise<{
       const p = parseFloat(String(variants[0].price));
       if (!Number.isNaN(p) && p >= 0) price = normalizePrice(p);
     }
+    const images = product.images as Array<{ src?: string }> | undefined;
+    const imageUrl =
+      Array.isArray(images) && images.length > 0 && typeof images[0]?.src === "string" && images[0].src.trim()
+        ? images[0].src.trim()
+        : null;
     const bodyHtml = product.body_html as string | undefined;
     const description =
       typeof bodyHtml === "string" && bodyHtml.trim()
@@ -82,32 +88,35 @@ async function fetchShopifyProductJson(productUrl: string): Promise<{
     console.log(LOG_PREFIX, "Shopify .json used for", productUrl.slice(0, 80), "->", {
       title: title.slice(0, 40),
       vendor,
-      price: price ?? "(none)"
+      price: price ?? "(none)",
+      imageUrl: imageUrl ? "yes" : "no"
     });
     return {
       name: title.trim(),
       brand: vendor?.trim() || undefined,
       price,
       description: description || undefined,
-      materials: undefined
+      materials: undefined,
+      imageUrl: imageUrl ?? null
     };
   } catch {
     return null;
   }
 }
 
-/** Extract product data from retailer HTML. Name, brand, materials from Cheerio; price only from Shopify .json when available. */
+/** Extract product data from retailer HTML. Name, brand, materials from Cheerio; price only from Shopify .json when available. Image: og:image or Shopify images[0].src. */
 export async function scrapeProductFromUrl(url: string): Promise<{
   brand?: string;
   name?: string;
   price?: number;
   materials?: string;
   description?: string;
+  imageUrl?: string | null;
 } | null> {
   const parsedUrl = new URL(url);
   const host = parsedUrl.hostname.toLowerCase();
 
-  // Shopify: try .json endpoint first (returns price when store allows it)
+  // Shopify: try .json endpoint first (returns price when store allows it; image from images[0].src)
   const shopifyResult = await fetchShopifyProductJson(url);
   if (shopifyResult && (shopifyResult.name || shopifyResult.brand || shopifyResult.price != null)) {
     const out = {
@@ -115,13 +124,15 @@ export async function scrapeProductFromUrl(url: string): Promise<{
       name: shopifyResult.name,
       price: shopifyResult.price,
       materials: shopifyResult.materials,
-      description: shopifyResult.description
+      description: shopifyResult.description,
+      imageUrl: shopifyResult.imageUrl ?? null
     };
     console.log(LOG_PREFIX, "extracted (Shopify .json)", url.slice(0, 80), "->", {
       brand: out.brand ?? "(missing)",
       name: out.name?.slice(0, 50) ?? "(missing)",
       price: out.price ?? "(missing)",
-      hasMaterials: !!out.materials
+      hasMaterials: !!out.materials,
+      hasImage: !!out.imageUrl
     });
     return out;
   }
@@ -136,6 +147,8 @@ export async function scrapeProductFromUrl(url: string): Promise<{
 
   const jsonLdScripts = $('script[type="application/ld+json"]').toArray();
   const ogTitle = $('meta[property="og:title"]').attr("content");
+  const ogImage = $('meta[property="og:image"]').attr("content");
+  const imageUrl = typeof ogImage === "string" && ogImage.trim() ? ogImage.trim() : null;
 
   let brand: string | undefined;
   let name: string | undefined;
@@ -187,26 +200,26 @@ export async function scrapeProductFromUrl(url: string): Promise<{
   if (host.includes("zara.com")) {
     brand = brand ?? "Zara";
     name = name ?? $(".product-detail-info__header-name").first().text().trim();
-    materials = materials ?? $('[data-qa="product-detail-composition"]').text().trim() || $(".product-detail-composition").text().trim();
+    materials = materials ?? ($('[data-qa="product-detail-composition"]').text().trim() || $(".product-detail-composition").text().trim());
   } else if (host.includes("hm.com")) {
     brand = brand ?? "H&M";
-    name = name ?? $("h1.primary-product-title").first().text().trim() || $(".ProductTitle-module").first().text().trim();
-    materials = materials ?? $(".ProductDetails-module__composition").text().trim() || $('[data-testid="product-composition"]').text().trim();
+    name = name ?? ($("h1.primary-product-title").first().text().trim() || $(".ProductTitle-module").first().text().trim());
+    materials = materials ?? ($(".ProductDetails-module__composition").text().trim() || $('[data-testid="product-composition"]').text().trim());
   } else if (host.includes("asos.com")) {
     brand = brand ?? $('[data-auto-id="product-brand"]').first().text().trim();
-    name = name ?? $('[data-auto-id="product-title"]').first().text().trim() || $("h1").first().text().trim();
-    materials = materials ?? $(".product-description__materials").text().trim() || $('[data-id="product-details"]').find("li").text();
+    name = name ?? ($('[data-auto-id="product-title"]').first().text().trim() || $("h1").first().text().trim());
+    materials = materials ?? ($(".product-description__materials").text().trim() || $('[data-id="product-details"]').find("li").text());
   } else if (host.includes("nike.com")) {
     brand = brand ?? "Nike";
     name = name ?? $("h1").first().text().trim();
   } else if (host.includes("everlane.com")) {
     brand = brand ?? "Everlane";
-    name = name ?? $("h1.product-title").first().text().trim() || $(".product__title").first().text().trim();
-    materials = materials ?? $(".product-details__materials").text().trim() || $('[data-id="materials"]').text().trim();
+    name = name ?? ($("h1.product-title").first().text().trim() || $(".product__title").first().text().trim());
+    materials = materials ?? ($(".product-details__materials").text().trim() || $('[data-id="materials"]').text().trim());
   } else if (host.includes("shein.com") || host.includes("shein.")) {
     brand = brand ?? "Shein";
-    name = name ?? $(".product-intro__head-name").first().text().trim() || $("h1").first().text().trim();
-    materials = materials ?? $(".product-intro__detail-description").text().trim() || $('[data-id="product-detail"]').text();
+    name = name ?? ($(".product-intro__head-name").first().text().trim() || $("h1").first().text().trim());
+    materials = materials ?? ($(".product-intro__detail-description").text().trim() || $('[data-id="product-detail"]').text());
   }
 
   if (!name) name = $("h1").first().text().trim() || ogTitle;
@@ -214,11 +227,12 @@ export async function scrapeProductFromUrl(url: string): Promise<{
 
   if (!name && !brand) return null;
 
-  const out = { brand, name, materials, description };
+  const out = { brand, name, materials, description, imageUrl };
   console.log(LOG_PREFIX, "extracted from HTML", url.slice(0, 80), "->", {
     brand: out.brand ?? "(missing)",
     name: out.name?.slice(0, 50) ?? "(missing)",
-    hasMaterials: !!out.materials
+    hasMaterials: !!out.materials,
+    hasImage: !!out.imageUrl
   });
   return out;
 }

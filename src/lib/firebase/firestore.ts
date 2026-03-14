@@ -117,7 +117,7 @@ function toSavedItem(docId: string, data: Record<string, unknown>): SavedItem {
     markup: (data.markup as number) ?? 0,
     markupBand: (data.markupBand as string) ?? "",
     fibers: Array.isArray(data.fibers) ? (data.fibers as string[]) : [],
-    verdict: (data.verdict as "trap" | "win") ?? "win",
+    verdict: (data.verdict as "trap" | "win" | "think_twice") ?? "win",
     verdictReason: (data.verdictReason as string) ?? "",
     tags: Array.isArray(data.tags) ? (data.tags as string[]) : [],
     isEstimated: (data.isEstimated as boolean) ?? true,

@@ -1,20 +1,28 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { RawProductData } from "./types";
 import type { ScanAnalysis, MinimalScanResponse } from "./types";
+import { computeVerdict, parseFibersToMaterials } from "./verdict";
 
 const CLAUDE_TIMEOUT_MS = 45000;
 
 const MINIMAL_SCAN_SYSTEM_PROMPT = `You are a material intelligence analyst for clothing and apparel. You will receive JSON input with: brandName, fibers (array of strings, e.g. "Cotton 100%" or "Polyester 80%, Elastane 20%"), price (retail price in USD), and confidenceTier (number).
 
+Apply these rules:
+- Small/indie brand: if brandName suggests an independent or small brand (not a major retailer or fast-fashion chain), set isSmallBusiness: true; higher markups are normal for small-business sustainability.
+- Fiber quality: premium natural (cashmere, silk, merino wool, modal, linen, lyocell/Tencel) > standard natural (cotton, wool, hemp) > synthetic (polyester, nylon, acrylic, viscose, elastane). Favor verdict for premium-natural-heavy garments.
+- verdictReason must include context (e.g. small-brand markup vs fast-fashion synthetic). Verdict stays "Retail Trap" or "Worth It".
+- markupContext: exactly one of "justified" | "partially justified" | "unjustified" based on fiber quality and small-business context.
+
 Respond with only valid JSON and nothing else. No markdown, no code fence, no explanation. The JSON must have exactly these fields:
 - estimatedMaterialCost (number, USD)
 - markup (number, percentage e.g. 50 for 50%)
 - markupBand (string: "low", "medium", or "high" based on markup)
-- verdict (string: "Retail Trap" or "Worth It")
-- verdictReason (string, one sentence)
-- tags (array of strings, e.g. "Synthetic Heavy", "High Markup", "Natural Fibers", "Fair Value")
+- verdict (string: ignored — we compute verdict from markup and fibers)
+- verdictReason (string: one sentence with context)
+- tags (array of strings)
 - isEstimated (boolean)
-- isSmallBusiness (boolean, infer from brand if possible)`;
+- isSmallBusiness (boolean, infer from brand if possible)
+- markupContext (string: "justified" | "partially justified" | "unjustified")`;
 
 export async function analyzeWithClaude(raw: RawProductData): Promise<ScanAnalysis> {
   const client = new Anthropic({
@@ -36,11 +44,30 @@ ${
     ? `This is a TAG/CARE-LABEL input: we have composition (materials) but NO retail price. Do a PARTIAL analysis:
 - Focus on material quality only: parse materials from the composition text, estimate material cost, and give a verdict based purely on whether the materials are good value for typical apparel (synthetic-heavy vs natural, durability, etc.).
 - Set markup to 0 and costPerWear to 0 (markup analysis requires a price).
-- Include in tags: "Partial analysis", "Markup requires price". If brand was not provided, also add "Brand unknown".`
+- Include in tags: "Partial analysis", "Markup requires price". If brand was not provided, also add "Brand unknown".
+- Set isSmallBusiness and markupContext using the rules below where applicable.`
     : isTagSource
-      ? `This is a TAG/CARE-LABEL input with composition and optional brand/price. If brand or price was not provided, still produce a full analysis using what you have, and add to tags any missing data (e.g. "Brand unknown" or "Price estimated") so the user knows the confidence level.`
-      : `If the raw data is sparse, make reasonable inferences for clothing/apparel.`
+      ? `This is a TAG/CARE-LABEL input with composition and optional brand/price. If brand or price was not provided, still produce a full analysis using what you have, and add to tags any missing data (e.g. "Brand unknown" or "Price estimated") so the user knows the confidence level. Apply the small-brand, fiber-quality, and markup-context rules below.`
+      : `If the raw data is sparse, make reasonable inferences for clothing/apparel. Apply the rules below.`
 }
+
+**Small / indie brand detection**
+- If the brand appears to be an independent or small brand (not a major retailer or fast-fashion chain), treat higher markups as normal and necessary for small-business sustainability. Set isSmallBusiness: true in that case.
+- Major retailers and fast-fashion chains: set isSmallBusiness: false.
+
+**Fiber quality weighting (for verdict and verdictReason)**
+Not all natural fibers are equal. Weight fibers in this order for quality assessment:
+- Premium natural: cashmere, silk, merino wool, modal, linen, lyocell/Tencel
+- Standard natural: cotton, wool, hemp
+- Synthetic: polyester, nylon, acrylic, viscose, elastane
+A garment that is predominantly premium natural fibers should receive a more favorable verdict than the same markup on synthetic fibers.
+
+**Verdict nuancing**
+- Verdict label stays exactly "Retail Trap" or "Worth It".
+- verdictReason MUST include context. For small brands with quality fibers, acknowledge both the markup and mitigating factors.
+  Example (small brand + quality fibers): "Independent brand markup — quality cotton-modal blend partially justifies the price. You are paying a premium for small-batch production."
+  Example (fast fashion synthetic): "Steep markup on low-quality synthetic materials with no justification beyond brand recognition."
+- Add a new field markupContext — exactly one of: "justified" | "partially justified" | "unjustified". Use it to reflect whether the markup is justified by fiber quality, small-business context, or neither.
 
 Return a JSON object with exactly these fields (no other fields, no markdown, no explanation):
 - brand (string, use provided brand or "Unknown" if missing)
@@ -50,9 +77,11 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
 - estimatedMaterialCost (number, in USD)
 - markup (number, as percentage e.g. 20 for 20%; use 0 if no price was provided)
 - costPerWear (number, estimated; use 0 if no price)
-- verdict ("Retail Trap" or "Worth It")
-- verdictReason (string, one sentence)
-- tags (array of strings, e.g. "Synthetic Heavy", "High Markup", "Fast Fashion", "Natural Fibers", "Fair Value"; include confidence flags like "Brand unknown" or "Markup requires price" when relevant)`;
+- verdict (string: any — we overwrite with computed three-tier verdict)
+- verdictReason (string, one sentence with context as above)
+- tags (array of strings, e.g. "Synthetic Heavy", "High Markup", "Fast Fashion", "Natural Fibers", "Fair Value", "Small Brand"; include confidence flags when relevant)
+- isSmallBusiness (boolean: true if independent/small brand, false if major retailer or fast fashion)
+- markupContext (string: exactly "justified" | "partially justified" | "unjustified")`;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), CLAUDE_TIMEOUT_MS);
@@ -79,7 +108,8 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
 
     const parsed = JSON.parse(jsonMatch[0]) as ScanAnalysis;
 
-    // Validate required fields
+    // Validate required fields (verdict/verdictReason are overwritten by computeVerdict)
+    const validMarkupContext = ["justified", "partially justified", "unjustified"] as const;
     if (
       typeof parsed.brand !== "string" ||
       typeof parsed.name !== "string" ||
@@ -88,12 +118,24 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
       typeof parsed.estimatedMaterialCost !== "number" ||
       typeof parsed.markup !== "number" ||
       typeof parsed.costPerWear !== "number" ||
-      !["Retail Trap", "Worth It"].includes(parsed.verdict) ||
       typeof parsed.verdictReason !== "string" ||
-      !Array.isArray(parsed.tags)
+      !Array.isArray(parsed.tags) ||
+      !validMarkupContext.includes(parsed.markupContext as (typeof validMarkupContext)[number])
     ) {
       throw new Error("Invalid Claude response structure");
     }
+    if (parsed.isSmallBusiness === undefined) parsed.isSmallBusiness = false;
+
+    const { verdict, verdictReason } = computeVerdict({
+      markup: parsed.markup,
+      materials: parsed.materials,
+      isSmallBusiness: parsed.isSmallBusiness,
+      costPerWear: parsed.costPerWear
+    });
+    parsed.verdict = verdict;
+    parsed.verdictReason = verdictReason;
+    parsed.markupContext =
+      verdict === "Worth It" ? "justified" : verdict === "Think Twice" ? "partially justified" : "unjustified";
 
     return parsed;
   } catch (err) {
@@ -155,18 +197,31 @@ export async function analyzeMinimalScan(input: {
 
     const parsed = JSON.parse(jsonMatch[0]) as MinimalScanResponse;
 
+    const validMarkupContext = ["justified", "partially justified", "unjustified"] as const;
     if (
       typeof parsed.estimatedMaterialCost !== "number" ||
       typeof parsed.markup !== "number" ||
       typeof parsed.markupBand !== "string" ||
-      !["Retail Trap", "Worth It"].includes(parsed.verdict) ||
       typeof parsed.verdictReason !== "string" ||
       !Array.isArray(parsed.tags) ||
       typeof parsed.isEstimated !== "boolean" ||
-      typeof parsed.isSmallBusiness !== "boolean"
+      typeof parsed.isSmallBusiness !== "boolean" ||
+      !validMarkupContext.includes(parsed.markupContext as (typeof validMarkupContext)[number])
     ) {
       throw new Error("Invalid minimal scan response structure");
     }
+
+    const materials = parseFibersToMaterials(input.fibers);
+    const { verdict, verdictReason } = computeVerdict({
+      markup: parsed.markup,
+      materials,
+      isSmallBusiness: parsed.isSmallBusiness,
+      costPerWear: 0
+    });
+    parsed.verdict = verdict;
+    parsed.verdictReason = verdictReason;
+    parsed.markupContext =
+      verdict === "Worth It" ? "justified" : verdict === "Think Twice" ? "partially justified" : "unjustified";
 
     return parsed;
   } catch (err) {

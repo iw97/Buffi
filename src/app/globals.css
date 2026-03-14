@@ -34,6 +34,7 @@
 
   /* Status */
   --red: #e8604a;
+  --amber: #e8a040;
 }
 
 * {
@@ -1459,6 +1460,29 @@ input[type="range"]::-webkit-slider-thumb:hover {
     rgba(255, 255, 255, 0.012) 3px,
     rgba(255, 255, 255, 0.012) 6px
   );
+  pointer-events: none;
+}
+.item-swatch-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.item-swatch-placeholder {
+  position: absolute;
+  inset: 0;
+  background: #0f0f0f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.item-swatch-monogram {
+  font-family: var(--font-cormorant, serif);
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--teal);
 }
 
 .item-brand {
@@ -1531,6 +1555,10 @@ input[type="range"]::-webkit-slider-thumb:hover {
   border-color: var(--teal);
   background: rgba(82, 217, 208, 0.12);
 }
+.verdict-stamp.think-twice {
+  border-color: var(--amber);
+  background: rgba(232, 160, 64, 0.08);
+}
 
 .verdict-eyebrow {
   font-family: var(--font-mono, monospace);
@@ -1553,6 +1581,24 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 .verdict-stamp.win .verdict-text {
   color: var(--teal);
+}
+.verdict-stamp.think-twice .verdict-text {
+  color: var(--amber);
+}
+
+.verdict-subtitle-wrap {
+  margin-top: 10px;
+}
+.verdict-subtitle {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-dim);
+  margin: 0;
+  font-weight: 400;
+  font-style: normal;
+}
+.verdict-subtitle + .verdict-subtitle {
+  margin-top: 6px;
 }
 
 .section-eyebrow {
@@ -1690,7 +1736,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   padding: 2px 6px;
   text-transform: uppercase;
 }
-.fiber-badge.plastic {
+.fiber-badge.synthetic {
   background: rgba(255, 107, 122, 0.1);
   color: var(--red);
   border: 1px solid rgba(255, 107, 122, 0.22);
@@ -1715,7 +1761,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   width: 0%;
   transition: width 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
-.fiber-fill.plastic {
+.fiber-fill.synthetic {
   background: var(--red);
 }
 .fiber-fill.natural {
@@ -2313,6 +2359,11 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--teal);
   border-color: rgba(82, 217, 208, 0.12);
   background: rgba(82, 217, 208, 0.12);
+}
+.save-tag.think_twice {
+  color: var(--amber);
+  border-color: rgba(232, 160, 64, 0.35);
+  background: rgba(232, 160, 64, 0.08);
 }
 
 .save-price {
