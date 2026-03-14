@@ -106,6 +106,11 @@ export function BreakdownScreen() {
   const [isProOverride, setIsProOverride] = useState(false);
   const isPro = isProFromProfile || isProOverride;
 
+  // When scraper (or Claude) cannot provide a price (e.g. JS-rendered + bot detection),
+  // allow user to enter price manually and recompute markup / cost-per-wear client-side.
+  const [manualPriceInput, setManualPriceInput] = useState("");
+  const [manualPriceApplied, setManualPriceApplied] = useState<number | null>(null);
+
   const score = 25; // TODO: derive from analysis
 
   useEffect(() => {
@@ -227,6 +232,35 @@ export function BreakdownScreen() {
         .reduce((sum, m) => sum + m.percentage, 0)
     : 0;
 
+  // Baseline values from analysis
+  const basePrice = result?.price ?? 0;
+  const hasAnalysisPrice = basePrice > 0;
+
+  // Effective price: either manual override, or the analysis price if > 0, otherwise null.
+  const effectivePrice: number | null =
+    manualPriceApplied != null ? manualPriceApplied : hasAnalysisPrice ? basePrice : null;
+
+  // Effective markup and cost-per-wear: when user enters price, recompute these locally.
+  let effectiveMarkup = result?.markup ?? 0;
+  let effectiveCostPerWear = result?.costPerWear ?? 0;
+  if (result && effectivePrice != null) {
+    const estCost = result.estimatedMaterialCost;
+    if (estCost > 0) {
+      effectiveMarkup = ((effectivePrice - estCost) / estCost) * 100;
+    } else {
+      effectiveMarkup = result.markup;
+    }
+    if (result.costPerWear > 0 && basePrice > 0) {
+      // Keep Claude's assumed wear-count, scale cost-per-wear linearly with price.
+      const wearCount = basePrice / result.costPerWear;
+      effectiveCostPerWear = wearCount > 0 ? effectivePrice / wearCount : result.costPerWear;
+    } else {
+      // Fallback: assume ~50 wears as a reasonable default when we had no price before.
+      const assumedWears = 50;
+      effectiveCostPerWear = effectivePrice / assumedWears;
+    }
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <div className="breakdown-header">
@@ -255,7 +289,9 @@ export function BreakdownScreen() {
             <div className="item-brand">{scan.brandName}</div>
             <div className="item-name">{scan.itemName}</div>
             <div className="item-price-row">
-              <div className="item-price">${scan.price}</div>
+              <div className="item-price">
+                {effectivePrice != null ? `$${effectivePrice.toFixed(2)}` : "—"}
+              </div>
               <div className="item-price-label">Retail</div>
             </div>
           </div>
@@ -275,8 +311,37 @@ export function BreakdownScreen() {
           <div className="receipt-card">
             <div className="receipt-row">
               <div className="receipt-key">You&apos;re paying</div>
-              <div className="receipt-val">${result!.price.toFixed(2)}</div>
+              {effectivePrice != null ? (
+                <div className="receipt-val">${effectivePrice.toFixed(2)}</div>
+              ) : (
+                <div className="receipt-val">
+                  <input
+                    className="price-input"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="Enter price to see full analysis"
+                    value={manualPriceInput}
+                    onChange={(e) => setManualPriceInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const raw = manualPriceInput.replace(/[^0-9.]/g, "");
+                        const parsed = parseFloat(raw);
+                        if (!Number.isNaN(parsed) && parsed > 0) {
+                          setManualPriceApplied(parsed);
+                        }
+                      }
+                    }}
+                  />
+                </div>
+              )}
             </div>
+            {effectivePrice == null && (
+              <div className="receipt-row">
+                <div className="receipt-key" style={{ fontSize: 11 }}>
+                  We couldn&apos;t read the price from this page — enter it manually to see your full breakdown
+                </div>
+              </div>
+            )}
 
             <div className="receipt-row">
               <div className="info-wrap" onClick={(e) => e.stopPropagation()}>
@@ -312,10 +377,20 @@ export function BreakdownScreen() {
                   ?
                 </button>
               </div>
-              <div className={`receipt-val ${result!.costPerWear > 5 ? "bad" : "good"}`}>${result!.costPerWear.toFixed(2)}</div>
+              <div className={`receipt-val ${effectiveCostPerWear > 5 ? "bad" : "good"}`}>
+                ${effectiveCostPerWear.toFixed(2)}
+              </div>
             </div>
             <div className={`info-popover ${infoOpen === "cpw" ? "visible" : ""}`}>
-              You&apos;d have to wear this item <strong>~{Math.round(result!.price / result!.costPerWear)} times</strong> before you reached the value of what you
+              {effectivePrice != null ? (
+                <>
+                  You&apos;d have to wear this item{" "}
+                  <strong>~{Math.round(effectivePrice / Math.max(effectiveCostPerWear, 0.01))} times</strong> before
+                  you reached the value of what you paid.
+                </>
+              ) : (
+                <>Enter a price to see how many wears it takes to reach the value of what you paid.</>
+              )}{" "}
               paid. The lower this number, the better the investment.
             </div>
 
@@ -330,11 +405,13 @@ export function BreakdownScreen() {
                   ?
                 </button>
               </div>
-              <div className="receipt-val big">{result!.markup.toLocaleString()}%</div>
+              <div className="receipt-val big">{Math.round(effectiveMarkup).toLocaleString()}%</div>
             </div>
             <div className={`info-popover ${infoOpen === "markup" ? "visible" : ""}`}>
-              The difference between the <strong>est. material cost (~${result!.estimatedMaterialCost.toFixed(2)})</strong> and what you paid (${result!.price.toFixed(2)}). This
-              is how much extra you&apos;re paying above what it costs to make.
+              The difference between the <strong>est. material cost (~${result!.estimatedMaterialCost.toFixed(2)})</strong>{" "}
+              and what you paid{" "}
+              {effectivePrice != null ? `$${effectivePrice.toFixed(2)}` : "(enter a price above to see this)"}. This is
+              how much extra you&apos;re paying above what it costs to make.
             </div>
           </div>
         </div>

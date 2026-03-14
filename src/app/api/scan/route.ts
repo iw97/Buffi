@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { scrapeProductFromUrl } from "@/lib/scan/scrape";
+import { getPriceFromGoogleShopping } from "@/lib/scan/serpapi";
 import { lookupBarcode } from "@/lib/scan/barcode";
 import { analyzeWithClaude, analyzeMinimalScan } from "@/lib/scan/analyze";
 import type { RawProductData, ScanResult, ScanError } from "@/lib/scan/types";
@@ -67,15 +68,28 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
       console.log("[api/scan] scraping URL", url.slice(0, 60));
       const scraped = await scrapeProductFromUrl(url);
       console.log("[api/scan] scrape result", scraped ? { name: !!scraped.name, brand: !!scraped.brand, price: !!scraped.price } : "null");
-      if (!scraped || (!scraped.name && !scraped.brand && !scraped.price)) {
-        console.log("[api/scan] scrape failed or empty");
+      if (!scraped || (!scraped.name && !scraped.brand)) {
+        console.log("[api/scan] scrape failed or empty (need at least name or brand)");
         return NextResponse.json(
           { ok: false, code: "url_scrape_failed", message: "Could not extract product data from URL" },
           { status: 422 }
         );
       }
-      raw = { ...scraped, url, source: "url" };
-      console.log("[api/scan] raw built from URL, calling Claude");
+      let scrapedWithPrice = { ...scraped };
+      if ((scraped.name || scraped.brand) && (scraped.price == null || scraped.price <= 0)) {
+        const query = [scraped.brand, scraped.name].filter(Boolean).join(" ").trim();
+        if (query) {
+          const serpResult = await getPriceFromGoogleShopping(query);
+          if (serpResult) {
+            scrapedWithPrice = { ...scraped, price: serpResult.price };
+            console.log("[api/scan] price from SerpAPI Google Shopping:", serpResult.price, "query:", query);
+          } else {
+            console.log("[api/scan] SerpAPI returned no matching result; manual price entry may be used");
+          }
+        }
+      }
+      raw = { ...scrapedWithPrice, url, source: "url" };
+      console.log("[api/scan] raw built from URL", raw.price != null ? `price=${raw.price}` : "no price (manual fallback)");
     } else if (barcode) {
       console.log("[api/scan] barcode flow, looking up", barcode.slice(0, 16));
       const lookedUp = await lookupBarcode(barcode);
