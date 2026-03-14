@@ -364,6 +364,24 @@ export function BreakdownScreen() {
               <div className="verdict-subtitle-wrap">{verdictSubtitle(result!.verdict)}</div>
             </div>
           </div>
+          {result!.valuesMatch && result!.valuesMatch.length > 0 && (
+            <div className="values-badges-row" role="list">
+              {result!.valuesMatch.map((entry, idx) => (
+                <span
+                  key={`${entry.value}-${idx}`}
+                  className={`values-badge values-badge-${entry.state}`}
+                  title={entry.note}
+                  role="listitem"
+                >
+                  {entry.state === "pass" && "✓"}
+                  {entry.state === "fail" && "✕"}
+                  {entry.state === "unverified" && "?"}
+                  <span className="values-badge-label">{entry.value}</span>
+                  <span className="values-badge-note" aria-hidden>{entry.note}</span>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="pad">
@@ -502,42 +520,35 @@ export function BreakdownScreen() {
 
         <div className="section-divider" />
 
-        <div className="pad">
-          <div className="section-eyebrow">— Values Match</div>
-          <div className="values-score-display">
-            <div className="score-ring">
-              <svg viewBox="0 0 72 72">
-                <circle className="score-ring-track" cx="36" cy="36" r="30" />
-                <circle
-                  className="score-ring-fill"
-                  cx="36"
-                  cy="36"
-                  r="30"
-                  style={{ strokeDashoffset: ringDashOffset }}
-                />
-              </svg>
-              <div className="score-number">{score}</div>
-            </div>
-            <div className="values-list">
-              <div className="value-item">
-                <div className="value-dot fail" />
-                <span>Natural fibers preferred</span>
+        {(result!.valuesMatch?.length ?? 0) > 0 && (
+          <div className="pad">
+            <div className="section-eyebrow">— Values Match</div>
+            <div className="values-score-display">
+              <div className="score-ring">
+                <svg viewBox="0 0 72 72">
+                  <circle className="score-ring-track" cx="36" cy="36" r="30" />
+                  <circle
+                    className="score-ring-fill"
+                    cx="36"
+                    cy="36"
+                    r="30"
+                    style={{ strokeDashoffset: ringDashOffset }}
+                  />
+                </svg>
+                <div className="score-number">{score}</div>
               </div>
-              <div className="value-item">
-                <div className="value-dot fail" />
-                <span>No virgin plastic</span>
-              </div>
-              <div className="value-item">
-                <div className="value-dot pass" />
-                <span>Under $100 retail</span>
-              </div>
-              <div className="value-item">
-                <div className="value-dot fail" />
-                <span>Capsule wardrobe quality</span>
+              <div className="values-list">
+                {result!.valuesMatch!.map((entry, idx) => (
+                  <div key={`${entry.value}-${idx}`} className="value-item" title={entry.note}>
+                    <div className={`value-dot ${entry.state}`} aria-hidden />
+                    <span>{entry.value}</span>
+                    <span className="value-item-note">{entry.note}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div className="section-divider" />
 

@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { RawProductData } from "./types";
-import type { ScanAnalysis, MinimalScanResponse } from "./types";
+import type { ScanAnalysis, MinimalScanResponse, ValuesMatchEntry, ValuesMatchState } from "./types";
 import { computeVerdict, parseFibersToMaterials } from "./verdict";
 
 const CLAUDE_TIMEOUT_MS = 45000;
@@ -24,7 +24,24 @@ Respond with only valid JSON and nothing else. No markdown, no code fence, no ex
 - isSmallBusiness (boolean, infer from brand if possible)
 - markupContext (string: "justified" | "partially justified" | "unjustified")`;
 
-export async function analyzeWithClaude(raw: RawProductData): Promise<ScanAnalysis> {
+const VALUES_EVALUATION_RULES = `
+**Values evaluation (only for values in the selectedValues array)**
+For each value in selectedValues, evaluate the product and return exactly one of: pass, fail, or unverified. Use a short note (one phrase) explaining why.
+
+- **Natural fibers only**: pass = 100% natural fibers; fail = any synthetic content; unverified = never (fiber data is always available).
+- **No virgin plastic**: pass = no polyester, nylon, or acrylic present; fail = any of those present; unverified = never.
+- **Cost-per-wear thinker**: pass = cost per wear under $2.00; fail = cost per wear over $5.00; unverified = if price was not available.
+- **Avoid fast fashion**: pass = brand is not a known fast fashion retailer; fail = brand is a known fast fashion retailer (Shein, Zara, H&M, Primark, Fashion Nova, Boohoo, PrettyLittleThing, ASOS own brand); unverified = brand unknown or ambiguous.
+- **No animal products**: pass = no wool, silk, cashmere, leather, fur, down; fail = any animal-derived fiber present; unverified = never.
+- **Fair labor**: pass = brand has known fair labor certification (Fair Trade, B Corp, SA8000); fail = brand has known labor violations on record; unverified = most cases — be honest that this cannot be confirmed from label data alone.
+- **Made in USA**: pass = country of manufacture confirmed USA; fail = country confirmed not USA; unverified = country not available.
+- **Secondhand first**: always return unverified with note: "Check secondhand options in Buffi Pro".
+- **Capsule wardrobe**: pass = natural fibers, neutral category, versatile construction; fail = very trend-specific or low durability; unverified = insufficient data.
+- **Certified sustainable**: pass = known certification in product data (GOTS, OEKO-TEX, Bluesign, B Corp); fail = no certification and brand is known fast fashion; unverified = most cases.
+- **Union-made**: pass = union-made indicated; fail = known non-union; unverified = most cases.
+`;
+
+export async function analyzeWithClaude(raw: RawProductData, selectedValues: string[] = []): Promise<ScanAnalysis> {
   const client = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY
   });
@@ -38,6 +55,7 @@ export async function analyzeWithClaude(raw: RawProductData): Promise<ScanAnalys
 
 Raw product data:
 ${JSON.stringify(raw, null, 2)}
+${selectedValues.length > 0 ? `\nUser selected values to evaluate (return one entry per value in valuesMatch):\n${JSON.stringify(selectedValues)}\n${VALUES_EVALUATION_RULES}` : ""}
 
 ${
   isTagSource && !runFullAnalysis
@@ -81,7 +99,8 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
 - verdictReason (string, one sentence with context as above)
 - tags (array of strings, e.g. "Synthetic Heavy", "High Markup", "Fast Fashion", "Natural Fibers", "Fair Value", "Small Brand"; include confidence flags when relevant)
 - isSmallBusiness (boolean: true if independent/small brand, false if major retailer or fast fashion)
-- markupContext (string: exactly "justified" | "partially justified" | "unjustified")`;
+- markupContext (string: exactly "justified" | "partially justified" | "unjustified")${selectedValues.length > 0 ? `
+- valuesMatch (array of objects, one per value in selectedValues: { value: string (the value label), state: "pass" | "fail" | "unverified", note: string (one short phrase) })` : ""}`;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), CLAUDE_TIMEOUT_MS);
@@ -125,6 +144,18 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
       throw new Error("Invalid Claude response structure");
     }
     if (parsed.isSmallBusiness === undefined) parsed.isSmallBusiness = false;
+
+    const validState: ValuesMatchState[] = ["pass", "fail", "unverified"];
+    if (selectedValues.length > 0 && Array.isArray(parsed.valuesMatch)) {
+      parsed.valuesMatch = (parsed.valuesMatch as ValuesMatchEntry[]).filter(
+        (e) =>
+          typeof e?.value === "string" &&
+          typeof e?.note === "string" &&
+          validState.includes(e.state as ValuesMatchState)
+      ) as ValuesMatchEntry[];
+    } else {
+      parsed.valuesMatch = [];
+    }
 
     const { verdict, verdictReason } = computeVerdict({
       markup: parsed.markup,

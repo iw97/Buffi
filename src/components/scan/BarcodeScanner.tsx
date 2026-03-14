@@ -6,7 +6,7 @@ interface BarcodeScannerProps {
   open: boolean;
   onDetected: (code: string) => void;
   onCancel: () => void;
-  onError: (code: "camera_permission_denied" | "unknown", message: string) => void;
+  onError: (code: "camera_permission_denied" | "camera_requires_https" | "unknown", message: string) => void;
 }
 
 export function BarcodeScanner({ open, onDetected, onCancel, onError }: BarcodeScannerProps) {
@@ -36,6 +36,11 @@ export function BarcodeScanner({ open, onDetected, onCancel, onError }: BarcodeS
 
   const startScanner = useCallback(() => {
     if (!containerRef.current || !open) return;
+
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      onError("camera_requires_https", "Camera requires HTTPS to scan barcodes.");
+      return;
+    }
 
     import("@ericblade/quagga2").then(({ default: Quagga }) => {
       Quagga.init(

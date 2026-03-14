@@ -114,6 +114,7 @@ export function usePendingScan() {
 /** Error from API — set by AnalyzingScreen, consumed by ScanScreen */
 export type ScanErrorCode =
   | "camera_permission_denied"
+  | "camera_requires_https"
   | "product_not_found"
   | "url_scrape_failed"
   | "claude_timeout"

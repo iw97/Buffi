@@ -15,9 +15,12 @@ import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signOut as firebaseSignOut
+  signOut as firebaseSignOut,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink as firebaseIsSignInWithEmailLink,
+  signInWithEmailLink as firebaseSignInWithEmailLink
 } from "firebase/auth";
-import { firebaseAuth, isFirebaseConfigured } from "@/lib/firebase/client";
+import { firebaseAuth, isFirebaseConfigured, BUFFI_SIGNIN_EMAIL_KEY } from "@/lib/firebase/client";
 import { setUserProfile, getUserProfile, ensureUserDocument } from "@/lib/firebase/firestore";
 import type { UserProfile } from "@/lib/firebase/types";
 
@@ -32,6 +35,11 @@ interface AuthActions {
   signInWithGoogle: () => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
+  /** Send passwordless sign-in link to email; caller should save email to localStorage (buffiSignInEmail) and show confirmation. */
+  sendSignInLinkToEmail: (email: string) => Promise<void>;
+  /** Complete sign-in from email link (used on /auth/callback). Returns true on success. */
+  completeSignInWithEmailLink: (email: string, linkOrFullUrl: string) => Promise<void>;
+  isSignInWithEmailLink: (url: string) => boolean;
   signOut: () => Promise<void>;
 }
 
@@ -112,6 +120,41 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
     [isConfigured]
   );
 
+  const sendSignInLinkToEmailAction = useCallback(
+    async (email: string) => {
+      if (!firebaseAuth || !isConfigured) return;
+      const baseUrl = typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL ?? "";
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || baseUrl;
+      const callbackUrl = `${appUrl.replace(/\/$/, "")}/auth/callback`;
+      await sendSignInLinkToEmail(firebaseAuth, email.trim(), {
+        url: callbackUrl,
+        handleCodeInApp: true
+      });
+    },
+    [isConfigured]
+  );
+
+  const isSignInWithEmailLinkAction = useCallback((url: string) => {
+    if (!firebaseAuth) return false;
+    return firebaseIsSignInWithEmailLink(firebaseAuth, url);
+  }, []);
+
+  const completeSignInWithEmailLink = useCallback(
+    async (email: string, linkOrFullUrl: string) => {
+      if (!firebaseAuth || !isConfigured) return;
+      await firebaseSignInWithEmailLink(firebaseAuth, email.trim(), linkOrFullUrl);
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.removeItem(BUFFI_SIGNIN_EMAIL_KEY);
+        } catch {
+          /* ignore */
+        }
+      }
+      // ensureUserDocument is triggered by onAuthStateChanged
+    },
+    [isConfigured]
+  );
+
   const signOut = useCallback(async () => {
     if (!firebaseAuth) return;
     await firebaseSignOut(firebaseAuth);
@@ -126,6 +169,9 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
       signInWithGoogle,
       signUpWithEmail,
       signInWithEmail,
+      sendSignInLinkToEmail: sendSignInLinkToEmailAction,
+      completeSignInWithEmailLink,
+      isSignInWithEmailLink: isSignInWithEmailLinkAction,
       signOut
     }),
     [
@@ -136,6 +182,9 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
       signInWithGoogle,
       signUpWithEmail,
       signInWithEmail,
+      sendSignInLinkToEmailAction,
+      completeSignInWithEmailLink,
+      isSignInWithEmailLinkAction,
       signOut
     ]
   );

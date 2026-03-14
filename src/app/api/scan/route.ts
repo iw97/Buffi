@@ -16,6 +16,9 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
     const composition = typeof body?.composition === "string" ? body.composition.trim() : undefined;
     const brand = typeof body?.brand === "string" ? body.brand.trim() || undefined : undefined;
     const price = typeof body?.price === "number" && body.price > 0 ? body.price : undefined;
+    const selectedValues = Array.isArray(body?.selectedValues)
+      ? (body.selectedValues as string[]).filter((s): s is string => typeof s === "string")
+      : [];
 
     const brandName = typeof body?.brandName === "string" ? body.brandName.trim() : undefined;
     const fibers = Array.isArray(body?.fibers) ? (body.fibers as string[]).filter((f) => typeof f === "string") : undefined;
@@ -120,8 +123,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
       );
     }
 
-    console.log("[api/scan] calling analyzeWithClaude");
-    const analysis = await analyzeWithClaude(raw);
+    console.log("[api/scan] calling analyzeWithClaude", selectedValues.length ? { selectedValuesCount: selectedValues.length } : "");
+    const analysis = await analyzeWithClaude(raw, selectedValues);
     if (raw.imageUrl != null) analysis.imageUrl = raw.imageUrl;
     console.log("[api/scan] Claude analysis received, returning 200");
     return NextResponse.json({ ok: true, analysis });

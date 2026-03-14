@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
+import { BUFFI_SIGNIN_EMAIL_KEY } from "@/lib/firebase/client";
 
 type AuthTab = "magic" | "password";
 
@@ -13,7 +14,7 @@ export function OnboardingAccountScreen() {
   const [magicEmail, setMagicEmail] = useState("");
   const [passwordEmail, setPasswordEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
+  const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const digitRefs = useRef<Array<HTMLInputElement | null>>([]);
 
@@ -65,6 +66,30 @@ export function OnboardingAccountScreen() {
     }
   };
 
+  const handleSendSignInLink = async () => {
+    setError(null);
+    const email = magicEmail.trim();
+    if (!email) {
+      setError("Enter your email address");
+      return;
+    }
+    if (!isConfigured || !auth) {
+      router.push("/scan");
+      return;
+    }
+    try {
+      await auth.sendSignInLinkToEmail(email);
+      try {
+        window.localStorage.setItem(BUFFI_SIGNIN_EMAIL_KEY, email);
+      } catch {
+        /* ignore */
+      }
+      setLinkSentTo(email);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to send sign-in link");
+    }
+  };
+
   const progress = useMemo(
     () => (
       <div className="ob-step-label" style={{ marginBottom: 12 }}>
@@ -74,7 +99,7 @@ export function OnboardingAccountScreen() {
     []
   );
 
-  const codeStateVisible = codeSentTo !== null;
+  const linkSentVisible = linkSentTo !== null;
 
   return (
     <div className="min-h-screen">
@@ -126,7 +151,7 @@ export function OnboardingAccountScreen() {
           </div>
 
           <div className={`auth-panel ${tab === "magic" ? "active" : ""}`}>
-            {!codeStateVisible ? (
+            {!linkSentVisible ? (
               <>
                 <div className="auth-input-wrap">
                   <div className="auth-input-label">Email Address</div>
@@ -139,61 +164,30 @@ export function OnboardingAccountScreen() {
                   />
                 </div>
                 <button
-                  className="ob-next"
                   type="button"
-                  style={{ marginTop: 4 }}
-                  onClick={() => {
-                    const email = magicEmail.trim() || "you@example.com";
-                    setCodeSentTo(email);
-                    setTimeout(() => digitRefs.current[0]?.focus(), 50);
-                  }}
+                  className="btn-primary"
+                  style={{ width: "100%", marginTop: 12 }}
+                  onClick={handleSendSignInLink}
                 >
-                  Send Login Code →
+                  Send sign-in link
                 </button>
-                <p className="auth-legal" style={{ marginTop: 8 }}>
-                  Magic link not implemented yet. Use password or Google.
-                </p>
               </>
             ) : (
               <>
-                <div className="code-hint">
-                  We sent a 6-digit code to{" "}
-                  <strong style={{ color: "var(--ivory)" }}>{codeSentTo}</strong>
-                  . Enter it below.
-                </div>
-                <div className="code-input-row">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <input
-                      key={i}
-                      className="code-digit"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={1}
-                      ref={(el) => {
-                        digitRefs.current[i] = el;
-                      }}
-                      onChange={(e) => {
-                        if (e.target.value.length === 1 && i < 5) {
-                          digitRefs.current[i + 1]?.focus();
-                        }
-                      }}
-                    />
-                  ))}
-                </div>
-                <button className="ob-next" type="button" onClick={() => router.push("/scan")}>
-                  Verify &amp; Start Scanning →
-                </button>
+                <p className="auth-legal" style={{ marginTop: 0, marginBottom: 8 }}>
+                  Check your email — we sent you a sign-in link to{" "}
+                  <strong style={{ color: "var(--ivory)" }}>{linkSentTo}</strong>.
+                </p>
+                <p className="auth-legal" style={{ color: "var(--text-dim)", fontSize: 13 }}>
+                  You can close this tab.
+                </p>
                 <button
-                  className="resend-link"
                   type="button"
-                  onClick={() => {
-                    digitRefs.current.forEach((el) => {
-                      if (el) el.value = "";
-                    });
-                    digitRefs.current[0]?.focus();
-                  }}
+                  className="auth-tab"
+                  style={{ marginTop: 16 }}
+                  onClick={() => setLinkSentTo(null)}
                 >
-                  Resend code
+                  Use a different email
                 </button>
               </>
             )}

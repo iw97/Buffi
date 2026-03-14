@@ -17,6 +17,15 @@ export type MarkupContext = "justified" | "partially justified" | "unjustified";
 /** Three-tier verdict for display (teal / amber / red). */
 export type VerdictTier = "Worth It" | "Think Twice" | "Retail Trap";
 
+/** Per-value assessment from Claude (pass / fail / unverified). */
+export type ValuesMatchState = "pass" | "fail" | "unverified";
+
+export interface ValuesMatchEntry {
+  value: string;
+  state: ValuesMatchState;
+  note: string;
+}
+
 /** Claude analysis output — exact fields from the prompt; verdict/verdictReason are computed. */
 export interface ScanAnalysis {
   brand: string;
@@ -35,6 +44,8 @@ export interface ScanAnalysis {
   markupContext: MarkupContext;
   /** Product image URL from scraper (og:image or Shopify), when source was URL. */
   imageUrl?: string | null;
+  /** User values evaluation: one entry per selected value (pass/fail/unverified + note). */
+  valuesMatch?: ValuesMatchEntry[];
 }
 
 /** Full scan result returned by /api/scan */
@@ -59,6 +70,7 @@ export interface MinimalScanResponse {
 /** Error codes for explicit handling */
 export type ScanErrorCode =
   | "camera_permission_denied"
+  | "camera_requires_https"
   | "product_not_found"
   | "url_scrape_failed"
   | "claude_timeout"

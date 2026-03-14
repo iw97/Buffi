@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuthOptional } from "@/contexts/AuthContext";
 import { usePendingScan, useScanResult, useScanError, type ScanErrorCode } from "@/contexts/ScanResultContext";
 
 type ProgressId = "p1" | "p2" | "p3" | "p4";
@@ -27,6 +28,7 @@ function toErrorCode(status: number, body?: { code?: string }): ScanErrorCode {
 
 export function AnalyzingScreen() {
   const router = useRouter();
+  const auth = useAuthOptional();
   const { pending, setPending } = usePendingScan();
   const { setResult } = useScanResult();
   const { setLastError } = useScanError();
@@ -57,15 +59,17 @@ export function AnalyzingScreen() {
       return;
     }
 
+    const selectedValues = auth?.profile?.valuesSelected ?? [];
     const body = pending.url
-      ? { url: pending.url }
+      ? { url: pending.url, ...(selectedValues.length > 0 && { selectedValues }) }
       : pending.tag
         ? {
             composition: pending.tag.composition,
             ...(pending.tag.brand && { brand: pending.tag.brand }),
-            ...(pending.tag.price != null && pending.tag.price > 0 && { price: pending.tag.price })
+            ...(pending.tag.price != null && pending.tag.price > 0 && { price: pending.tag.price }),
+            ...(selectedValues.length > 0 && { selectedValues })
           }
-        : { barcode: pending.barcode };
+        : { barcode: pending.barcode, ...(selectedValues.length > 0 && { selectedValues }) };
     console.log("[scan flow] request body prepared", { keys: Object.keys(body), hasUrl: !!body.url });
 
     const controller = new AbortController();
