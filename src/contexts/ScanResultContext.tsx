@@ -22,9 +22,10 @@ export function isValidScanResult(value: unknown): value is ScanAnalysis {
   const verdict = r.verdict;
   const hasVerdict =
     verdict === "Retail Trap" || verdict === "Worth It" || verdict === "Think Twice";
-  const hasEstimatedMaterialCost =
-    typeof r.estimatedMaterialCost === "number";
-  return hasVerdict && hasEstimatedMaterialCost;
+  const hasCostRange =
+    typeof r.estimatedMaterialCostMin === "number" && typeof r.estimatedMaterialCostMax === "number";
+  const hasLegacyCost = typeof r.estimatedMaterialCost === "number";
+  return hasVerdict && (hasCostRange || hasLegacyCost);
 }
 
 /** Unwrap API response shape { ok, analysis } to analysis if present. */

@@ -32,11 +32,20 @@ export interface ScanAnalysis {
   name: string;
   price: number;
   materials: { fiber: string; percentage: number }[];
-  estimatedMaterialCost: number;
-  markup: number;
+  /** Range: total cost to produce (materials + labor). Use min/max for display. */
+  estimatedMaterialCostMin: number;
+  estimatedMaterialCostMax: number;
+  /** Range: markup % (min = from costMax/price, max = from costMin/price). */
+  markupMin: number;
+  markupMax: number;
+  /** Legacy single values (optional); used for backward compat if range not present. */
+  estimatedMaterialCost?: number;
+  markup?: number;
   costPerWear: number;
   verdict: VerdictTier;
   verdictReason: string;
+  /** When markup range spans two verdict tiers, show this note. */
+  verdictSpanNote?: string | null;
   tags: string[];
   /** Small/indie brand; higher markups are normal for sustainability. */
   isSmallBusiness?: boolean;
@@ -46,6 +55,10 @@ export interface ScanAnalysis {
   imageUrl?: string | null;
   /** User values evaluation: one entry per selected value (pass/fail/unverified + note). */
   valuesMatch?: ValuesMatchEntry[];
+  /** True when synthetic fibers are appropriate for the garment category (e.g. rainwear, activewear); do not penalize. */
+  functionalSynthetic?: boolean;
+  /** Known ethical/sustainable brand; higher markup is partially justified. */
+  isEthicalBrand?: boolean;
 }
 
 /** Full scan result returned by /api/scan */
@@ -56,15 +69,20 @@ export interface ScanResult {
 
 /** Minimal scan response (brandName + fibers + price + confidenceTier → Claude) */
 export interface MinimalScanResponse {
-  estimatedMaterialCost: number;
-  markup: number;
+  estimatedMaterialCostMin: number;
+  estimatedMaterialCostMax: number;
+  markupMin: number;
+  markupMax: number;
   markupBand: string;
   verdict: VerdictTier;
   verdictReason: string;
+  verdictSpanNote?: string | null;
   tags: string[];
   isEstimated: boolean;
   isSmallBusiness: boolean;
   markupContext: MarkupContext;
+  functionalSynthetic?: boolean;
+  isEthicalBrand?: boolean;
 }
 
 /** Error codes for explicit handling */

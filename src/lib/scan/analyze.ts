@@ -1,28 +1,43 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { RawProductData } from "./types";
 import type { ScanAnalysis, MinimalScanResponse, ValuesMatchEntry, ValuesMatchState } from "./types";
-import { computeVerdict, parseFibersToMaterials } from "./verdict";
+import { computeVerdict, computeVerdictFromRange, parseFibersToMaterials } from "./verdict";
 
 const CLAUDE_TIMEOUT_MS = 45000;
+
+const MATERIAL_COST_RULES = `
+Material cost estimation: Use these fabric costs per yard (USD): Basic cotton $2–4, Premium cotton (combed, pima) $5–9. Polyester $1–3, Nylon $3–6. Basic linen $5–8, Premium linen $9–15. Viscose/Rayon $2–5, Modal $6–10, Lyocell/Tencel $7–12. Acrylic $1–3. Basic wool $8–15, Merino wool $15–30, Cashmere $50–100, Silk $20–40.
+Yardage by category: T-shirt 1.5–2, Dress (simple) 2.5–3.5, Blazer/Jacket 2.5–3.5 plus lining, Trousers/Pants 2–3, Skirt (midi) 2–3, Outerwear coat 3.5–5.
+Add 15–25% for thread, labels, packaging, trimmings. Add 30–50% for labor on top of materials.
+Return estimatedMaterialCostMin and estimatedMaterialCostMax (USD): total cost to produce including materials and basic labor. The range should reflect genuine uncertainty — typically ±30–40% around the midpoint for standard garments, wider for complex construction or specialty fibers.
+markupMin = (price / costMax - 1) * 100, markupMax = (price / costMin - 1) * 100 (so markupMin is the conservative/low markup, markupMax is the high markup).
+`;
 
 const MINIMAL_SCAN_SYSTEM_PROMPT = `You are a material intelligence analyst for clothing and apparel. You will receive JSON input with: brandName, fibers (array of strings, e.g. "Cotton 100%" or "Polyester 80%, Elastane 20%"), price (retail price in USD), and confidenceTier (number).
 
 Apply these rules:
 - Small/indie brand: if brandName suggests an independent or small brand (not a major retailer or fast-fashion chain), set isSmallBusiness: true; higher markups are normal for small-business sustainability.
-- Fiber quality: premium natural (cashmere, silk, merino wool, modal, linen, lyocell/Tencel) > standard natural (cotton, wool, hemp) > synthetic (polyester, nylon, acrylic, viscose, elastane). Favor verdict for premium-natural-heavy garments.
+- Fiber quality: premium natural (cashmere, silk, merino wool, modal, linen, lyocell/Tencel) > standard natural (cotton, wool, hemp) > synthetic. Synthetics (never tag as natural): polyurethane, polyester, nylon, acrylic, spandex, elastane, lycra, Gore-Tex, viscose, rayon. Favor verdict for premium-natural-heavy garments.
 - verdictReason must include context (e.g. small-brand markup vs fast-fashion synthetic). Verdict stays "Retail Trap" or "Worth It".
 - markupContext: exactly one of "justified" | "partially justified" | "unjustified" based on fiber quality and small-business context.
+- functionalSynthetic: true when garment category makes synthetics appropriate (rainwear, activewear, swimwear, lingerie, hosiery, tights); false for formal/everyday/casual.
+- isEthicalBrand: true when brand is a known ethical/sustainable brand (Patagonia, Eileen Fisher, Reformation, Kotn, Pact, Thought Clothing, Stella McCartney, Veja, Allbirds, Girlfriend Collective, Mara Hoffman, Amour Vert). Apply same higher markup threshold as indie brands; note sustainability reputation in verdictReason.
+${MATERIAL_COST_RULES}
 
 Respond with only valid JSON and nothing else. No markdown, no code fence, no explanation. The JSON must have exactly these fields:
-- estimatedMaterialCost (number, USD)
-- markup (number, percentage e.g. 50 for 50%)
-- markupBand (string: "low", "medium", or "high" based on markup)
+- estimatedMaterialCostMin (number, USD)
+- estimatedMaterialCostMax (number, USD)
+- markupMin (number, percentage — from costMax/price: (price/costMax - 1)*100)
+- markupMax (number, percentage — from costMin/price: (price/costMin - 1)*100)
+- markupBand (string: "low", "medium", or "high" based on midpoint of markup range)
 - verdict (string: ignored — we compute verdict from markup and fibers)
 - verdictReason (string: one sentence with context)
 - tags (array of strings)
 - isEstimated (boolean)
 - isSmallBusiness (boolean, infer from brand if possible)
-- markupContext (string: "justified" | "partially justified" | "unjustified")`;
+- markupContext (string: "justified" | "partially justified" | "unjustified")
+- functionalSynthetic (boolean)
+- isEthicalBrand (boolean)`;
 
 const VALUES_EVALUATION_RULES = `
 **Values evaluation (only for values in the selectedValues array)**
@@ -73,12 +88,23 @@ ${
 - If the brand appears to be an independent or small brand (not a major retailer or fast-fashion chain), treat higher markups as normal and necessary for small-business sustainability. Set isSmallBusiness: true in that case.
 - Major retailers and fast-fashion chains: set isSmallBusiness: false.
 
+**Known ethical/sustainable brands**
+These brands have a strong sustainability/ethics reputation; higher markup is expected and partially justified. Set isEthicalBrand: true when the brand is one of: Patagonia, Eileen Fisher, Reformation, Kotn, Pact, Thought Clothing, Stella McCartney, Veja, Allbirds, Girlfriend Collective, Mara Hoffman, Amour Vert (or the same company under another name). For these brands: note the brand’s sustainability reputation in verdictReason; apply the same higher markup threshold as indie brands before Retail Trap; return isEthicalBrand: true in the JSON response.
+
 **Fiber quality weighting (for verdict and verdictReason)**
 Not all natural fibers are equal. Weight fibers in this order for quality assessment:
 - Premium natural: cashmere, silk, merino wool, modal, linen, lyocell/Tencel
 - Standard natural: cotton, wool, hemp
-- Synthetic: polyester, nylon, acrylic, viscose, elastane
+- Synthetic (these must never be tagged as natural): polyurethane, polyester, nylon, acrylic, spandex, elastane, lycra, Gore-Tex, viscose, rayon
 A garment that is predominantly premium natural fibers should receive a more favorable verdict than the same markup on synthetic fibers.
+
+**Functional synthetic (garment category)**
+Synthetic fibers that are appropriate or necessary for the garment type should not be penalized. Set functionalSynthetic: true when synthetics are expected for the category; set false when synthetics are a quality compromise.
+- Rain jackets, waterproof outerwear, windbreakers: nylon, polyester, polyurethane are expected and appropriate — do not penalize. High synthetic % is normal. Evaluate verdict primarily on markup and brand context only.
+- Activewear, swimwear, athletic wear: nylon, polyester, spandex/elastane are functional requirements — do not penalize synthetic content.
+- Lingerie, hosiery, tights: nylon is standard and appropriate — do not penalize.
+- Formal wear, everyday clothing, casualwear: apply normal fiber quality weighting; natural fibers preferred, synthetics penalized.
+When functionalSynthetic is true: do not factor synthetic % into verdict; base verdict on markup range and brand context only. In verdictReason acknowledge: "Synthetic materials are appropriate for this garment type."
 
 **Verdict nuancing**
 - Verdict label stays exactly "Retail Trap" or "Worth It".
@@ -87,19 +113,44 @@ A garment that is predominantly premium natural fibers should receive a more fav
   Example (fast fashion synthetic): "Steep markup on low-quality synthetic materials with no justification beyond brand recognition."
 - Add a new field markupContext — exactly one of: "justified" | "partially justified" | "unjustified". Use it to reflect whether the markup is justified by fiber quality, small-business context, or neither.
 
+**Material cost estimation (use these figures when calculating estimatedMaterialCost)**
+Fabric cost per yard (USD):
+- Basic cotton: $2–4/yard. Premium cotton (combed, pima): $5–9/yard.
+- Polyester: $1–3/yard. Nylon: $3–6/yard.
+- Basic linen: $5–8/yard. Premium linen: $9–15/yard.
+- Viscose/Rayon: $2–5/yard. Modal: $6–10/yard. Lyocell/Tencel: $7–12/yard.
+- Acrylic: $1–3/yard.
+- Basic wool: $8–15/yard. Merino wool: $15–30/yard. Cashmere: $50–100/yard. Silk: $20–40/yard.
+- Elastane/spandex: treat as a small blend share; use blended yard cost for the main fabric and add a small amount for stretch content.
+
+Fabric usage by garment category (approximate yards):
+- T-shirt: 1.5–2 yards. Dress (simple): 2.5–3.5 yards. Blazer/Jacket: 2.5–3.5 yards plus lining. Trousers/Pants: 2–3 yards. Skirt (midi): 2–3 yards. Outerwear coat: 3.5–5 yards.
+Infer category from product name/description when possible; otherwise use a reasonable default (e.g. top 1.5–2, bottom 2–2.5, dress 2.5–3).
+
+On top of fabric cost:
+- Add 15–25% for thread, labels, packaging, and basic trimmings.
+- Add 30–50% for labor cost on top of materials (manufacturing in standard production countries).
+Return a range for total cost to produce (fabric + trimmings + labor), in USD. The range should reflect genuine uncertainty — typically ±30–40% around the midpoint for standard garments, wider for complex construction or specialty fibers.
+- estimatedMaterialCostMin, estimatedMaterialCostMax (numbers, USD).
+- markupMin = (price / estimatedMaterialCostMax - 1) * 100, markupMax = (price / estimatedMaterialCostMin - 1) * 100 (use 0 for both if no price).
+
 Return a JSON object with exactly these fields (no other fields, no markdown, no explanation):
 - brand (string, use provided brand or "Unknown" if missing)
 - name (string, use product name or a short description from materials if missing)
 - price (number; use provided price, or 0 if not provided)
 - materials (array of objects: { fiber: string, percentage: number }; ensure percentages sum to 100)
-- estimatedMaterialCost (number, in USD)
-- markup (number, as percentage e.g. 20 for 20%; use 0 if no price was provided)
+- estimatedMaterialCostMin (number, USD)
+- estimatedMaterialCostMax (number, USD)
+- markupMin (number, percentage — from costMax/price; use 0 if no price)
+- markupMax (number, percentage — from costMin/price; use 0 if no price)
 - costPerWear (number, estimated; use 0 if no price)
 - verdict (string: any — we overwrite with computed three-tier verdict)
 - verdictReason (string, one sentence with context as above)
 - tags (array of strings, e.g. "Synthetic Heavy", "High Markup", "Fast Fashion", "Natural Fibers", "Fair Value", "Small Brand"; include confidence flags when relevant)
 - isSmallBusiness (boolean: true if independent/small brand, false if major retailer or fast fashion)
-- markupContext (string: exactly "justified" | "partially justified" | "unjustified")${selectedValues.length > 0 ? `
+- markupContext (string: exactly "justified" | "partially justified" | "unjustified")
+- functionalSynthetic (boolean: true if synthetic fibers are appropriate for the garment category, false if synthetics are a quality compromise)
+- isEthicalBrand (boolean: true if brand is a known ethical/sustainable brand from the list above — Patagonia, Eileen Fisher, Reformation, Kotn, Pact, Thought Clothing, Stella McCartney, Veja, Allbirds, Girlfriend Collective, Mara Hoffman, Amour Vert)${selectedValues.length > 0 ? `
 - valuesMatch (array of objects, one per value in selectedValues: { value: string (the value label), state: "pass" | "fail" | "unverified", note: string (one short phrase) })` : ""}`;
 
   const controller = new AbortController();
@@ -127,15 +178,17 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
 
     const parsed = JSON.parse(jsonMatch[0]) as ScanAnalysis;
 
-    // Validate required fields (verdict/verdictReason are overwritten by computeVerdict)
+    // Validate required fields (verdict/verdictReason are overwritten by computeVerdictFromRange)
     const validMarkupContext = ["justified", "partially justified", "unjustified"] as const;
     if (
       typeof parsed.brand !== "string" ||
       typeof parsed.name !== "string" ||
       typeof parsed.price !== "number" ||
       !Array.isArray(parsed.materials) ||
-      typeof parsed.estimatedMaterialCost !== "number" ||
-      typeof parsed.markup !== "number" ||
+      typeof (parsed as Record<string, unknown>).estimatedMaterialCostMin !== "number" ||
+      typeof (parsed as Record<string, unknown>).estimatedMaterialCostMax !== "number" ||
+      typeof (parsed as Record<string, unknown>).markupMin !== "number" ||
+      typeof (parsed as Record<string, unknown>).markupMax !== "number" ||
       typeof parsed.costPerWear !== "number" ||
       typeof parsed.verdictReason !== "string" ||
       !Array.isArray(parsed.tags) ||
@@ -143,6 +196,18 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
     ) {
       throw new Error("Invalid Claude response structure");
     }
+    const costMin = (parsed as Record<string, unknown>).estimatedMaterialCostMin as number;
+    const costMax = (parsed as Record<string, unknown>).estimatedMaterialCostMax as number;
+    let markupMin = (parsed as Record<string, unknown>).markupMin as number;
+    let markupMax = (parsed as Record<string, unknown>).markupMax as number;
+    if (parsed.price > 0 && costMax > 0 && costMin > 0) {
+      markupMin = (parsed.price / costMax - 1) * 100;
+      markupMax = (parsed.price / costMin - 1) * 100;
+    }
+    parsed.estimatedMaterialCostMin = costMin;
+    parsed.estimatedMaterialCostMax = costMax;
+    parsed.markupMin = markupMin;
+    parsed.markupMax = markupMax;
     if (parsed.isSmallBusiness === undefined) parsed.isSmallBusiness = false;
 
     const validState: ValuesMatchState[] = ["pass", "fail", "unverified"];
@@ -157,14 +222,29 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
       parsed.valuesMatch = [];
     }
 
-    const { verdict, verdictReason } = computeVerdict({
-      markup: parsed.markup,
+    parsed.functionalSynthetic = typeof (parsed as Record<string, unknown>).functionalSynthetic === "boolean"
+      ? (parsed as Record<string, unknown>).functionalSynthetic as boolean
+      : false;
+    parsed.isEthicalBrand =
+      typeof (parsed as Record<string, unknown>).isEthicalBrand === "boolean"
+        ? ((parsed as Record<string, unknown>).isEthicalBrand as boolean)
+        : false;
+
+    const { verdict, verdictReason, verdictSpanNote } = computeVerdictFromRange({
+      markupMin: parsed.markupMin,
+      markupMax: parsed.markupMax,
       materials: parsed.materials,
       isSmallBusiness: parsed.isSmallBusiness,
-      costPerWear: parsed.costPerWear
+      isEthicalBrand: parsed.isEthicalBrand,
+      costPerWear: parsed.costPerWear,
+      functionalSynthetic: parsed.functionalSynthetic
     });
     parsed.verdict = verdict;
-    parsed.verdictReason = verdictReason;
+    parsed.verdictReason =
+      parsed.functionalSynthetic && !verdictReason.includes("appropriate for this garment type")
+        ? `${verdictReason} Synthetic materials are appropriate for this garment type.`
+        : verdictReason;
+    parsed.verdictSpanNote = verdictSpanNote ?? undefined;
     parsed.markupContext =
       verdict === "Worth It" ? "justified" : verdict === "Think Twice" ? "partially justified" : "unjustified";
 
@@ -230,8 +310,10 @@ export async function analyzeMinimalScan(input: {
 
     const validMarkupContext = ["justified", "partially justified", "unjustified"] as const;
     if (
-      typeof parsed.estimatedMaterialCost !== "number" ||
-      typeof parsed.markup !== "number" ||
+      typeof parsed.estimatedMaterialCostMin !== "number" ||
+      typeof parsed.estimatedMaterialCostMax !== "number" ||
+      typeof parsed.markupMin !== "number" ||
+      typeof parsed.markupMax !== "number" ||
       typeof parsed.markupBand !== "string" ||
       typeof parsed.verdictReason !== "string" ||
       !Array.isArray(parsed.tags) ||
@@ -242,15 +324,39 @@ export async function analyzeMinimalScan(input: {
       throw new Error("Invalid minimal scan response structure");
     }
 
+    let { markupMin, markupMax } = parsed;
+    if (input.price > 0 && parsed.estimatedMaterialCostMax > 0 && parsed.estimatedMaterialCostMin > 0) {
+      markupMin = (input.price / parsed.estimatedMaterialCostMax - 1) * 100;
+      markupMax = (input.price / parsed.estimatedMaterialCostMin - 1) * 100;
+      parsed.markupMin = markupMin;
+      parsed.markupMax = markupMax;
+    }
+
+    parsed.functionalSynthetic =
+      typeof (parsed as Record<string, unknown>).functionalSynthetic === "boolean"
+        ? ((parsed as Record<string, unknown>).functionalSynthetic as boolean)
+        : false;
+    parsed.isEthicalBrand =
+      typeof (parsed as Record<string, unknown>).isEthicalBrand === "boolean"
+        ? ((parsed as Record<string, unknown>).isEthicalBrand as boolean)
+        : false;
+
     const materials = parseFibersToMaterials(input.fibers);
-    const { verdict, verdictReason } = computeVerdict({
-      markup: parsed.markup,
+    const { verdict, verdictReason, verdictSpanNote } = computeVerdictFromRange({
+      markupMin: parsed.markupMin,
+      markupMax: parsed.markupMax,
       materials,
       isSmallBusiness: parsed.isSmallBusiness,
-      costPerWear: 0
+      isEthicalBrand: parsed.isEthicalBrand,
+      costPerWear: 0,
+      functionalSynthetic: parsed.functionalSynthetic
     });
     parsed.verdict = verdict;
-    parsed.verdictReason = verdictReason;
+    parsed.verdictReason =
+      parsed.functionalSynthetic && !verdictReason.includes("appropriate for this garment type")
+        ? `${verdictReason} Synthetic materials are appropriate for this garment type.`
+        : verdictReason;
+    parsed.verdictSpanNote = verdictSpanNote ?? undefined;
     parsed.markupContext =
       verdict === "Worth It" ? "justified" : verdict === "Think Twice" ? "partially justified" : "unjustified";
 

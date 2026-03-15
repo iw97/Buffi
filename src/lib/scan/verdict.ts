@@ -9,7 +9,20 @@ export type { VerdictTier } from "./types";
 
 const PREMIUM_NATURAL = ["modal", "cashmere", "silk", "merino", "linen", "lyocell", "tencel"];
 const STANDARD_NATURAL = ["cotton", "wool", "hemp"];
-const SYNTHETIC = ["polyester", "nylon", "acrylic", "viscose", "elastane"];
+/** These fibers are always synthetic; never classify as natural. */
+const SYNTHETIC = [
+  "polyurethane",
+  "polyester",
+  "nylon",
+  "polyamide",
+  "acrylic",
+  "spandex",
+  "elastane",
+  "lycra",
+  "gore-tex",
+  "viscose",
+  "rayon"
+];
 
 function normalizeFiber(fiber: string): string {
   return fiber.toLowerCase().trim();
@@ -72,17 +85,69 @@ export function parseFibersToMaterials(fibers: string[]): { fiber: string; perce
   return out;
 }
 
+const VERDICT_ORDER: Record<string, number> = { "Worth It": 0, "Think Twice": 1, "Retail Trap": 2 };
+
+function verdictSeverity(tier: VerdictTier): number {
+  return VERDICT_ORDER[tier] ?? 0;
+}
+
+/** Compute verdict from markup range: use worst-case (markupMax). If min and max fall in different tiers, return the worse verdict and a span note. */
+export function computeVerdictFromRange(analysis: {
+  markupMin: number;
+  markupMax: number;
+  materials: { fiber: string; percentage: number }[];
+  isSmallBusiness?: boolean;
+  isEthicalBrand?: boolean;
+  costPerWear?: number;
+  functionalSynthetic?: boolean;
+}): { verdict: VerdictTier; verdictReason: string; verdictSpanNote: string | null } {
+  const resMin = computeVerdict({
+    markup: analysis.markupMin,
+    materials: analysis.materials,
+    isSmallBusiness: analysis.isSmallBusiness,
+    isEthicalBrand: analysis.isEthicalBrand,
+    costPerWear: analysis.costPerWear,
+    functionalSynthetic: analysis.functionalSynthetic
+  });
+  const resMax = computeVerdict({
+    markup: analysis.markupMax,
+    materials: analysis.materials,
+    isSmallBusiness: analysis.isSmallBusiness,
+    isEthicalBrand: analysis.isEthicalBrand,
+    costPerWear: analysis.costPerWear,
+    functionalSynthetic: analysis.functionalSynthetic
+  });
+  const worse = verdictSeverity(resMax.verdict) >= verdictSeverity(resMin.verdict) ? resMax : resMin;
+  const spansTiers = resMin.verdict !== resMax.verdict;
+  return {
+    verdict: worse.verdict,
+    verdictReason: worse.verdictReason,
+    verdictSpanNote: spansTiers ? "Markup range spans two categories — verdict reflects worst case." : null
+  };
+}
+
 export function computeVerdict(analysis: {
   markup: number;
   materials: { fiber: string; percentage: number }[];
   isSmallBusiness?: boolean;
+  isEthicalBrand?: boolean;
   costPerWear?: number;
+  functionalSynthetic?: boolean;
 }): { verdict: VerdictTier; verdictReason: string } {
-  const { markup, materials, isSmallBusiness = false, costPerWear = 0 } = analysis;
+  const {
+    markup,
+    materials,
+    isSmallBusiness = false,
+    isEthicalBrand = false,
+    costPerWear = 0,
+    functionalSynthetic = false
+  } = analysis;
   const { premiumNaturalPct, naturalPct, syntheticPct } = getFiberBreakdown(materials);
   const predominantlyPremiumNatural = premiumNaturalPct >= PREDOMINANT;
   const predominantlyNatural = naturalPct >= PREDOMINANT;
   const syntheticHeavy = syntheticPct >= PREDOMINANT;
+  const penalizeSynthetic = syntheticHeavy && !functionalSynthetic;
+  const indieOrEthical = isSmallBusiness || isEthicalBrand;
 
   // ——— Always Retail Trap (no override) ———
   if (markup > 1300) {
@@ -92,7 +157,7 @@ export function computeVerdict(analysis: {
         "Markup over 1,300% — we can’t justify this premium regardless of materials or brand."
     };
   }
-  if (syntheticHeavy && markup > 600 && !isSmallBusiness) {
+  if (penalizeSynthetic && markup > 600 && !indieOrEthical) {
     return {
       verdict: "Retail Trap",
       verdictReason:
@@ -121,6 +186,13 @@ export function computeVerdict(analysis: {
         "Independent brand with quality natural fibers and modest markup — reasonable for small-batch production."
     };
   }
+  if (markup < 400 && isEthicalBrand && predominantlyNatural) {
+    return {
+      verdict: "Worth It",
+      verdictReason:
+        "Known sustainable brand with quality natural fibers and modest markup — the price reflects their sustainability and ethics."
+    };
+  }
 
   // ——— Think Twice (amber): low cost per wear ———
   if (costPerWear > 0 && costPerWear < 2) {
@@ -147,6 +219,14 @@ export function computeVerdict(analysis: {
         "Independent brand with natural fibers — markup is high but partially justified by small-batch production and material quality."
     };
   }
+  // ——— Override UP to Think Twice: known ethical/sustainable brand + natural, markup up to 1,300% ———
+  if (isEthicalBrand && predominantlyNatural && markup <= 1300) {
+    return {
+      verdict: "Think Twice",
+      verdictReason:
+        "Known sustainable brand with natural fibers — markup is high but partially justified by the brand’s sustainability reputation and ethics."
+    };
+  }
 
   // ——— Override UP to Think Twice: premium natural, markup up to 1,200% ———
   if (predominantlyPremiumNatural && markup <= 1200) {
@@ -158,7 +238,7 @@ export function computeVerdict(analysis: {
   }
 
   // ——— Default: Retail Trap ———
-  if (syntheticHeavy && markup > 600) {
+  if (penalizeSynthetic && markup > 600) {
     return {
       verdict: "Retail Trap",
       verdictReason:

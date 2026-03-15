@@ -10,7 +10,20 @@ import type { ScanAnalysis } from "@/lib/scan/types";
 
 type InfoId = "material" | "cpw" | "markup";
 
-const SYNTHETIC_FIBERS = ["polyester", "nylon", "elastane", "spandex", "acrylic", "viscose", "rayon", "polyamide"];
+/** Always synthetic; never tag as natural. */
+const SYNTHETIC_FIBERS = [
+  "polyurethane",
+  "polyester",
+  "nylon",
+  "polyamide",
+  "elastane",
+  "spandex",
+  "acrylic",
+  "lycra",
+  "gore-tex",
+  "viscose",
+  "rayon"
+];
 
 function fiberKind(fiber: string): "synthetic" | "natural" {
   const lower = fiber.toLowerCase();
@@ -73,15 +86,31 @@ function verdictToSavedVerdict(verdict: string): "trap" | "win" | "think_twice" 
   return "win";
 }
 
+function getMaterialCostMidpoint(a: ScanAnalysis): number {
+  if (typeof a.estimatedMaterialCostMin === "number" && typeof a.estimatedMaterialCostMax === "number") {
+    return (a.estimatedMaterialCostMin + a.estimatedMaterialCostMax) / 2;
+  }
+  return a.estimatedMaterialCost ?? 0;
+}
+
+function getMarkupMidpoint(a: ScanAnalysis): number {
+  if (typeof a.markupMin === "number" && typeof a.markupMax === "number") {
+    return (a.markupMin + a.markupMax) / 2;
+  }
+  return a.markup ?? 0;
+}
+
 function analysisToSavedItem(a: ScanAnalysis) {
   const fibers = a.materials.map((m) => `${m.fiber} ${m.percentage}%`);
+  const estCost = getMaterialCostMidpoint(a);
+  const markup = getMarkupMidpoint(a);
   return {
     brandName: a.brand,
     itemName: a.name,
     price: a.price,
-    estimatedMaterialCost: a.estimatedMaterialCost,
-    markup: a.markup,
-    markupBand: markupToBand(a.markup),
+    estimatedMaterialCost: estCost,
+    markup,
+    markupBand: markupToBand(markup),
     fibers,
     verdict: verdictToSavedVerdict(a.verdict),
     verdictReason: a.verdictReason,
@@ -176,7 +205,11 @@ export function BreakdownScreen() {
   }, [score]);
 
   useEffect(() => {
-    const close = () => setInfoOpen(null);
+    function close(e: MouseEvent) {
+      const target = e.target as Node;
+      if (target && document.body.contains(target) && (target as Element).closest?.(".info-wrap, .info-popover")) return;
+      setInfoOpen(null);
+    }
     document.addEventListener("click", close);
     return () => document.removeEventListener("click", close);
   }, []);
@@ -288,22 +321,33 @@ export function BreakdownScreen() {
   const effectivePrice: number | null =
     manualPriceApplied != null ? manualPriceApplied : hasAnalysisPrice ? basePrice : null;
 
-  // Effective markup and cost-per-wear: when user enters price, recompute these locally.
-  let effectiveMarkup = result?.markup ?? 0;
+  const hasCostRange =
+    result &&
+    typeof result.estimatedMaterialCostMin === "number" &&
+    typeof result.estimatedMaterialCostMax === "number";
+  const hasMarkupRange = result && typeof result.markupMin === "number" && typeof result.markupMax === "number";
+
+  // Effective markup (range or single): when user enters price, recompute from cost range when available.
+  let effectiveMarkupMin = result?.markupMin ?? 0;
+  let effectiveMarkupMax = result?.markupMax ?? 0;
+  let effectiveMarkup = getMarkupMidpoint(result!);
   let effectiveCostPerWear = result?.costPerWear ?? 0;
   if (result && effectivePrice != null) {
-    const estCost = result.estimatedMaterialCost;
-    if (estCost > 0) {
-      effectiveMarkup = ((effectivePrice - estCost) / estCost) * 100;
+    if (hasCostRange && result.estimatedMaterialCostMax > 0 && result.estimatedMaterialCostMin > 0) {
+      effectiveMarkupMin = (effectivePrice / result.estimatedMaterialCostMax - 1) * 100;
+      effectiveMarkupMax = (effectivePrice / result.estimatedMaterialCostMin - 1) * 100;
+      effectiveMarkup = (effectiveMarkupMin + effectiveMarkupMax) / 2;
     } else {
-      effectiveMarkup = result.markup;
+      const estCost = getMaterialCostMidpoint(result);
+      if (estCost > 0) {
+        effectiveMarkup = ((effectivePrice - estCost) / estCost) * 100;
+        effectiveMarkupMin = effectiveMarkupMax = effectiveMarkup;
+      }
     }
     if (result.costPerWear > 0 && basePrice > 0) {
-      // Keep Claude's assumed wear-count, scale cost-per-wear linearly with price.
       const wearCount = basePrice / result.costPerWear;
       effectiveCostPerWear = wearCount > 0 ? effectivePrice / wearCount : result.costPerWear;
     } else {
-      // Fallback: assume ~50 wears as a reasonable default when we had no price before.
       const assumedWears = 50;
       effectiveCostPerWear = effectivePrice / assumedWears;
     }
@@ -345,7 +389,12 @@ export function BreakdownScreen() {
             )}
           </div>
           <div>
-            <div className="item-brand">{scan.brandName}</div>
+            <div className="item-brand-row">
+              <span className="item-brand">{scan.brandName}</span>
+              {result!.isEthicalBrand && (
+                <span className="brand-badge brand-badge-ethical">Known sustainable brand</span>
+              )}
+            </div>
             <div className="item-name">{scan.itemName}</div>
             <div className="item-price-row">
               <div className="item-price">
@@ -362,6 +411,9 @@ export function BreakdownScreen() {
               <div className="verdict-eyebrow">Our Verdict</div>
               <div className="verdict-text">{result!.verdict}.</div>
               <div className="verdict-subtitle-wrap">{verdictSubtitle(result!.verdict)}</div>
+              {result!.verdictSpanNote && (
+                <p className="verdict-span-note">{result!.verdictSpanNote}</p>
+              )}
             </div>
           </div>
           {result!.valuesMatch && result!.valuesMatch.length > 0 && (
@@ -432,16 +484,26 @@ export function BreakdownScreen() {
                   ?
                 </button>
               </div>
-              <div className="receipt-val good">~${result!.estimatedMaterialCost.toFixed(2)}</div>
+              <div className="receipt-val good">
+                {hasCostRange
+                  ? `~$${result!.estimatedMaterialCostMin.toFixed(2)} – $${result!.estimatedMaterialCostMax.toFixed(2)}`
+                  : `~$${getMaterialCostMidpoint(result!).toFixed(2)}`}
+              </div>
             </div>
             <div className={`info-popover ${infoOpen === "material" ? "visible" : ""}`}>
-              How much it costs to <strong>actually make</strong> this item — fabric, thread, labour. Everything
-              before brand markup, shipping, and retail margin.
+              Material cost is estimated based on fiber composition, garment construction, and current commodity
+              prices. Actual costs vary by manufacturer and order volume.
             </div>
 
             <div className="receipt-row">
-              <div className="receipt-key">% synthetic</div>
-              <div className={`receipt-val ${syntheticPct > 50 ? "bad" : "good"}`}>{Math.round(syntheticPct)}%</div>
+              <div className="receipt-key">
+                % synthetic{result!.functionalSynthetic ? " (functional)" : ""}
+              </div>
+              <div
+                className={`receipt-val ${result!.functionalSynthetic ? "good" : syntheticPct > 50 ? "bad" : "good"}`}
+              >
+                {Math.round(syntheticPct)}%
+              </div>
             </div>
 
             <div className="receipt-row">
@@ -483,10 +545,23 @@ export function BreakdownScreen() {
                   ?
                 </button>
               </div>
-              <div className="receipt-val big">{Math.round(effectiveMarkup).toLocaleString()}%</div>
+              <div
+                className={`receipt-val big receipt-val-markup receipt-val-markup-${verdictToStampClass(result!.verdict)}`}
+              >
+                {(hasMarkupRange && (effectivePrice != null || result!.price > 0))
+                  ? `${Math.round(effectiveMarkupMin).toLocaleString()}% – ${Math.round(effectiveMarkupMax).toLocaleString()}%`
+                  : `${Math.round(effectiveMarkup).toLocaleString()}%`}
+              </div>
             </div>
             <div className={`info-popover ${infoOpen === "markup" ? "visible" : ""}`}>
-              The difference between the <strong>est. material cost (~${result!.estimatedMaterialCost.toFixed(2)})</strong>{" "}
+              The difference between the{" "}
+              <strong>
+                est. material cost (
+                {hasCostRange
+                  ? `~$${result!.estimatedMaterialCostMin.toFixed(2)} – $${result!.estimatedMaterialCostMax.toFixed(2)}`
+                  : `~$${getMaterialCostMidpoint(result!).toFixed(2)}`}
+                )
+              </strong>{" "}
               and what you paid{" "}
               {effectivePrice != null ? `$${effectivePrice.toFixed(2)}` : "(enter a price above to see this)"}. This is
               how much extra you&apos;re paying above what it costs to make.
@@ -699,7 +774,7 @@ export function BreakdownScreen() {
             <div className="share-card-headline">
               {result!.verdict}.
               <br />
-              {result!.markup.toLocaleString()}% markup.
+              {Math.round(getMarkupMidpoint(result!)).toLocaleString()}% markup.
             </div>
             <div className="share-stats">
               <div className="share-stat">
@@ -707,7 +782,7 @@ export function BreakdownScreen() {
                 <div className="share-stat-key">Retail</div>
               </div>
               <div className="share-stat">
-                <div className="share-stat-val">~${result!.estimatedMaterialCost.toFixed(0)}</div>
+                <div className="share-stat-val">~${getMaterialCostMidpoint(result!).toFixed(0)}</div>
                 <div className="share-stat-key">Real Cost</div>
               </div>
               <div className="share-stat">

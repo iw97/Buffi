@@ -1560,13 +1560,34 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--teal);
 }
 
+.item-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
 .item-brand {
   font-family: var(--font-mono, monospace);
   font-size: 10px;
   letter-spacing: 2px;
   color: var(--text-dim);
   text-transform: uppercase;
-  margin-bottom: 6px;
+}
+
+.brand-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 8px;
+  letter-spacing: 1px;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.brand-badge-ethical {
+  background: rgba(82, 217, 208, 0.12);
+  color: var(--teal);
+  border: 1px solid rgba(82, 217, 208, 0.25);
 }
 
 .item-name {
@@ -1791,6 +1812,23 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .receipt-val.big {
   font-size: 17px;
   color: var(--red);
+}
+.receipt-val-markup.receipt-val-markup-win {
+  color: var(--teal);
+}
+.receipt-val-markup.receipt-val-markup-think-twice {
+  color: var(--amber);
+}
+.receipt-val-markup.receipt-val-markup-trap {
+  color: var(--red);
+}
+
+.verdict-span-note {
+  margin-top: 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-dim);
+  font-style: italic;
 }
 
 .info-wrap {
