@@ -4,6 +4,13 @@ import { getPriceFromGoogleShopping } from "@/lib/scan/serpapi";
 import { lookupBarcode } from "@/lib/scan/barcode";
 import { analyzeWithClaude, analyzeMinimalScan } from "@/lib/scan/analyze";
 import type { RawProductData, ScanResult, ScanError } from "@/lib/scan/types";
+import { extractGtinAndUpsertMapping } from "@/lib/firebase/productMappingsServer";
+import {
+  getCacheTtlDays,
+  getCachedProductScanIfFresh,
+  productScanToScanAnalysis,
+  recordProductScan
+} from "@/lib/firebase/productScansServer";
 
 export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | ScanError | unknown>> {
   console.log("[api/scan] POST received");
@@ -68,6 +75,20 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
           { status: 400 }
         );
       }
+
+      const ttlDays = getCacheTtlDays();
+      try {
+        const cached = await getCachedProductScanIfFresh(url, ttlDays);
+        if (cached) {
+          console.log(`[scan] cache hit for ${url}`);
+          const analysis = productScanToScanAnalysis(cached);
+          return NextResponse.json({ ok: true, source: "cache", analysis });
+        }
+      } catch (cacheErr) {
+        console.warn("[api/scan] productScans cache lookup failed:", (cacheErr as Error).message);
+      }
+
+      console.log(`[scan] fresh scan for ${url}`);
       console.log("[api/scan] scraping URL", url.slice(0, 60));
       const scraped = await scrapeProductFromUrl(url);
       console.log("[api/scan] scrape result", scraped ? { name: !!scraped.name, brand: !!scraped.brand, price: !!scraped.price } : "null");
@@ -126,8 +147,14 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
     console.log("[api/scan] calling analyzeWithClaude", selectedValues.length ? { selectedValuesCount: selectedValues.length } : "");
     const analysis = await analyzeWithClaude(raw, selectedValues);
     if (raw.imageUrl != null) analysis.imageUrl = raw.imageUrl;
+    if (raw.source === "url" && typeof raw.url === "string" && raw.url.trim()) {
+      const u = raw.url.trim();
+      void Promise.all([recordProductScan(u, analysis), extractGtinAndUpsertMapping(u, analysis.brand, analysis.name)]).catch(
+        (e) => console.warn("[api/scan] background productScans/productMappings failed:", (e as Error).message)
+      );
+    }
     console.log("[api/scan] Claude analysis received, returning 200");
-    return NextResponse.json({ ok: true, analysis });
+    return NextResponse.json({ ok: true, source: "live", analysis });
   } catch (err) {
     const e = err as Error & { code?: string };
     console.error("[api/scan] catch", e?.message, e);

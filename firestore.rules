@@ -1,9 +1,19 @@
-// TEMPORARY: permissive rules for testing. Tighten before launch.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Internal intelligence — no client access (Admin SDK only).
+    match /productScans/{document} {
+      allow read, write: if false;
+    }
+    match /productMappings/{document} {
+      allow read, write: if false;
+    }
+
+    // TEMPORARY: permissive rules for other collections. Tighten before launch.
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if
+        request.path.split('/')[0] != 'productScans'
+        && request.path.split('/')[0] != 'productMappings';
     }
   }
 }

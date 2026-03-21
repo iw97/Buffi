@@ -1,3 +1,5 @@
+import type { MarkupContext, ValuesMatchEntry, VerdictTier } from "@/lib/scan/types";
+
 /**
  * Firestore document types and collection names for Buffi.
  */
@@ -6,8 +8,71 @@ export const COLLECTIONS = {
   USERS: "users",
   SAVED_ITEMS: "savedItems",
   SCAN_HISTORY: "scanHistory",
-  PRODUCT_MAPPINGS: "productMappings"
+  /** GTIN → URL registry; Admin SDK only, no client access. */
+  PRODUCT_MAPPINGS: "productMappings",
+  /** Internal product-level scan aggregates + cache; Admin SDK only, no client access. */
+  PRODUCT_SCANS: "productScans"
 } as const;
+
+/** Verdict counters for productScans aggregation (maps from ScanAnalysis verdict). */
+export interface VerdictDistribution {
+  worthIt: number;
+  thinkTwice: number;
+  retailTrap: number;
+}
+
+/** Latest scan snapshot inside productScans (for cache / breakdown restoration). */
+export interface ProductScanLatestSnapshot {
+  price: number;
+  markupMin: number;
+  markupMax: number;
+  estimatedMaterialCostMin: number;
+  estimatedMaterialCostMax: number;
+  costPerWear: number;
+  verdict: VerdictTier;
+  verdictReason: string;
+  tags: string[];
+  markupContext: MarkupContext;
+  imageUrl?: string | null;
+  verdictSpanNote?: string | null;
+  isSmallBusiness?: boolean;
+  isEthicalBrand?: boolean;
+  functionalSynthetic?: boolean;
+  valuesMatch?: ValuesMatchEntry[];
+}
+
+/**
+ * productScans/{urlHash} — internal product intelligence + result cache.
+ * Document ID: URL-safe hash of normalized productUrl.
+ */
+export interface ProductScanDocument {
+  productUrl: string;
+  brand: string;
+  productName: string;
+  fibers: { fiber: string; percentage: number }[];
+  averagePrice: number;
+  scanCount: number;
+  averageMarkupMin: number;
+  averageMarkupMax: number;
+  verdictDistribution: VerdictDistribution;
+  firstScannedAt: unknown;
+  lastScannedAt: unknown;
+  /** Present on new writes; legacy docs may omit. */
+  latestScan?: ProductScanLatestSnapshot;
+}
+
+/** productMappings/{gtin} — written only from server. */
+export interface ProductMappingDocument {
+  gtin: string;
+  productUrl: string;
+  brand: string;
+  productName: string;
+  confirmedAt: unknown;
+  confirmCount: number;
+  source: "url-scrape";
+  stale?: boolean;
+  staleAt?: unknown;
+}
 
 /** User profile and preferences (stored in users/{uid}) */
 export interface UserProfile {
@@ -61,12 +126,3 @@ export interface ScanHistoryEntry {
   expiresAt: string;
 }
 
-/** Product mapping by GTIN (productMappings collection). Read-only for clients; writes via server/Admin SDK. */
-export interface ProductMapping {
-  id?: string;
-  gtin: string;
-  productUrl: string;
-  brand: string;
-  confirmedAt: string;
-  confirmedByUserId: string;
-}

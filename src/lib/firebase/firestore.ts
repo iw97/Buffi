@@ -18,7 +18,7 @@ import {
 import type { Unsubscribe } from "firebase/firestore";
 import type { Timestamp } from "firebase/firestore";
 import { firestore, firebaseAuth } from "./client";
-import { COLLECTIONS, type UserProfile, type SavedItem, type ScanHistoryEntry, type ProductMapping } from "./types";
+import { COLLECTIONS, type UserProfile, type SavedItem, type ScanHistoryEntry } from "./types";
 
 function timestampToIso(t: unknown): string {
   if (t && typeof (t as Timestamp).toDate === "function") return (t as Timestamp).toDate().toISOString();
@@ -221,27 +221,3 @@ export async function addScanHistoryEntry(
   });
 }
 
-/** Get product mappings (read-only). For write, use server-side API with Firebase Admin SDK. */
-export async function getProductMappings(gtin?: string): Promise<ProductMapping[]> {
-  const op = "getProductMappings(productMappings" + (gtin ? "?gtin=" + gtin : "") + ")";
-  if (!requireAuth(op)) return [];
-  return withFirestoreLog(op, async () => {
-    const db = getDb();
-    const ref = collection(db, COLLECTIONS.PRODUCT_MAPPINGS);
-    const q = gtin
-      ? query(ref, where("gtin", "==", gtin), limit(20))
-      : query(ref, limit(100));
-    const snap = await getDocs(q);
-    return snap.docs.map((d) => {
-      const data = d.data();
-      return {
-        id: d.id,
-        gtin: (data.gtin as string) ?? "",
-        productUrl: (data.productUrl as string) ?? "",
-        brand: (data.brand as string) ?? "",
-        confirmedAt: timestampToIso(data.confirmedAt),
-        confirmedByUserId: (data.confirmedByUserId as string) ?? ""
-      } as ProductMapping;
-    });
-  });
-}

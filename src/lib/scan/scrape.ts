@@ -71,9 +71,14 @@ async function fetchShopifyProductJson(productUrl: string): Promise<{
     const vendor = product.vendor as string | undefined;
     const variants = product.variants as Array<{ price?: string }> | undefined;
     let price: number | undefined;
-    if (Array.isArray(variants) && variants.length > 0 && variants[0]?.price != null) {
-      const p = parseFloat(String(variants[0].price));
-      if (!Number.isNaN(p) && p >= 0) price = normalizePrice(p);
+    if (Array.isArray(variants) && variants.length > 0) {
+      const parsed = variants
+        .map((v) => (v?.price != null ? parseFloat(String(v.price)) : NaN))
+        .filter((p) => !Number.isNaN(p) && p >= 0);
+      if (parsed.length > 0) {
+        const usePrice = parsed.length === 1 ? parsed[0] : Math.max(...parsed);
+        price = normalizePrice(usePrice);
+      }
     }
     const images = product.images as Array<{ src?: string }> | undefined;
     const imageUrl =

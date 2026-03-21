@@ -7,6 +7,7 @@ import { useScanResult, getStoredScanResult, isValidScanResult, normalizeScanRes
 import { addSavedItem, removeSavedItem, setUserProfile } from "@/lib/firebase/firestore";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
 import type { ScanAnalysis } from "@/lib/scan/types";
+import type { BetterAlternativeCard, BetterAlternativesPayload } from "@/lib/better-alternatives/types";
 
 type InfoId = "material" | "cpw" | "markup";
 
@@ -100,6 +101,52 @@ function getMarkupMidpoint(a: ScanAnalysis): number {
   return a.markup ?? 0;
 }
 
+function betterAltBadgeLabel(badge: BetterAlternativeCard["badge"]): string {
+  switch (badge) {
+    case "more_natural":
+      return "More natural fibers";
+    case "lower_markup":
+      return "Lower markup";
+    case "better_cpw":
+      return "Better cost per wear";
+    default:
+      return "";
+  }
+}
+
+function BetterAltProductCard({ card }: { card: BetterAlternativeCard }) {
+  const [imgErr, setImgErr] = useState(false);
+  const priceStr =
+    card.price > 0
+      ? `$${card.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+      : "—";
+  return (
+    <a
+      href={card.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="better-alt-card"
+    >
+      <div className="better-alt-card-img-wrap">
+        {card.imageUrl && !imgErr ? (
+          <img src={card.imageUrl} alt="" onError={() => setImgErr(true)} />
+        ) : (
+          <div className="better-alt-card-img-placeholder" aria-hidden />
+        )}
+      </div>
+      <div className="better-alt-card-body">
+        <div className="better-alt-card-title">{card.title}</div>
+        <div className="better-alt-card-brand">{card.brand}</div>
+        <div className="better-alt-card-price-row">
+          <span className="better-alt-card-price">{priceStr}</span>
+          <span className="better-alt-card-badge">{betterAltBadgeLabel(card.badge)}</span>
+        </div>
+        <div className="better-alt-card-fiber">{card.fiberSummary}</div>
+      </div>
+    </a>
+  );
+}
+
 function analysisToSavedItem(a: ScanAnalysis) {
   const fibers = a.materials.map((m) => `${m.fiber} ${m.percentage}%`);
   const estCost = getMaterialCostMidpoint(a);
@@ -185,6 +232,8 @@ export function BreakdownScreen() {
   const [manualPriceInput, setManualPriceInput] = useState("");
   const [manualPriceApplied, setManualPriceApplied] = useState<number | null>(null);
   const [imageError, setImageError] = useState(false);
+  const [betterAlts, setBetterAlts] = useState<BetterAlternativesPayload | null>(null);
+  const [betterAltsLoading, setBetterAltsLoading] = useState(false);
 
   const score = 25; // TODO: derive from analysis
   const imageUrl = result?.imageUrl ?? null;
@@ -198,6 +247,43 @@ export function BreakdownScreen() {
     }, 300);
     return () => window.clearTimeout(t);
   }, []);
+
+  useEffect(() => {
+    if (!validResult) return;
+    const v = validResult.verdict;
+    if (v !== "Think Twice" && v !== "Retail Trap") {
+      setBetterAlts(null);
+      setBetterAltsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setBetterAltsLoading(true);
+    setBetterAlts(null);
+    fetch("/api/better-alternatives", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scan: validResult })
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("better-alternatives failed");
+        return res.json() as Promise<BetterAlternativesPayload>;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setBetterAlts(data);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBetterAlts({ sameBrand: null, sameBrandSkippedMessage: null, crossBrand: null });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setBetterAltsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [validResult]);
 
   const ringDashOffset = useMemo(() => {
     const circumference = 188;
@@ -352,6 +438,25 @@ export function BreakdownScreen() {
       effectiveCostPerWear = effectivePrice / assumedWears;
     }
   }
+
+  const verdictForAlts = result?.verdict;
+  const showBetterAlternatives =
+    verdictForAlts === "Think Twice" || verdictForAlts === "Retail Trap";
+  const hasBetterAlternativesSection =
+    showBetterAlternatives &&
+    (betterAltsLoading ||
+      (betterAlts &&
+        (betterAlts.sameBrand != null ||
+          betterAlts.crossBrand != null ||
+          (betterAlts.sameBrandSkippedMessage != null && betterAlts.sameBrandSkippedMessage.length > 0))));
+
+  const origBrandForAlts = (result?.brand || "").trim();
+  const showBetterAltFromRow =
+    origBrandForAlts.length > 0 &&
+    !/^unknown$/i.test(origBrandForAlts) &&
+    betterAlts &&
+    (betterAlts.sameBrand != null ||
+      (betterAlts.sameBrandSkippedMessage != null && betterAlts.sameBrandSkippedMessage.length > 0));
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -625,32 +730,46 @@ export function BreakdownScreen() {
           </div>
         )}
 
-        <div className="section-divider" />
-
-        <div className="pad">
-          <div className="section-eyebrow">— Find it secondhand</div>
-          <div className="secondhand-pro-wrap">
-            <div className="secondhand-pro-placeholder">
-              <div className="secondhand-pro-placeholder-inner">
-                <div className="secondhand-pro-image" aria-hidden />
-                <div className="secondhand-pro-content">
-                  <div className="secondhand-pro-platform" />
-                  <div className="secondhand-pro-title" />
-                  <div className="secondhand-pro-price" />
+        {hasBetterAlternativesSection && (
+          <>
+            <div className="section-divider" />
+            <div className="pad">
+              <div className="section-eyebrow">— Found something better?</div>
+              <p className="better-alt-disclaimer">
+                Based on fiber quality and value — not sponsored.
+              </p>
+              {betterAltsLoading ? (
+                <div className="better-alt-skeletons" aria-hidden>
+                  <div className="better-alt-skeleton-card" />
+                  <div className="better-alt-skeleton-card" />
                 </div>
-                <div className="secondhand-pro-arrow" aria-hidden>→</div>
-              </div>
-              <div className="secondhand-pro-overlay" aria-hidden>
-                <svg className="secondhand-pro-lock" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-                <span>Buffi Pro</span>
-              </div>
+              ) : (
+                betterAlts && (
+                  <>
+                    {showBetterAltFromRow && (
+                      <>
+                        <div className="better-alt-slot-label better-alt-slot-from">
+                          FROM {origBrandForAlts.toUpperCase()}
+                        </div>
+                        {betterAlts.sameBrand ? (
+                          <BetterAltProductCard card={betterAlts.sameBrand} />
+                        ) : (
+                          <p className="better-alt-skip-msg">{betterAlts.sameBrandSkippedMessage}</p>
+                        )}
+                      </>
+                    )}
+                    {betterAlts.crossBrand && (
+                      <>
+                        <div className="better-alt-slot-label better-alt-slot-worth">WORTH CONSIDERING</div>
+                        <BetterAltProductCard card={betterAlts.crossBrand} />
+                      </>
+                    )}
+                  </>
+                )
+              )}
             </div>
-          </div>
-          <p className="secondhand-pro-caption">Secondhand alternatives are available on Buffi Pro</p>
-        </div>
+          </>
+        )}
 
         <div className="save-btn-row">
           {saveError && (

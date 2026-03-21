@@ -59,12 +59,16 @@ export interface ScanAnalysis {
   functionalSynthetic?: boolean;
   /** Known ethical/sustainable brand; higher markup is partially justified. */
   isEthicalBrand?: boolean;
+  /** Set when analysis is served from productScans cache (URL scans). */
+  confidenceTier?: number;
 }
 
 /** Full scan result returned by /api/scan */
 export interface ScanResult {
   ok: true;
   analysis: ScanAnalysis;
+  /** Present for URL scans: live pipeline vs productScans cache */
+  source?: "live" | "cache";
 }
 
 /** Minimal scan response (brandName + fibers + price + confidenceTier → Claude) */
@@ -83,6 +87,28 @@ export interface MinimalScanResponse {
   markupContext: MarkupContext;
   functionalSynthetic?: boolean;
   isEthicalBrand?: boolean;
+}
+
+/** Lightweight Claude comparison of a candidate product vs an original scan (better-alternatives flow). */
+export interface AlternativeAnalysisResult {
+  fibers: { fiber: string; percentage: number }[];
+  estimatedMaterialCostMin: number;
+  estimatedMaterialCostMax: number;
+  markupMin: number;
+  markupMax: number;
+  costPerWear: number;
+  isGenuinelyBetter: boolean;
+  primaryImprovement: "fiber" | "markup" | "costPerWear" | null;
+  /** At most six words (enforced in post-processing). */
+  improvementSummary: string;
+}
+
+/** Input for `analyzeAlternative`: minimal candidate fields + composition text. */
+export interface AlternativeCandidateProduct {
+  name: string;
+  brand: string;
+  price: number;
+  rawCompositionText: string;
 }
 
 /** Error codes for explicit handling */

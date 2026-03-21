@@ -11,6 +11,13 @@ export interface GoogleShoppingFirstResult {
   source: string;
 }
 
+export interface GoogleShoppingItem {
+  title: string;
+  link: string;
+  price: number | null;
+  source: string;
+}
+
 /** Remove currency symbols and non-numeric chars, then parse as float. */
 function cleanPriceString(raw: string): number | null {
   const cleaned = raw.replace(/[^\d.]/g, "");
@@ -108,5 +115,76 @@ export async function getPriceFromGoogleShopping(
   } catch (e) {
     console.warn(LOG_PREFIX, "fetch failed:", (e as Error).message);
     return null;
+  }
+}
+
+/**
+ * Google Shopping via SerpAPI — multiple results with product links (for better-alternatives).
+ */
+export async function getGoogleShoppingResults(query: string, limit: number): Promise<GoogleShoppingItem[]> {
+  const apiKey = process.env.SERPAPI_KEY;
+  if (!apiKey?.trim()) {
+    console.log(LOG_PREFIX, "SERPAPI_KEY not set, skipping multi-result Shopping");
+    return [];
+  }
+  const trimmed = query.trim();
+  if (!trimmed || limit <= 0) return [];
+
+  const params = new URLSearchParams({
+    engine: "google_shopping",
+    q: trimmed,
+    api_key: apiKey
+  });
+  const url = `https://serpapi.com/search.json?${params.toString()}`;
+
+  console.log(LOG_PREFIX, "multi search query:", trimmed.slice(0, 120), "limit:", limit);
+
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    if (!res.ok) {
+      console.warn(LOG_PREFIX, "SerpAPI multi request failed", res.status);
+      return [];
+    }
+    const data = (await res.json()) as {
+      shopping_results?: Array<{
+        title?: string;
+        link?: string;
+        product_link?: string;
+        price?: string;
+        source?: string;
+      }>;
+      error?: string;
+    };
+    if (data.error) {
+      console.warn(LOG_PREFIX, "SerpAPI error:", data.error);
+      return [];
+    }
+    const results = data.shopping_results;
+    if (!Array.isArray(results) || results.length === 0) return [];
+
+    const out: GoogleShoppingItem[] = [];
+    for (const row of results) {
+      const title = typeof row.title === "string" ? row.title.trim() : "";
+      const link = (typeof row.link === "string" && row.link.trim()
+        ? row.link.trim()
+        : typeof row.product_link === "string" && row.product_link.trim()
+          ? row.product_link.trim()
+          : "") || "";
+      if (!title || !link) continue;
+      if (!/^https?:\/\//i.test(link)) continue;
+      const price =
+        row.price != null && typeof row.price === "string" ? cleanPriceString(row.price) : null;
+      out.push({
+        title,
+        link,
+        price,
+        source: typeof row.source === "string" ? row.source : ""
+      });
+      if (out.length >= limit) break;
+    }
+    return out;
+  } catch (e) {
+    console.warn(LOG_PREFIX, "multi fetch failed:", (e as Error).message);
+    return [];
   }
 }
