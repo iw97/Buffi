@@ -37,6 +37,8 @@ export interface ProductScanLatestSnapshot {
   verdictSpanNote?: string | null;
   isSmallBusiness?: boolean;
   isEthicalBrand?: boolean;
+  hasCertifiedMaterials?: boolean;
+  certifications?: string[];
   functionalSynthetic?: boolean;
   valuesMatch?: ValuesMatchEntry[];
 }

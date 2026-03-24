@@ -1,4 +1,6 @@
 import Link from "next/link";
+import LandingFaqSection from "@/components/marketing/LandingFaqSection";
+import LandingHowItWorks from "@/components/marketing/LandingHowItWorks";
 
 export default function MarketingLandingPage() {
   return (
@@ -9,34 +11,44 @@ export default function MarketingLandingPage() {
           Know what you&apos;re <em>really</em> buying.
         </h1>
         <p className="landing-sub">
-          Scan any tag or paste a product URL. We&apos;ll show you the receipt — materials, markup, and whether it&apos;s worth it.
+          Scan any tag or paste a product URL. We&apos;ll show you the receipt
+          — materials, markup, and whether it&apos;s worth it.
         </p>
         <Link href="/scan" className="landing-cta">
           Try Buffi →
         </Link>
       </section>
 
-      <section className="landing-overview">
-        <h2 className="landing-section-title">How it works</h2>
-        <ul className="landing-features">
-          <li>
-            <strong>Scan or paste</strong> — Use your camera on a care label or paste a product link from supported retailers.
-          </li>
-          <li>
-            <strong>Get the breakdown</strong> — Plain-English materials, estimated material cost, and our verdict on value.
-          </li>
-          <li>
-            <strong>Shop with confidence</strong> — Save scans and avoid overpaying for what you wear.
-          </li>
-        </ul>
-      </section>
+      <LandingHowItWorks />
+
+      <LandingFaqSection />
 
       <section className="landing-cta-section">
-        <p className="landing-cta-text">Ready to see behind the tag?</p>
-        <Link href="/scan" className="landing-cta secondary">
-          Open the app
-        </Link>
+        <div className="landing-inner">
+          <p className="landing-cta-text">Ready to see behind the tag?</p>
+          <Link href="/scan" className="landing-cta secondary">
+            Try Buffi
+          </Link>
+        </div>
       </section>
+
+      <footer className="landing-footer" role="contentinfo">
+        <div className="landing-inner landing-footer-inner">
+          <Link href="/" className="landing-footer-wordmark">
+            Buffi<span>.</span>
+          </Link>
+          <p className="landing-footer-tagline">
+            Material intelligence for the conscious shopper
+          </p>
+          <div className="landing-footer-links">
+            <Link href="/privacy">Privacy</Link>
+            <span className="landing-footer-sep" aria-hidden>
+              ·
+            </span>
+            <Link href="/terms">Terms</Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -59,6 +59,10 @@ export interface ScanAnalysis {
   functionalSynthetic?: boolean;
   /** Known ethical/sustainable brand; higher markup is partially justified. */
   isEthicalBrand?: boolean;
+  /** True when recycled/certified materials are detected in product context. */
+  hasCertifiedMaterials?: boolean;
+  /** Detected certification/material labels, e.g. REPREVE, GOTS, Fair Trade. */
+  certifications?: string[];
   /** Set when analysis is served from productScans cache (URL scans). */
   confidenceTier?: number;
 }
@@ -87,6 +91,8 @@ export interface MinimalScanResponse {
   markupContext: MarkupContext;
   functionalSynthetic?: boolean;
   isEthicalBrand?: boolean;
+  hasCertifiedMaterials?: boolean;
+  certifications?: string[];
 }
 
 /** Lightweight Claude comparison of a candidate product vs an original scan (better-alternatives flow). */

@@ -9,6 +9,8 @@ const MATERIAL_COST_RULES = `
 Material cost estimation: Use these fabric costs per yard (USD): Basic cotton $2–4, Premium cotton (combed, pima) $5–9. Polyester $1–3, Nylon $3–6. Basic linen $5–8, Premium linen $9–15. Viscose/Rayon $2–5, Modal $6–10, Lyocell/Tencel $7–12. Acrylic $1–3. Basic wool $8–15, Merino wool $15–30, Cashmere $50–100, Silk $20–40.
 Yardage by category: T-shirt 1.5–2, Dress (simple) 2.5–3.5, Blazer/Jacket 2.5–3.5 plus lining, Trousers/Pants 2–3, Skirt (midi) 2–3, Outerwear coat 3.5–5.
 Add 15–25% for thread, labels, packaging, trimmings. Add 30–50% for labor on top of materials.
+Certified/recycled material premiums (apply when detected in product description, composition notes, or known brand context): recycled polyester 1.4x base polyester cost; REPREVE or OceanCycle recycled polyester 1.8x base polyester cost; recycled nylon 1.5x base nylon cost; GOTS certified organic cotton 1.6x base cotton cost; Bluesign-certified materials 1.3x relevant base cost. Fair Trade certified manufacturing adds an additional $8–$15 to total estimated production cost regardless of fiber type.
+When certified/recycled materials are detected, set hasCertifiedMaterials: true, return certifications as an array of strings (e.g. ["REPREVE", "OceanCycle", "Fair Trade"]), and acknowledge this context in verdictReason.
 Return estimatedMaterialCostMin and estimatedMaterialCostMax (USD): total cost to produce including materials and basic labor. The range should reflect genuine uncertainty — typically ±30–40% around the midpoint for standard garments, wider for complex construction or specialty fibers.
 markupMin = (price / costMax - 1) * 100, markupMax = (price / costMin - 1) * 100 (so markupMin is the conservative/low markup, markupMax is the high markup).
 `;
@@ -21,7 +23,7 @@ Apply these rules:
 - verdictReason must include context (e.g. small-brand markup vs fast-fashion synthetic). Verdict stays "Retail Trap" or "Worth It".
 - markupContext: exactly one of "justified" | "partially justified" | "unjustified" based on fiber quality and small-business context.
 - functionalSynthetic: true when garment category makes synthetics appropriate (rainwear, activewear, swimwear, lingerie, hosiery, tights); false for formal/everyday/casual.
-- isEthicalBrand: true when brand is a known ethical/sustainable brand (Patagonia, Eileen Fisher, Reformation, Kotn, Pact, Thought Clothing, Stella McCartney, Veja, Allbirds, Girlfriend Collective, Mara Hoffman, Amour Vert). Apply same higher markup threshold as indie brands; note sustainability reputation in verdictReason.
+- isEthicalBrand: true when brand is a known ethical/sustainable brand (Patagonia, Eileen Fisher, Reformation, Kotn, Pact, Thought Clothing, Amour Vert, Girlfriend Collective, Whimsy and Row, Colorful Standard, Organic Basics, tentree, prAna, Stella McCartney, Veja, Allbirds, Mara Hoffman). Apply same higher markup threshold as indie brands; verdictReason should acknowledge sustainability reputation and supply-chain transparency.
 ${MATERIAL_COST_RULES}
 
 Respond with only valid JSON and nothing else. No markdown, no code fence, no explanation. The JSON must have exactly these fields:
@@ -37,7 +39,9 @@ Respond with only valid JSON and nothing else. No markdown, no code fence, no ex
 - isSmallBusiness (boolean, infer from brand if possible)
 - markupContext (string: "justified" | "partially justified" | "unjustified")
 - functionalSynthetic (boolean)
-- isEthicalBrand (boolean)`;
+- isEthicalBrand (boolean)
+- hasCertifiedMaterials (boolean)
+- certifications (array of strings)`;
 
 const VALUES_EVALUATION_RULES = `
 **Values evaluation (only for values in the selectedValues array)**
@@ -89,7 +93,7 @@ ${
 - Major retailers and fast-fashion chains: set isSmallBusiness: false.
 
 **Known ethical/sustainable brands**
-These brands have a strong sustainability/ethics reputation; higher markup is expected and partially justified. Set isEthicalBrand: true when the brand is one of: Patagonia, Eileen Fisher, Reformation, Kotn, Pact, Thought Clothing, Stella McCartney, Veja, Allbirds, Girlfriend Collective, Mara Hoffman, Amour Vert (or the same company under another name). For these brands: note the brand’s sustainability reputation in verdictReason; apply the same higher markup threshold as indie brands before Retail Trap; return isEthicalBrand: true in the JSON response.
+These brands have a strong sustainability/ethics reputation; higher markup is expected and partially justified. Set isEthicalBrand: true when the brand is one of: Patagonia, Eileen Fisher, Reformation, Kotn, Pact, Thought Clothing, Amour Vert, Girlfriend Collective, Whimsy and Row, Colorful Standard, Organic Basics, tentree, prAna, Stella McCartney, Veja, Allbirds, Mara Hoffman (or the same company under another name). For these brands: note the brand's sustainability reputation and supply-chain transparency in verdictReason; apply the same higher markup threshold as indie brands before Retail Trap; return isEthicalBrand: true in the JSON response.
 
 **Fiber quality weighting (for verdict and verdictReason)**
 Not all natural fibers are equal. Weight fibers in this order for quality assessment:
@@ -150,7 +154,9 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
 - isSmallBusiness (boolean: true if independent/small brand, false if major retailer or fast fashion)
 - markupContext (string: exactly "justified" | "partially justified" | "unjustified")
 - functionalSynthetic (boolean: true if synthetic fibers are appropriate for the garment category, false if synthetics are a quality compromise)
-- isEthicalBrand (boolean: true if brand is a known ethical/sustainable brand from the list above — Patagonia, Eileen Fisher, Reformation, Kotn, Pact, Thought Clothing, Stella McCartney, Veja, Allbirds, Girlfriend Collective, Mara Hoffman, Amour Vert)${selectedValues.length > 0 ? `
+- isEthicalBrand (boolean: true if brand is a known ethical/sustainable brand from the list above — Patagonia, Eileen Fisher, Reformation, Kotn, Pact, Thought Clothing, Amour Vert, Girlfriend Collective, Whimsy and Row, Colorful Standard, Organic Basics, tentree, prAna, Stella McCartney, Veja, Allbirds, Mara Hoffman)
+- hasCertifiedMaterials (boolean: true when recycled/certified materials or certifications are detected from product text, composition notes, or known brand context)
+- certifications (array of strings: include detected labels, e.g. "REPREVE", "OceanCycle", "GOTS", "Fair Trade", "Bluesign"; empty array if none)${selectedValues.length > 0 ? `
 - valuesMatch (array of objects, one per value in selectedValues: { value: string (the value label), state: "pass" | "fail" | "unverified", note: string (one short phrase) })` : ""}`;
 
   const controller = new AbortController();
@@ -229,6 +235,15 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
       typeof (parsed as Record<string, unknown>).isEthicalBrand === "boolean"
         ? ((parsed as Record<string, unknown>).isEthicalBrand as boolean)
         : false;
+    parsed.hasCertifiedMaterials =
+      typeof (parsed as Record<string, unknown>).hasCertifiedMaterials === "boolean"
+        ? ((parsed as Record<string, unknown>).hasCertifiedMaterials as boolean)
+        : false;
+    parsed.certifications = Array.isArray((parsed as Record<string, unknown>).certifications)
+      ? ((parsed as Record<string, unknown>).certifications as unknown[])
+          .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+          .map((x) => x.trim())
+      : [];
 
     const { verdict, verdictReason, verdictSpanNote } = computeVerdictFromRange({
       markupMin: parsed.markupMin,
@@ -244,6 +259,12 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
       parsed.functionalSynthetic && !verdictReason.includes("appropriate for this garment type")
         ? `${verdictReason} Synthetic materials are appropriate for this garment type.`
         : verdictReason;
+    if (parsed.hasCertifiedMaterials && (parsed.certifications?.length ?? 0) > 0) {
+      const certText = parsed.certifications!.slice(0, 3).join(", ");
+      if (!parsed.verdictReason.toLowerCase().includes("certif")) {
+        parsed.verdictReason = `${parsed.verdictReason} Certified materials (${certText}) are factored into this assessment.`;
+      }
+    }
     parsed.verdictSpanNote = verdictSpanNote ?? undefined;
     parsed.markupContext =
       verdict === "Worth It" ? "justified" : verdict === "Think Twice" ? "partially justified" : "unjustified";
@@ -340,6 +361,15 @@ export async function analyzeMinimalScan(input: {
       typeof (parsed as Record<string, unknown>).isEthicalBrand === "boolean"
         ? ((parsed as Record<string, unknown>).isEthicalBrand as boolean)
         : false;
+    parsed.hasCertifiedMaterials =
+      typeof (parsed as Record<string, unknown>).hasCertifiedMaterials === "boolean"
+        ? ((parsed as Record<string, unknown>).hasCertifiedMaterials as boolean)
+        : false;
+    parsed.certifications = Array.isArray((parsed as Record<string, unknown>).certifications)
+      ? ((parsed as Record<string, unknown>).certifications as unknown[])
+          .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+          .map((x) => x.trim())
+      : [];
 
     const materials = parseFibersToMaterials(input.fibers);
     const { verdict, verdictReason, verdictSpanNote } = computeVerdictFromRange({
@@ -356,6 +386,12 @@ export async function analyzeMinimalScan(input: {
       parsed.functionalSynthetic && !verdictReason.includes("appropriate for this garment type")
         ? `${verdictReason} Synthetic materials are appropriate for this garment type.`
         : verdictReason;
+    if (parsed.hasCertifiedMaterials && (parsed.certifications?.length ?? 0) > 0) {
+      const certText = parsed.certifications!.slice(0, 3).join(", ");
+      if (!parsed.verdictReason.toLowerCase().includes("certif")) {
+        parsed.verdictReason = `${parsed.verdictReason} Certified materials (${certText}) are factored into this assessment.`;
+      }
+    }
     parsed.verdictSpanNote = verdictSpanNote ?? undefined;
     parsed.markupContext =
       verdict === "Worth It" ? "justified" : verdict === "Think Twice" ? "partially justified" : "unjustified";

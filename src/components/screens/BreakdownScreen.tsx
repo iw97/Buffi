@@ -457,6 +457,10 @@ export function BreakdownScreen() {
     betterAlts &&
     (betterAlts.sameBrand != null ||
       (betterAlts.sameBrandSkippedMessage != null && betterAlts.sameBrandSkippedMessage.length > 0));
+  const certifications = Array.isArray(result?.certifications)
+    ? result.certifications.filter((c): c is string => typeof c === "string" && c.trim().length > 0)
+    : [];
+  const showCertifiedMaterials = Boolean(result?.hasCertifiedMaterials) && certifications.length > 0;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -678,6 +682,12 @@ export function BreakdownScreen() {
 
         <div className="pad">
           <div className="section-eyebrow">— Fiber Composition</div>
+          {showCertifiedMaterials && (
+            <div className="certified-materials-wrap">
+              <span className="certified-materials-badge">Certified materials</span>
+              <div className="certified-materials-list">{certifications.join(" · ")}</div>
+            </div>
+          )}
           <div className="fiber-bars">
             {result!.materials.map((f) => {
               const kind = fiberKind(f.fiber);

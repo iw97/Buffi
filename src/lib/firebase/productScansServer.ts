@@ -70,6 +70,8 @@ function buildLatestSnapshot(analysis: ScanAnalysis): ProductScanLatestSnapshot 
   if (analysis.verdictSpanNote != null) snap.verdictSpanNote = analysis.verdictSpanNote;
   if (analysis.isSmallBusiness !== undefined) snap.isSmallBusiness = analysis.isSmallBusiness;
   if (analysis.isEthicalBrand !== undefined) snap.isEthicalBrand = analysis.isEthicalBrand;
+  if (analysis.hasCertifiedMaterials !== undefined) snap.hasCertifiedMaterials = analysis.hasCertifiedMaterials;
+  if (analysis.certifications != null && analysis.certifications.length > 0) snap.certifications = analysis.certifications;
   if (analysis.functionalSynthetic !== undefined) snap.functionalSynthetic = analysis.functionalSynthetic;
   if (analysis.valuesMatch != null && analysis.valuesMatch.length > 0) snap.valuesMatch = analysis.valuesMatch;
   return snap;
@@ -148,6 +150,8 @@ export function productScanToScanAnalysis(doc: ProductScanDocument): ScanAnalysi
     if (ls.verdictSpanNote != null) analysis.verdictSpanNote = ls.verdictSpanNote;
     if (ls.isSmallBusiness !== undefined) analysis.isSmallBusiness = ls.isSmallBusiness;
     if (ls.isEthicalBrand !== undefined) analysis.isEthicalBrand = ls.isEthicalBrand;
+    if (ls.hasCertifiedMaterials !== undefined) analysis.hasCertifiedMaterials = ls.hasCertifiedMaterials;
+    if (ls.certifications != null && ls.certifications.length > 0) analysis.certifications = ls.certifications;
     if (ls.functionalSynthetic !== undefined) analysis.functionalSynthetic = ls.functionalSynthetic;
     if (ls.valuesMatch != null && ls.valuesMatch.length > 0) analysis.valuesMatch = ls.valuesMatch;
     return analysis;
