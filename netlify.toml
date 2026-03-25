@@ -1,5 +1,10 @@
 # Buffi — Netlify deployment
 # Next.js is built and deployed via @netlify/plugin-nextjs (OpenNext).
+#
+# Marketing landing lives at "/" (site root). The phone-style app shell is at
+# /scan, /saves, /profile, etc. If production "looks like the app" on first load,
+# open the root URL with no path, or remove any Netlify redirect that sends "/" → "/scan"
+# (Site configuration → Redirects / _redirects).
 
 [build]
   command = "npm run build"

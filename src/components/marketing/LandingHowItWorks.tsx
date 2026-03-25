@@ -1,32 +1,50 @@
 import Image from "next/image";
 import Link from "next/link";
 
-const STEPS = [
+type StepMedia =
+  | { kind: "video"; src: string; videoFit?: "cover" | "contain" }
+  | { kind: "image"; src: string; alt: string };
+
+const STEPS: {
+  num: string;
+  title: string;
+  description: string;
+  label: string;
+  media: StepMedia;
+}[] = [
   {
     num: "01",
     title: "Scan or paste",
     description:
       "Point your camera at a care label or paste a product URL",
-    src: "/screenshots/scan.png",
-    alt: "Scan screen",
+    label: "Buffi scan — camera and paste URL",
+    media: { kind: "video", src: "/landing/scanvideo.mov" },
   },
   {
     num: "02",
     title: "Analyzing",
     description:
       "Buffi reads the fibers, estimates material cost, and calculates markup",
-    src: "/screenshots/analyzing.png",
-    alt: "Analyzing screen",
+    label: "Buffi analyzing — reading tag and metrics",
+    media: {
+      kind: "video",
+      src: "/landing/analyzingvideo.mov",
+      videoFit: "contain",
+    },
   },
   {
     num: "03",
     title: "Get the breakdown",
     description:
       "See the receipt — materials, markup, verdict, and whether it\u2019s worth it",
-    src: "/screenshots/breakdown.png",
-    alt: "Breakdown screen",
+    label: "Buffi breakdown — verdict and receipt",
+    media: {
+      kind: "image",
+      src: "/screenshots/breakdown.png",
+      alt: "Product breakdown with verdict and receipt",
+    },
   },
-] as const;
+];
 
 export default function LandingHowItWorks() {
   return (
@@ -50,14 +68,31 @@ export default function LandingHowItWorks() {
               </div>
               <div className="landing-hiw-shot-wrap">
                 <div className="landing-hiw-frame">
-                  <Image
-                    src={step.src}
-                    alt={step.alt}
-                    fill
-                    sizes="(max-width: 899px) min(260px, 82vw), 260px"
-                    unoptimized
-                    className="landing-hiw-shot"
-                  />
+                  {step.media.kind === "video" ? (
+                    <video
+                      className={`landing-hiw-shot landing-hiw-shot-video${
+                        step.media.videoFit === "contain"
+                          ? " landing-hiw-shot-video--contain"
+                          : ""
+                      }`}
+                      src={step.media.src}
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      preload="metadata"
+                      aria-label={step.label}
+                    />
+                  ) : (
+                    <Image
+                      src={step.media.src}
+                      alt={step.media.alt}
+                      fill
+                      sizes="(max-width: 899px) min(260px, 82vw), 260px"
+                      unoptimized
+                      className="landing-hiw-shot"
+                    />
+                  )}
                 </div>
               </div>
             </li>

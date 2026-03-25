@@ -1,6 +1,5 @@
-"use client";
-
 import Link from "next/link";
+import { WaitlistCtaLink } from "@/components/marketing/WaitlistCtaLink";
 
 export default function MarketingLayout({
   children,
@@ -14,11 +13,11 @@ export default function MarketingLayout({
           Buffi<span>.</span>
         </Link>
         <nav className="marketing-nav">
-          <Link href="/faq">FAQ</Link>
+          <Link href="/#landing-faq-heading">FAQ</Link>
           <Link href="/about">About</Link>
-          <Link href="/scan" className="marketing-cta">
-            Try Buffi
-          </Link>
+          <WaitlistCtaLink className="marketing-cta">
+            Join the waitlist
+          </WaitlistCtaLink>
         </nav>
       </header>
       <main className="marketing-main">{children}</main>

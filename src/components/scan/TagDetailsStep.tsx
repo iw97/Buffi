@@ -14,7 +14,7 @@ export function TagDetailsStep({ initialComposition, onBack, onSubmit }: TagDeta
   const [brandInput, setBrandInput] = useState("");
   const [priceInput, setPriceInput] = useState("");
   const [showBrandList, setShowBrandList] = useState(false);
-  const brandListRef = useRef<HTMLUListElement>(null);
+  const brandListRef = useRef<HTMLDivElement>(null);
 
   const filteredBrands = useMemo(() => {
     const q = brandInput.trim().toLowerCase();

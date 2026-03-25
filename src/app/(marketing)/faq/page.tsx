@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { WaitlistCtaLink } from "@/components/marketing/WaitlistCtaLink";
 
 const ITEMS = [
   {
@@ -54,7 +55,7 @@ export default function MarketingFaqPage() {
       <p style={{ marginTop: 32 }}>
         <Link href="/" className="marketing-link">← Back to home</Link>
         {" · "}
-        <Link href="/scan" className="marketing-link">Try Buffi</Link>
+        <WaitlistCtaLink className="marketing-link">Join the waitlist</WaitlistCtaLink>
       </p>
     </div>
   );

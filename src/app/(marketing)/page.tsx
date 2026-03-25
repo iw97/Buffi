@@ -1,6 +1,7 @@
 import Link from "next/link";
 import LandingFaqSection from "@/components/marketing/LandingFaqSection";
 import LandingHowItWorks from "@/components/marketing/LandingHowItWorks";
+import { WaitlistCtaLink } from "@/components/marketing/WaitlistCtaLink";
 
 export default function MarketingLandingPage() {
   return (
@@ -14,9 +15,9 @@ export default function MarketingLandingPage() {
           Scan any tag or paste a product URL. We&apos;ll show you the receipt
           — materials, markup, and whether it&apos;s worth it.
         </p>
-        <Link href="/scan" className="landing-cta">
-          Try Buffi →
-        </Link>
+        <WaitlistCtaLink className="landing-cta">
+          Join the waitlist →
+        </WaitlistCtaLink>
       </section>
 
       <LandingHowItWorks />
@@ -26,9 +27,9 @@ export default function MarketingLandingPage() {
       <section className="landing-cta-section">
         <div className="landing-inner">
           <p className="landing-cta-text">Ready to see behind the tag?</p>
-          <Link href="/scan" className="landing-cta secondary">
-            Try Buffi
-          </Link>
+          <WaitlistCtaLink className="landing-cta secondary">
+            Join the waitlist
+          </WaitlistCtaLink>
         </div>
       </section>
 

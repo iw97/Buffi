@@ -70,7 +70,10 @@ export function AnalyzingScreen() {
             ...(selectedValues.length > 0 && { selectedValues })
           }
         : { barcode: pending.barcode, ...(selectedValues.length > 0 && { selectedValues }) };
-    console.log("[scan flow] request body prepared", { keys: Object.keys(body), hasUrl: !!body.url });
+    console.log("[scan flow] request body prepared", {
+      keys: Object.keys(body),
+      hasUrl: "url" in body && !!body.url
+    });
 
     const controller = new AbortController();
 

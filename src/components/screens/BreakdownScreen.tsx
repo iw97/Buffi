@@ -177,7 +177,19 @@ export function BreakdownScreen() {
   const validResult = normalizeScanResult(result) ?? null;
 
   useEffect(() => {
-    console.log("[breakdown] effect run – result (raw)", result === null ? "null" : JSON.stringify({ keys: Object.keys(result as object), verdict: (result as Record<string, unknown>)?.verdict, estimatedMaterialCost: (result as Record<string, unknown>)?.estimatedMaterialCost }));
+    if (result === null) {
+      console.log("[breakdown] effect run – result (raw)", "null");
+    } else {
+      const r = result as unknown as Record<string, unknown>;
+      console.log(
+        "[breakdown] effect run – result (raw)",
+        JSON.stringify({
+          keys: Object.keys(result as object),
+          verdict: r.verdict,
+          estimatedMaterialCost: r.estimatedMaterialCost
+        })
+      );
+    }
 
     if (isValidScanResult(result)) {
       setWaitingForData(false);
@@ -186,7 +198,15 @@ export function BreakdownScreen() {
     if (!hasCheckedStorage) {
       setHasCheckedStorage(true);
       const storedRaw = getStoredScanResult();
-      console.log("[breakdown] stored (raw)", storedRaw === null ? "null" : JSON.stringify({ keys: Object.keys(storedRaw as object), verdict: (storedRaw as Record<string, unknown>)?.verdict }));
+      if (storedRaw === null) {
+        console.log("[breakdown] stored (raw)", "null");
+      } else {
+        const s = storedRaw as unknown as Record<string, unknown>;
+        console.log(
+          "[breakdown] stored (raw)",
+          JSON.stringify({ keys: Object.keys(storedRaw as object), verdict: s.verdict })
+        );
+      }
       const stored = normalizeScanResult(storedRaw);
       if (stored) {
         setResult(stored);
@@ -898,7 +918,9 @@ export function BreakdownScreen() {
       {/* Share modal */}
       <div className={`share-modal ${shareOpen ? "open" : ""}`} onClick={() => setShareOpen(false)}>
         <div className="share-modal-inner" onClick={(e) => e.stopPropagation()}>
-          <div className="share-card-preview">
+          <div
+            className={`share-card-preview share-card-preview--${verdictToStampClass(result!.verdict)}`}
+          >
             <div className="share-card-eyebrow">buffi · receipt</div>
             <div className="share-card-headline">
               {result!.verdict}.

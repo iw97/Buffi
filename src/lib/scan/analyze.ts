@@ -183,6 +183,7 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
     if (!jsonMatch) throw new Error("No JSON in Claude response");
 
     const parsed = JSON.parse(jsonMatch[0]) as ScanAnalysis;
+    const pre = parsed as unknown as Record<string, unknown>;
 
     // Validate required fields (verdict/verdictReason are overwritten by computeVerdictFromRange)
     const validMarkupContext = ["justified", "partially justified", "unjustified"] as const;
@@ -191,10 +192,10 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
       typeof parsed.name !== "string" ||
       typeof parsed.price !== "number" ||
       !Array.isArray(parsed.materials) ||
-      typeof (parsed as Record<string, unknown>).estimatedMaterialCostMin !== "number" ||
-      typeof (parsed as Record<string, unknown>).estimatedMaterialCostMax !== "number" ||
-      typeof (parsed as Record<string, unknown>).markupMin !== "number" ||
-      typeof (parsed as Record<string, unknown>).markupMax !== "number" ||
+      typeof pre.estimatedMaterialCostMin !== "number" ||
+      typeof pre.estimatedMaterialCostMax !== "number" ||
+      typeof pre.markupMin !== "number" ||
+      typeof pre.markupMax !== "number" ||
       typeof parsed.costPerWear !== "number" ||
       typeof parsed.verdictReason !== "string" ||
       !Array.isArray(parsed.tags) ||
@@ -202,10 +203,10 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
     ) {
       throw new Error("Invalid Claude response structure");
     }
-    const costMin = (parsed as Record<string, unknown>).estimatedMaterialCostMin as number;
-    const costMax = (parsed as Record<string, unknown>).estimatedMaterialCostMax as number;
-    let markupMin = (parsed as Record<string, unknown>).markupMin as number;
-    let markupMax = (parsed as Record<string, unknown>).markupMax as number;
+    const costMin = pre.estimatedMaterialCostMin as number;
+    const costMax = pre.estimatedMaterialCostMax as number;
+    let markupMin = pre.markupMin as number;
+    let markupMax = pre.markupMax as number;
     if (parsed.price > 0 && costMax > 0 && costMin > 0) {
       markupMin = (parsed.price / costMax - 1) * 100;
       markupMax = (parsed.price / costMin - 1) * 100;
@@ -228,19 +229,16 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
       parsed.valuesMatch = [];
     }
 
-    parsed.functionalSynthetic = typeof (parsed as Record<string, unknown>).functionalSynthetic === "boolean"
-      ? (parsed as Record<string, unknown>).functionalSynthetic as boolean
-      : false;
+    parsed.functionalSynthetic =
+      typeof pre.functionalSynthetic === "boolean" ? pre.functionalSynthetic : false;
     parsed.isEthicalBrand =
-      typeof (parsed as Record<string, unknown>).isEthicalBrand === "boolean"
-        ? ((parsed as Record<string, unknown>).isEthicalBrand as boolean)
-        : false;
+      typeof pre.isEthicalBrand === "boolean" ? (pre.isEthicalBrand as boolean) : false;
     parsed.hasCertifiedMaterials =
-      typeof (parsed as Record<string, unknown>).hasCertifiedMaterials === "boolean"
-        ? ((parsed as Record<string, unknown>).hasCertifiedMaterials as boolean)
+      typeof pre.hasCertifiedMaterials === "boolean"
+        ? (pre.hasCertifiedMaterials as boolean)
         : false;
-    parsed.certifications = Array.isArray((parsed as Record<string, unknown>).certifications)
-      ? ((parsed as Record<string, unknown>).certifications as unknown[])
+    parsed.certifications = Array.isArray(pre.certifications)
+      ? (pre.certifications as unknown[])
           .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
           .map((x) => x.trim())
       : [];
@@ -328,6 +326,7 @@ export async function analyzeMinimalScan(input: {
     if (!jsonMatch) throw new Error("No JSON in Claude response");
 
     const parsed = JSON.parse(jsonMatch[0]) as MinimalScanResponse;
+    const preM = parsed as unknown as Record<string, unknown>;
 
     const validMarkupContext = ["justified", "partially justified", "unjustified"] as const;
     if (
@@ -354,19 +353,15 @@ export async function analyzeMinimalScan(input: {
     }
 
     parsed.functionalSynthetic =
-      typeof (parsed as Record<string, unknown>).functionalSynthetic === "boolean"
-        ? ((parsed as Record<string, unknown>).functionalSynthetic as boolean)
-        : false;
+      typeof preM.functionalSynthetic === "boolean" ? (preM.functionalSynthetic as boolean) : false;
     parsed.isEthicalBrand =
-      typeof (parsed as Record<string, unknown>).isEthicalBrand === "boolean"
-        ? ((parsed as Record<string, unknown>).isEthicalBrand as boolean)
-        : false;
+      typeof preM.isEthicalBrand === "boolean" ? (preM.isEthicalBrand as boolean) : false;
     parsed.hasCertifiedMaterials =
-      typeof (parsed as Record<string, unknown>).hasCertifiedMaterials === "boolean"
-        ? ((parsed as Record<string, unknown>).hasCertifiedMaterials as boolean)
+      typeof preM.hasCertifiedMaterials === "boolean"
+        ? (preM.hasCertifiedMaterials as boolean)
         : false;
-    parsed.certifications = Array.isArray((parsed as Record<string, unknown>).certifications)
-      ? ((parsed as Record<string, unknown>).certifications as unknown[])
+    parsed.certifications = Array.isArray(preM.certifications)
+      ? (preM.certifications as unknown[])
           .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
           .map((x) => x.trim())
       : [];

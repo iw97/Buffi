@@ -1,13 +1,16 @@
-# Landing phone mockup screenshots
+# Landing “How it works” media
 
-The carousel uses a fixed **portrait** window (~**260×494 CSS px** after notch + home bar), aspect ratio **≈ 9 : 17.1** (width ÷ height ≈ **0.526**).
+## Current setup
 
-## What to capture
+| Step | File | Notes |
+|------|------|--------|
+| 1 — Scan | `/landing/scanvideo.mov` | Looping screen recording (`public/landing/scanvideo.mov`). |
+| 2 — Analyzing | `/landing/analyzingvideo.mov` | Looping screen recording (`public/landing/analyzingvideo.mov`). |
+| 3 — Breakdown | `/screenshots/breakdown.png` | Static phone screenshot. |
 
-| File | Notes |
-|------|--------|
-| `scan.png` | Normalized to **544×1024** (portrait, near-native fit). |
-| `analyzing.png` | Cropped from landscape and normalized to **544×1024** (left-biased crop to keep the content area). |
-| `breakdown.png` | Cropped and normalized to **544×1024** (centered). |
+Videos are **muted**, **loop**, **`playsInline`**, and **`autoPlay`** for mobile Safari.
 
-**Ideal for future captures:** export all three from the same simulator/device size (portrait), with the same width/height ratio and resolution.
+## Replacing assets
+
+- Drop new `.mov` files into `public/landing/` (same names) or update paths in `src/components/marketing/LandingHowItWorks.tsx`.
+- Replace `public/screenshots/breakdown.png` with a new portrait screenshot; the frame uses **aspect-ratio 17 / 32** with **`object-fit: cover`**.

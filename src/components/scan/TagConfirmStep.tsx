@@ -22,7 +22,7 @@ export function TagConfirmStep({ extraction, onBack, onSubmit }: TagConfirmStepP
   const [priceInput, setPriceInput] = useState("");
   const [showBrandList, setShowBrandList] = useState(false);
   const [lookingUpPrice, setLookingUpPrice] = useState(false);
-  const brandListRef = useRef<HTMLUListElement>(null);
+  const brandListRef = useRef<HTMLDivElement>(null);
 
   const composition = fibers.map((f) => `${f.fiber} ${f.percentage}%`).join(", ");
 
