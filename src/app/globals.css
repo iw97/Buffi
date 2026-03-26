@@ -687,6 +687,57 @@ body {
   max-width: 560px;
 }
 
+.legal-page {
+  max-width: min(760px, 100%);
+}
+.legal-effective-date {
+  margin-bottom: 24px;
+  color: var(--text-dim);
+}
+.legal-content {
+  color: var(--text-secondary);
+}
+.legal-content h2 {
+  margin: 26px 0 10px;
+  color: var(--text-primary);
+  font-family: var(--font-cormorant, serif);
+  font-size: 30px;
+  font-weight: 500;
+  line-height: 1.15;
+}
+.legal-content h3 {
+  margin: 16px 0 6px;
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.legal-content p {
+  margin: 0 0 14px;
+  font-family: var(--font-sans, sans-serif);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.legal-content ul {
+  margin: 0 0 14px;
+  padding-left: 20px;
+}
+.legal-content li {
+  margin: 0 0 8px;
+  font-family: var(--font-sans, sans-serif);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.legal-back-link {
+  margin-top: 10px;
+}
+.legal-tagline {
+  color: var(--text-dim);
+  font-family: var(--font-cormorant, serif);
+  font-size: 18px;
+}
+
 /* Waitlist */
 .waitlist-page.marketing-about-page {
   max-width: min(720px, 100%);
