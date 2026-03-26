@@ -100,8 +100,8 @@ export default function LandingHowItWorks() {
         </ul>
 
         <p className="landing-hiw-cta-wrap">
-          <Link href="/scan" className="landing-cta secondary">
-            Open the app
+          <Link href="/waitlist" className="landing-cta secondary">
+            Join the waitlist
           </Link>
         </p>
       </div>
