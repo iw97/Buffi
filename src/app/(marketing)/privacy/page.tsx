@@ -90,8 +90,8 @@ export default function PrivacyPage() {
         <h2>6. Your Rights and Choices</h2>
         <p>
           You may request deletion of your account and associated personal data at any time by contacting us at{" "}
-          <a href="mailto:hello@buffi.app" className="marketing-link">
-            hello@buffi.app
+          <a href="mailto:heybuffi@gmail.com" className="marketing-link">
+            heybuffi@gmail.com
           </a>
           . Upon request we will delete your account data, scan history, and saved items. Anonymous aggregate
           product data that does not identify you personally cannot be deleted as it is not linked to your account.
@@ -131,8 +131,8 @@ export default function PrivacyPage() {
         </ul>
         <p>
           To exercise any of these rights, contact us at{" "}
-          <a href="mailto:hello@buffi.app" className="marketing-link">
-            hello@buffi.app
+          <a href="mailto:heybuffi@gmail.com" className="marketing-link">
+            heybuffi@gmail.com
           </a>
           . We will respond within 30 days. If you are unsatisfied with our response you have the right to lodge a
           complaint with your local data protection authority.
@@ -147,8 +147,8 @@ export default function PrivacyPage() {
         <h3>Data Protection Contact</h3>
         <p>
           For GDPR-related inquiries contact us at{" "}
-          <a href="mailto:hello@buffi.app" className="marketing-link">
-            hello@buffi.app
+          <a href="mailto:heybuffi@gmail.com" className="marketing-link">
+            heybuffi@gmail.com
           </a>{" "}
           with the subject line &quot;GDPR Request&quot;.
         </p>
@@ -158,8 +158,8 @@ export default function PrivacyPage() {
           Buffi is not directed at children under the age of 13 (or 16 in certain EU member states). We do not
           knowingly collect personal information from children below these ages. If you believe a child has provided
           us with personal information, please contact us at{" "}
-          <a href="mailto:hello@buffi.app" className="marketing-link">
-            hello@buffi.app
+          <a href="mailto:heybuffi@gmail.com" className="marketing-link">
+            heybuffi@gmail.com
           </a>{" "}
           and we will delete it promptly.
         </p>
@@ -177,8 +177,8 @@ export default function PrivacyPage() {
           <br />
           Buffi
           <br />
-          <a href="mailto:hello@buffi.app" className="marketing-link">
-            hello@buffi.app
+          <a href="mailto:heybuffi@gmail.com" className="marketing-link">
+            heybuffi@gmail.com
           </a>
           <br />
           North Carolina, United States

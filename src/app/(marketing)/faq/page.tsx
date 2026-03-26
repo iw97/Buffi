@@ -15,11 +15,11 @@ const ITEMS = [
   },
   {
     q: "I'm a premium member — can I get a refund?",
-    a: "Yes! Reach out to us at support@buffi.app and we'll take care of you."
+    a: "Yes! Reach out to us at heybuffi@gmail.com and we'll take care of you."
   },
   {
     q: "I have another question.",
-    a: "We'd love to hear from you. Send us an email at hello@buffi.app and we'll get back to you as soon as we can."
+    a: "We'd love to hear from you. Send us an email at heybuffi@gmail.com and we'll get back to you as soon as we can."
   }
 ];
 

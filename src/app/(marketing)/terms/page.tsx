@@ -140,8 +140,8 @@ export default function TermsPage() {
         </p>
         <p>
           EU users may withdraw consent for non-essential data processing at any time by contacting{" "}
-          <a href="mailto:hello@buffi.app" className="marketing-link">
-            hello@buffi.app
+          <a href="mailto:heybuffi@gmail.com" className="marketing-link">
+            heybuffi@gmail.com
           </a>
           . Withdrawal of consent does not affect the lawfulness of processing carried out before withdrawal.
         </p>
@@ -164,8 +164,8 @@ export default function TermsPage() {
         <h2>14. Termination</h2>
         <p>
           You may stop using Buffi at any time and request account deletion by contacting{" "}
-          <a href="mailto:hello@buffi.app" className="marketing-link">
-            hello@buffi.app
+          <a href="mailto:heybuffi@gmail.com" className="marketing-link">
+            heybuffi@gmail.com
           </a>
           . We may suspend or terminate your access at any time for violation of these Terms. Upon termination
           your right to use Buffi ends immediately. Sections 6, 7, 9, 10, and 11 survive termination.
@@ -177,8 +177,8 @@ export default function TermsPage() {
           <br />
           Buffi
           <br />
-          <a href="mailto:hello@buffi.app" className="marketing-link">
-            hello@buffi.app
+          <a href="mailto:heybuffi@gmail.com" className="marketing-link">
+            heybuffi@gmail.com
           </a>
           <br />
           North Carolina, United States
