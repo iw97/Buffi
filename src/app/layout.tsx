@@ -4,6 +4,8 @@ import { Cormorant_Garamond, DM_Mono, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 
+const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://buffi.app";
+
 const cormorant = Cormorant_Garamond({
   subsets: ["latin"],
   weight: ["300", "400", "600", "700"],
@@ -25,7 +27,24 @@ const dmMono = DM_Mono({
 
 export const metadata: Metadata = {
   title: "Buffi",
-  description: "Material intelligence"
+  description: "Material intelligence",
+  metadataBase: new URL(appUrl),
+  openGraph: {
+    title: "Buffi",
+    description: "Material intelligence",
+    type: "website",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 500,
+        height: 500
+      }
+    ]
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: ["/og-image.png"]
+  }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
