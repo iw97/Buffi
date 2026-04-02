@@ -1,14 +1,17 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { BUFFI_SIGNIN_EMAIL_KEY } from "@/lib/firebase/client";
+import { safeReturnPath } from "@/lib/auth/returnTo";
 
 type AuthTab = "magic" | "password";
 
 export function OnboardingAccountScreen() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = safeReturnPath(searchParams.get("returnTo"), "/scan");
   const auth = useAuthOptional();
   const [tab, setTab] = useState<AuthTab>("magic");
   const [magicEmail, setMagicEmail] = useState("");
@@ -25,7 +28,7 @@ export function OnboardingAccountScreen() {
     if (isConfigured && auth) {
       try {
         await auth.signInWithGoogle();
-        router.push("/scan");
+        router.push(returnTo);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Sign-in failed");
       }
@@ -39,12 +42,12 @@ export function OnboardingAccountScreen() {
     if (isConfigured && auth && passwordEmail.trim() && password.length >= 6) {
       try {
         await auth.signUpWithEmail(passwordEmail.trim(), password);
-        router.push("/scan");
+        router.push(returnTo);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Sign-up failed");
       }
     } else if (!isConfigured) {
-      router.push("/scan");
+      router.push(returnTo);
     } else {
       setError("Email and password (min 6 characters) required");
     }
@@ -55,12 +58,12 @@ export function OnboardingAccountScreen() {
     if (isConfigured && auth && passwordEmail.trim() && password) {
       try {
         await auth.signInWithEmail(passwordEmail.trim(), password);
-        router.push("/scan");
+        router.push(returnTo);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Sign-in failed");
       }
     } else if (!isConfigured) {
-      router.push("/scan");
+      router.push(returnTo);
     } else {
       setError("Email and password required");
     }
@@ -74,11 +77,11 @@ export function OnboardingAccountScreen() {
       return;
     }
     if (!isConfigured || !auth) {
-      router.push("/scan");
+      router.push(returnTo);
       return;
     }
     try {
-      await auth.sendSignInLinkToEmail(email);
+      await auth.sendSignInLinkToEmail(email, returnTo);
       try {
         window.localStorage.setItem(BUFFI_SIGNIN_EMAIL_KEY, email);
       } catch {
@@ -111,8 +114,8 @@ export function OnboardingAccountScreen() {
           <em>profile.</em>
         </h2>
         <p className="ob-desc">
-          Create a free account to keep your values, save scans, and sync across
-          devices. Or skip for now and explore first.
+          Create a free account to keep your values, save scans, and sync across devices.
+          New accounts can use the email magic link — no password required.
         </p>
 
         <div className="auth-block">
@@ -139,7 +142,7 @@ export function OnboardingAccountScreen() {
               type="button"
               onClick={() => setTab("magic")}
             >
-              Email Link
+              Magic link
             </button>
             <button
               className={`auth-tab ${tab === "password" ? "active" : ""}`}
@@ -169,13 +172,13 @@ export function OnboardingAccountScreen() {
                   style={{ width: "100%", marginTop: 12 }}
                   onClick={handleSendSignInLink}
                 >
-                  Send sign-in link
+                  Send magic link
                 </button>
               </>
             ) : (
               <>
                 <p className="auth-legal" style={{ marginTop: 0, marginBottom: 8 }}>
-                  Check your email — we sent you a sign-in link to{" "}
+                  Check your email — we sent you a link to sign in or create your account at{" "}
                   <strong style={{ color: "var(--ivory)" }}>{linkSentTo}</strong>.
                 </p>
                 <p className="auth-legal" style={{ color: "var(--text-dim)", fontSize: 13 }}>
@@ -240,9 +243,9 @@ export function OnboardingAccountScreen() {
               fontSize: 11,
               letterSpacing: 1
             }}
-            onClick={() => router.push("/scan")}
+            onClick={() => router.push("/")}
           >
-            Skip for now
+            Back to home
           </button>
         </div>
       </div>

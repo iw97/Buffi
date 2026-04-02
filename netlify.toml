@@ -13,9 +13,6 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Beta gate (optional): set BETA_ACCESS_SECRET in Netlify → Site settings → Environment variables.
-# Testers unlock once via https://<site>/waitlist?beta=<secret> (cookie lasts 90 days).
-
 # Function timeout: Netlify default is 10s. For /api/scan (Claude) we need at least 15s.
 # Set in Netlify UI: Site settings → Build & deploy → Continuous deployment →
 # Build settings → Post processing → Functions → Function timeout (set to 15 or 26).

@@ -35,8 +35,8 @@ interface AuthActions {
   signInWithGoogle: () => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
-  /** Send passwordless sign-in link to email; caller should save email to localStorage (buffiSignInEmail) and show confirmation. */
-  sendSignInLinkToEmail: (email: string) => Promise<void>;
+  /** Send passwordless sign-in / sign-up link to email; caller should save email to localStorage (buffiSignInEmail) and show confirmation. */
+  sendSignInLinkToEmail: (email: string, returnTo?: string) => Promise<void>;
   /** Complete sign-in from email link (used on /auth/callback). Returns true on success. */
   completeSignInWithEmailLink: (email: string, linkOrFullUrl: string) => Promise<void>;
   isSignInWithEmailLink: (url: string) => boolean;
@@ -46,7 +46,7 @@ interface AuthActions {
 const AuthContext = createContext<AuthState & AuthActions | null>(null);
 
 /** For testing: when true, act as if user is always logged in (mock user when none). */
-const TESTING_FORCE_LOGGED_IN = true;
+const TESTING_FORCE_LOGGED_IN = false;
 
 const MOCK_USER = {
   uid: "testing-uid",
@@ -121,11 +121,15 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   );
 
   const sendSignInLinkToEmailAction = useCallback(
-    async (email: string) => {
+    async (email: string, returnTo?: string) => {
       if (!firebaseAuth || !isConfigured) return;
       const baseUrl = typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL ?? "";
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || baseUrl;
-      const callbackUrl = `${appUrl.replace(/\/$/, "")}/auth/callback`;
+      let callbackUrl = `${appUrl.replace(/\/$/, "")}/auth/callback`;
+      const rt = returnTo?.trim();
+      if (rt && rt.startsWith("/") && !rt.startsWith("//") && !rt.includes("://")) {
+        callbackUrl += `?returnTo=${encodeURIComponent(rt)}`;
+      }
       await sendSignInLinkToEmail(firebaseAuth, email.trim(), {
         url: callbackUrl,
         handleCodeInApp: true

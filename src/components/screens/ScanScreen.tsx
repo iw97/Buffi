@@ -3,6 +3,8 @@
 import { useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import { useAuthOptional } from "@/contexts/AuthContext";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { usePendingScan, useScanError } from "@/contexts/ScanResultContext";
 import { TagDetailsStep } from "@/components/scan/TagDetailsStep";
 import { TagConfirmStep, type TagExtraction } from "@/components/scan/TagConfirmStep";
@@ -14,6 +16,12 @@ const TagCameraScanner = dynamic(
 
 export function ScanScreen() {
   const router = useRouter();
+  const auth = useAuthOptional();
+  const isConfigured = auth?.isConfigured ?? false;
+  const authLoading = auth?.loading ?? true;
+  const user = auth?.user ?? null;
+  useRequireAuth("/scan");
+
   const { setPending } = usePendingScan();
   const { lastError, setLastError } = useScanError();
   const [urlOpen, setUrlOpen] = useState(false);
@@ -29,6 +37,21 @@ export function ScanScreen() {
 
   function clearError() {
     setLastError(null);
+  }
+
+  if (isConfigured && authLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-10">
+        <div className="analyzing-label">Loading</div>
+        <p className="auth-legal" style={{ color: "var(--text-dim)" }}>
+          Checking your account…
+        </p>
+      </div>
+    );
+  }
+
+  if (isConfigured && !user) {
+    return null;
   }
 
   function handleUrlSubmit() {

@@ -4,8 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { BUFFI_SIGNIN_EMAIL_KEY } from "@/lib/firebase/client";
+import { safeReturnPath } from "@/lib/auth/returnTo";
 
 type Status = "checking" | "need-email" | "signing-in" | "success" | "error";
+
+function afterSignInPath(): string {
+  if (typeof window === "undefined") return "/scan";
+  return safeReturnPath(new URL(window.location.href).searchParams.get("returnTo"), "/scan");
+}
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -39,7 +45,7 @@ export default function AuthCallbackPage() {
         .completeSignInWithEmailLink(storedEmail, fullUrl)
         .then(() => {
           setStatus("success");
-          router.replace("/scan");
+          router.replace(afterSignInPath());
         })
         .catch(() => {
           setStatus("error");
@@ -62,7 +68,7 @@ export default function AuthCallbackPage() {
     try {
       await auth.completeSignInWithEmailLink(email, window.location.href);
       setStatus("success");
-      router.replace("/scan");
+      router.replace(afterSignInPath());
     } catch {
       setStatus("error");
       setErrorMessage("This link has expired or already been used. Request a new one.");

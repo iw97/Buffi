@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { usePendingScan, useScanResult, useScanError, type ScanErrorCode } from "@/contexts/ScanResultContext";
 
 type ProgressId = "p1" | "p2" | "p3" | "p4";
@@ -29,6 +30,11 @@ function toErrorCode(status: number, body?: { code?: string }): ScanErrorCode {
 export function AnalyzingScreen() {
   const router = useRouter();
   const auth = useAuthOptional();
+  const isConfigured = auth?.isConfigured ?? false;
+  const authLoading = auth?.loading ?? true;
+  const user = auth?.user ?? null;
+  useRequireAuth("/analyzing");
+
   const { pending, setPending } = usePendingScan();
   const { setResult } = useScanResult();
   const { setLastError } = useScanError();
@@ -46,6 +52,9 @@ export function AnalyzingScreen() {
   useEffect(() => {
     if (hasNavigated.current) {
       console.log("[scan flow] effect skipped – already navigated");
+      return;
+    }
+    if (isConfigured && (authLoading || !user)) {
       return;
     }
     setFlowError(null);
@@ -140,7 +149,7 @@ export function AnalyzingScreen() {
 
     run();
     return () => controller.abort();
-  }, [pending, setPending, setResult, setLastError, router]);
+  }, [pending, setPending, setResult, setLastError, router, isConfigured, authLoading, user]);
 
   useEffect(() => {
     const timers: Array<number> = [];
@@ -157,6 +166,21 @@ export function AnalyzingScreen() {
     });
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, [items]);
+
+  if (isConfigured && authLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-10">
+        <div className="analyzing-label">Loading</div>
+        <p className="auth-legal" style={{ color: "var(--text-dim)" }}>
+          Checking your account…
+        </p>
+      </div>
+    );
+  }
+
+  if (isConfigured && !user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-8 p-10">

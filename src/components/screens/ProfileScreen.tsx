@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
 
 /** Set to true to always show the logged-in profile UI (for testing). */
-const TESTING_ALWAYS_SHOW_LOGGED_IN = true;
+const TESTING_ALWAYS_SHOW_LOGGED_IN = false;
 
 const MOCK_DISPLAY = {
   displayName: "Test User",

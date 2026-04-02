@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { useScanResult, getStoredScanResult, isValidScanResult, normalizeScanResult } from "@/contexts/ScanResultContext";
 import { addSavedItem, removeSavedItem, setUserProfile } from "@/lib/firebase/firestore";
 import { isFirebaseConfigured } from "@/lib/firebase/client";
@@ -170,6 +171,11 @@ function analysisToSavedItem(a: ScanAnalysis) {
 export function BreakdownScreen() {
   const router = useRouter();
   const auth = useAuthOptional();
+  const authLoading = auth?.loading ?? true;
+  const isConfigured = auth?.isConfigured ?? false;
+  const user = auth?.user ?? null;
+  useRequireAuth("/breakdown");
+
   const { result, setResult, clearResult } = useScanResult();
   const [waitingForData, setWaitingForData] = useState(true);
   const [hasCheckedStorage, setHasCheckedStorage] = useState(false);
@@ -235,8 +241,6 @@ export function BreakdownScreen() {
   const [premiumOpen, setPremiumOpen] = useState(false);
   const [savePromptOpen, setSavePromptOpen] = useState(false);
 
-  const user = auth?.user ?? null;
-  const isConfigured = auth?.isConfigured ?? false;
   const isLoggedIn = !!user;
   const saveCount = auth?.profile?.savedCount ?? 0;
   const [savedItemId, setSavedItemId] = useState<string | null>(null);
@@ -398,6 +402,21 @@ export function BreakdownScreen() {
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Sign-up failed");
     }
+  }
+
+  if (isConfigured && authLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-10">
+        <div className="analyzing-label">Loading</div>
+        <p className="auth-legal" style={{ color: "var(--text-dim)" }}>
+          Checking your account…
+        </p>
+      </div>
+    );
+  }
+
+  if (isConfigured && !user) {
+    return null;
   }
 
   if (waitingForData) {
