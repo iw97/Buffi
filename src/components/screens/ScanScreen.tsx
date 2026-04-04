@@ -4,7 +4,6 @@ import { useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
-import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { usePendingScan, useScanError } from "@/contexts/ScanResultContext";
 import { TagDetailsStep } from "@/components/scan/TagDetailsStep";
 import { TagConfirmStep, type TagExtraction } from "@/components/scan/TagConfirmStep";
@@ -20,7 +19,6 @@ export function ScanScreen() {
   const isConfigured = auth?.isConfigured ?? false;
   const authLoading = auth?.loading ?? true;
   const user = auth?.user ?? null;
-  useRequireAuth("/scan");
 
   const { setPending } = usePendingScan();
   const { lastError, setLastError } = useScanError();
@@ -50,10 +48,6 @@ export function ScanScreen() {
         </p>
       </div>
     );
-  }
-
-  if (isConfigured && !user) {
-    return null;
   }
 
   function handleUrlSubmit() {
@@ -278,6 +272,30 @@ export function ScanScreen() {
           <div className="header-tag">Material Intelligence</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {isConfigured && !user ? (
+            <button
+              type="button"
+              onClick={() =>
+                router.push(
+                  `/onboarding/account?${new URLSearchParams({ returnTo: "/scan" }).toString()}`
+                )
+              }
+              style={{
+                background: "none",
+                border: "none",
+                padding: "7px 10px",
+                cursor: "pointer",
+                fontSize: 14,
+                fontFamily: "var(--font-sans)",
+                color: "var(--teal)",
+                textDecoration: "underline",
+                textUnderlineOffset: 3,
+                lineHeight: 1
+              }}
+            >
+              Log in
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => router.push("/saves")}

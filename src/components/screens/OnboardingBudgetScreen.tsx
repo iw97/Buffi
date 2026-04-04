@@ -1,10 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { onboardingReturnToQuery } from "@/lib/auth/returnTo";
 
 export function OnboardingBudgetScreen() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const stepQ = onboardingReturnToQuery(searchParams);
   const [budget, setBudget] = useState<number>(75);
 
   const progress = useMemo(
@@ -65,10 +68,10 @@ export function OnboardingBudgetScreen() {
         </div>
 
         <div className="ob-nav">
-          <button className="ob-back" type="button" onClick={() => router.push("/onboarding/priorities")}>
+          <button className="ob-back" type="button" onClick={() => router.push(`/onboarding/priorities${stepQ}`)}>
             ←
           </button>
-          <button className="ob-next" type="button" onClick={() => router.push("/onboarding/account")}>
+          <button className="ob-next" type="button" onClick={() => router.push(`/onboarding/account${stepQ}`)}>
             Continue →
           </button>
         </div>

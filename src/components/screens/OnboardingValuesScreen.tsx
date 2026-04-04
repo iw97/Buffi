@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { onboardingReturnToQuery } from "@/lib/auth/returnTo";
 
 const DEFAULT_CHIPS = [
   { label: "Natural fibers only", selected: true },
@@ -18,6 +19,8 @@ const DEFAULT_CHIPS = [
 
 export function OnboardingValuesScreen() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const stepQ = onboardingReturnToQuery(searchParams);
   const [chips, setChips] = useState(DEFAULT_CHIPS);
 
   const progress = useMemo(
@@ -65,7 +68,11 @@ export function OnboardingValuesScreen() {
         </div>
 
         <div className="ob-nav">
-          <button className="ob-next" type="button" onClick={() => router.push("/onboarding/priorities")}>
+          <button
+            className="ob-next"
+            type="button"
+            onClick={() => router.push(`/onboarding/priorities${stepQ}`)}
+          >
             Continue →
           </button>
         </div>

@@ -136,7 +136,13 @@ export function ProfileScreen() {
 
         <div className="menu-section-label">Preferences</div>
 
-        <button className="menu-item" type="button" onClick={() => router.push("/onboarding/values")}>
+        <button
+          className="menu-item"
+          type="button"
+          onClick={() =>
+            router.push(`/onboarding/values?${new URLSearchParams({ returnTo: "/profile" }).toString()}`)
+          }
+        >
           <div className="menu-item-left">
             <div className="menu-item-icon" aria-hidden>
               ⚙︎

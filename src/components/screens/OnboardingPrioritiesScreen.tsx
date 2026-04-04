@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { onboardingReturnToQuery } from "@/lib/auth/returnTo";
 
 function labelFor(val: number) {
   return val >= 75 ? "High" : val >= 40 ? "Medium" : "Low";
@@ -9,6 +10,8 @@ function labelFor(val: number) {
 
 export function OnboardingPrioritiesScreen() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const stepQ = onboardingReturnToQuery(searchParams);
   const [fiber, setFiber] = useState(85);
   const [price, setPrice] = useState(90);
   const [ethics, setEthics] = useState(55);
@@ -116,10 +119,10 @@ export function OnboardingPrioritiesScreen() {
         </div>
 
         <div className="ob-nav">
-          <button className="ob-back" type="button" onClick={() => router.push("/onboarding/values")}>
+          <button className="ob-back" type="button" onClick={() => router.push(`/onboarding/values${stepQ}`)}>
             ←
           </button>
-          <button className="ob-next" type="button" onClick={() => router.push("/onboarding/budget")}>
+          <button className="ob-next" type="button" onClick={() => router.push(`/onboarding/budget${stepQ}`)}>
             Continue →
           </button>
         </div>

@@ -1,6 +1,18 @@
+import { Suspense } from "react";
 import { OnboardingValuesScreen } from "@/components/screens/OnboardingValuesScreen";
 
 export default function Page() {
-  return <OnboardingValuesScreen />;
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <p className="auth-legal" style={{ color: "var(--text-dim)" }}>
+            Loading…
+          </p>
+        </div>
+      }
+    >
+      <OnboardingValuesScreen />
+    </Suspense>
+  );
 }
-

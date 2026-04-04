@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { BUFFI_SIGNIN_EMAIL_KEY } from "@/lib/firebase/client";
-import { safeReturnPath } from "@/lib/auth/returnTo";
+import { onboardingReturnToQuery, safeReturnPath } from "@/lib/auth/returnTo";
 
 type AuthTab = "magic" | "password";
 
@@ -12,7 +12,10 @@ export function OnboardingAccountScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = safeReturnPath(searchParams.get("returnTo"), "/scan");
+  const stepQ = onboardingReturnToQuery(searchParams);
   const auth = useAuthOptional();
+  const authLoading = auth?.loading ?? false;
+  const user = auth?.user ?? null;
   const [tab, setTab] = useState<AuthTab>("magic");
   const [magicEmail, setMagicEmail] = useState("");
   const [passwordEmail, setPasswordEmail] = useState("");
@@ -22,6 +25,61 @@ export function OnboardingAccountScreen() {
   const digitRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const isConfigured = auth?.isConfigured ?? false;
+
+  if (isConfigured && authLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-10">
+        <div className="analyzing-label">Loading</div>
+        <p className="auth-legal" style={{ color: "var(--text-dim)" }}>
+          Checking your account…
+        </p>
+      </div>
+    );
+  }
+
+  if (isConfigured && user) {
+    const signedInAs = user.email?.trim() || user.displayName?.trim() || "your account";
+    return (
+      <div className="min-h-screen">
+        <div className="ob-shell">
+          <div className="ob-step-label" style={{ marginBottom: 12 }}>
+            You&apos;re signed in
+          </div>
+          <h2 className="ob-title">
+            Profile
+            <br />
+            <em>updated.</em>
+          </h2>
+          <p className="ob-desc">
+            You&apos;re already logged in as <strong style={{ color: "var(--ivory)" }}>{signedInAs}</strong>.
+            No need to create another account — your values flow is complete.
+          </p>
+          <button className="ob-next" type="button" onClick={() => router.push(returnTo)}>
+            Continue →
+          </button>
+          <div className="ob-nav" style={{ marginTop: 24 }}>
+            <button className="ob-back" type="button" onClick={() => router.push(`/onboarding/budget${stepQ}`)}>
+              ←
+            </button>
+            <button
+              className="ob-next"
+              type="button"
+              style={{
+                background: "transparent",
+                border: "1px solid var(--border-light)",
+                color: "var(--text-dim)",
+                fontSize: 11,
+                letterSpacing: 1
+              }}
+              onClick={() => router.push(returnTo)}
+            >
+              {returnTo === "/profile" ? "Back to profile" : "Back to app"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleGoogle = async () => {
     setError(null);
@@ -230,7 +288,7 @@ export function OnboardingAccountScreen() {
         </div>
 
         <div className="ob-nav" style={{ marginTop: 24 }}>
-          <button className="ob-back" type="button" onClick={() => router.push("/onboarding/budget")}>
+          <button className="ob-back" type="button" onClick={() => router.push(`/onboarding/budget${stepQ}`)}>
             ←
           </button>
           <button
