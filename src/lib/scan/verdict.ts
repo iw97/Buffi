@@ -1,31 +1,74 @@
 /**
  * Three-tier verdict: Worth It (teal) | Think Twice (amber) | Retail Trap (red).
- * Rules apply deterministic overrides from markup, fibers, and brand context.
+ * Fiber taxonomy: only petroleum-based fibers count as “synthetic %”; cellulosic ≠ synthetic.
  */
 
 import type { VerdictTier } from "./types";
 
 export type { VerdictTier } from "./types";
 
-const PREMIUM_NATURAL = ["modal", "cashmere", "silk", "merino", "linen", "lyocell", "tencel"];
-/** Eastman Naia / Naia Renew — premium cellulosic acetate; not petroleum synthetic. */
-const CELLULOSIC_PREMIUM = ["naia renew", "naia"];
-/** Generic cellulose acetate fibers (wood pulp); not petroleum synthetic. */
-const CELLULOSIC_STANDARD = ["cellulose acetate", "triacetate", "acetate"];
-const STANDARD_NATURAL = ["cotton", "wool", "hemp"];
-/** These fibers are always synthetic; never classify as natural. */
-const SYNTHETIC = [
-  "polyurethane",
-  "polyester",
-  "nylon",
-  "polyamide",
-  "acrylic",
-  "spandex",
-  "elastane",
-  "lycra",
-  "gore-tex",
+/** Longer / specific phrases first so “organic cotton” wins over “cotton”. */
+const PREMIUM_NATURAL = [
+  "organic cotton",
+  "pima cotton",
+  "egyptian cotton",
+  "merino wool",
+  "merino",
+  "cashmere",
+  "alpaca",
+  "angora",
+  "belgian linen",
+  "irish linen",
+  "premium linen",
+  "european linen",
+  "silk",
+  "linen"
+];
+
+const STANDARD_NATURAL = ["cotton", "wool", "hemp", "ramie", "jute", "kapok", "flax"];
+
+const PREMIUM_CELLULOSIC = [
+  "naia renew",
+  "naia",
+  "bamboo lyocell",
+  "lenzing",
+  "ecovero",
+  "tencel",
+  "lyocell",
+  "cupro",
+  "modal"
+];
+
+const STANDARD_CELLULOSIC = [
+  "bamboo viscose",
+  "bamboo rayon",
+  "cellulose acetate",
+  "triacetate",
   "viscose",
-  "rayon"
+  "rayon",
+  "acetate",
+  "bamboo"
+];
+
+/** Petroleum-based only — never viscose/rayon/modal here. */
+const PETROLEUM_SYNTHETIC = [
+  "repreve",
+  "oceancycle",
+  "ocean cycle",
+  "recycled polyester",
+  "recycled nylon",
+  "polyester",
+  "polyamide",
+  "nylon",
+  "microfiber",
+  "polyurethane",
+  "polypropylene",
+  "gore-tex",
+  "acrylic",
+  "elastane",
+  "spandex",
+  "lycra",
+  "pvc"
 ];
 
 function normalizeFiber(fiber: string): string {
@@ -34,11 +77,21 @@ function normalizeFiber(fiber: string): string {
 
 function categoryForFiber(fiber: string): "premium" | "standard" | "synthetic" | "other" {
   const n = normalizeFiber(fiber);
-  if (PREMIUM_NATURAL.some((p) => n.includes(p))) return "premium";
-  if (CELLULOSIC_PREMIUM.some((p) => n.includes(p))) return "premium";
-  if (CELLULOSIC_STANDARD.some((p) => n.includes(p))) return "standard";
-  if (STANDARD_NATURAL.some((s) => n.includes(s))) return "standard";
-  if (SYNTHETIC.some((s) => n.includes(s))) return "synthetic";
+  for (const p of PREMIUM_NATURAL) {
+    if (n.includes(p)) return "premium";
+  }
+  for (const p of PREMIUM_CELLULOSIC) {
+    if (n.includes(p)) return "premium";
+  }
+  for (const s of STANDARD_NATURAL) {
+    if (n.includes(s)) return "standard";
+  }
+  for (const s of STANDARD_CELLULOSIC) {
+    if (n.includes(s)) return "standard";
+  }
+  for (const s of PETROLEUM_SYNTHETIC) {
+    if (n.includes(s)) return "synthetic";
+  }
   return "other";
 }
 
@@ -149,58 +202,42 @@ export function computeVerdict(analysis: {
     functionalSynthetic = false
   } = analysis;
   const { premiumNaturalPct, naturalPct, syntheticPct } = getFiberBreakdown(materials);
-  const predominantlyPremiumNatural = premiumNaturalPct >= PREDOMINANT;
-  const predominantlyNatural = naturalPct >= PREDOMINANT;
+  const predominantlyPremium = premiumNaturalPct >= PREDOMINANT;
+  const predominantlyNaturalOrCellulosic = naturalPct >= PREDOMINANT;
   const syntheticHeavy = syntheticPct >= PREDOMINANT;
   const penalizeSynthetic = syntheticHeavy && !functionalSynthetic;
   const indieOrEthical = isSmallBusiness || isEthicalBrand;
 
-  // ——— Always Retail Trap (no override) ———
-  if (markup > 1300) {
+  if (markup > 1500) {
     return {
       verdict: "Retail Trap",
-      verdictReason:
-        "Markup over 1,300% — we can’t justify this premium regardless of materials or brand."
-    };
-  }
-  if (penalizeSynthetic && markup > 600 && !indieOrEthical) {
-    return {
-      verdict: "Retail Trap",
-      verdictReason:
-        "Steep markup on predominantly synthetic materials with no small-brand or quality-fiber justification."
+      verdictReason: "Markup over 1,500% — we can’t justify this premium regardless of materials or brand."
     };
   }
 
-  // ——— Worth It (teal) ———
-  if (markup < 300) {
+  if (markup < 500) {
     return {
       verdict: "Worth It",
-      verdictReason: "Markup under 300% — fair value for what you’re getting."
-    };
-  }
-  if (markup < 600 && predominantlyPremiumNatural) {
-    return {
-      verdict: "Worth It",
-      verdictReason:
-        "Markup under 600% with predominantly premium natural fibers — the price reflects better materials."
-    };
-  }
-  if (markup < 400 && isSmallBusiness && predominantlyNatural) {
-    return {
-      verdict: "Worth It",
-      verdictReason:
-        "Independent brand with quality natural fibers and modest markup — reasonable for small-batch production."
-    };
-  }
-  if (markup < 400 && isEthicalBrand && predominantlyNatural) {
-    return {
-      verdict: "Worth It",
-      verdictReason:
-        "Known sustainable brand with quality natural fibers and modest markup — the price reflects their sustainability and ethics."
+      verdictReason: "Markup under 500% — strong value relative to estimated materials."
     };
   }
 
-  // ——— Think Twice (amber): low cost per wear ———
+  if (markup < 700 && predominantlyPremium) {
+    return {
+      verdict: "Worth It",
+      verdictReason:
+        "Markup under 700% with predominantly premium natural or certified cellulosic fibers — materials support the price."
+    };
+  }
+
+  if (markup < 600 && indieOrEthical) {
+    return {
+      verdict: "Worth It",
+      verdictReason:
+        "Markup under 600% for an independent or known ethical brand — sustainability and small-batch context partially justify the premium."
+    };
+  }
+
   if (costPerWear > 0 && costPerWear < 2) {
     return {
       verdict: "Think Twice",
@@ -208,49 +245,61 @@ export function computeVerdict(analysis: {
     };
   }
 
-  // ——— Think Twice: 300–800% with quality natural ———
-  if (markup >= 300 && markup <= 800 && predominantlyNatural) {
+  if (penalizeSynthetic && markup > 1000 && !indieOrEthical) {
     return {
-      verdict: "Think Twice",
+      verdict: "Retail Trap",
       verdictReason:
-        "Markup in the 300–800% range with predominantly natural fibers — consider whether the quality and ethics justify the premium."
+        "Markup over 1,000% on predominantly petroleum-based synthetics with no strong brand or fiber-quality justification."
     };
   }
 
-  // ——— Override UP to Think Twice: indie + natural, markup up to 1,300% ———
-  if (isSmallBusiness && predominantlyNatural && markup <= 1300) {
+  if (indieOrEthical && predominantlyNaturalOrCellulosic && markup <= 1500) {
     return {
       verdict: "Think Twice",
       verdictReason:
-        "Independent brand with natural fibers — markup is high but partially justified by small-batch production and material quality."
-    };
-  }
-  // ——— Override UP to Think Twice: known ethical/sustainable brand + natural, markup up to 1,300% ———
-  if (isEthicalBrand && predominantlyNatural && markup <= 1300) {
-    return {
-      verdict: "Think Twice",
-      verdictReason:
-        "Known sustainable brand with natural fibers — markup is high but partially justified by the brand’s sustainability reputation and ethics."
+        "Independent or ethical brand with natural or cellulosic-forward composition — markup is high but partially justified."
     };
   }
 
-  // ——— Override UP to Think Twice: premium natural, markup up to 1,200% ———
-  if (predominantlyPremiumNatural && markup <= 1200) {
+  if (markup >= 500 && markup <= 1000) {
+    if (predominantlyNaturalOrCellulosic) {
+      return {
+        verdict: "Think Twice",
+        verdictReason:
+          "Markup between 500% and 1,000% with natural or cellulosic fibers — weigh fiber quality and use against the price."
+      };
+    }
     return {
       verdict: "Think Twice",
       verdictReason:
-        "Predominantly premium natural fibers — markup is high but materials partly justify the price."
+        "Markup between 500% and 1,000% — consider whether construction, brand, and fibers justify the premium."
     };
   }
 
-  // ——— Default: Retail Trap ———
+  if (markup > 1000 && markup <= 1500 && predominantlyPremium) {
+    return {
+      verdict: "Think Twice",
+      verdictReason:
+        "Markup over 1,000% but premium natural or cellulosic fibers offer partial justification — not an automatic trap."
+    };
+  }
+
+  if (markup > 1000 && predominantlyNaturalOrCellulosic && !syntheticHeavy) {
+    return {
+      verdict: "Think Twice",
+      verdictReason:
+        "High markup with mostly natural or cellulosic (non-petroleum) fibers — quality helps, but the multiple is still steep."
+    };
+  }
+
   if (penalizeSynthetic && markup > 600) {
     return {
       verdict: "Retail Trap",
       verdictReason:
-        "High markup on predominantly synthetic materials — you’re paying a premium without the fiber quality to back it up."
+        "High markup on predominantly petroleum-based synthetics — you’re paying a premium without the fiber quality to back it up."
     };
   }
+
   return {
     verdict: "Retail Trap",
     verdictReason: "Markup is high relative to estimated material cost with limited mitigating factors."

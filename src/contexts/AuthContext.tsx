@@ -20,10 +20,16 @@ import {
   isSignInWithEmailLink as firebaseIsSignInWithEmailLink,
   signInWithEmailLink as firebaseSignInWithEmailLink
 } from "firebase/auth";
+/** Top-level `firebaseAuth` is for sign-in/out actions; listener uses dynamic import so the client always attaches after `window` + app init. */
 import { firebaseAuth, isFirebaseConfigured, BUFFI_SIGNIN_EMAIL_KEY } from "@/lib/firebase/client";
 import { setUserProfile, getUserProfile, ensureUserDocument } from "@/lib/firebase/firestore";
 import type { UserProfile } from "@/lib/firebase/types";
 
+/**
+ * Auth state for the app.
+ * `loading` is true until Firebase has finished its initial session check (onAuthStateChanged first fire),
+ * or until we know auth is unavailable — never infer "logged out" from `user === null` while `loading` is true.
+ */
 interface AuthState {
   user: User | null;
   profile: UserProfile | null;
@@ -63,20 +69,45 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   const isConfigured = isFirebaseConfigured();
 
   useEffect(() => {
-    if (!isConfigured || !firebaseAuth) {
+    if (!isConfigured) {
       setLoading(false);
       if (TESTING_FORCE_LOGGED_IN) setUser(MOCK_USER);
       return;
     }
-    const unsub = onAuthStateChanged(firebaseAuth, (u) => {
-      setUser(TESTING_FORCE_LOGGED_IN && !u ? MOCK_USER : u);
-      setProfile(null);
-      setLoading(false);
-      if (u) {
-        ensureUserDocument(u.uid, u.email ?? null, u.displayName ?? null, u.photoURL ?? null).catch(() => {});
-      }
-    });
-    return () => unsub();
+
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+
+    import("@/lib/firebase/client")
+      .then(({ firebaseAuth: auth }) => {
+        if (cancelled) return;
+        if (!auth) {
+          setLoading(false);
+          return;
+        }
+        unsubscribe = onAuthStateChanged(auth, (u) => {
+          setUser(TESTING_FORCE_LOGGED_IN && !u ? MOCK_USER : u);
+          setProfile(null);
+          setLoading(false);
+          if (u) {
+            ensureUserDocument(u.uid, u.email ?? null, u.displayName ?? null, u.photoURL ?? null).catch(
+              () => {}
+            );
+          }
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, [isConfigured]);
 
   useEffect(() => {
@@ -196,12 +227,17 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
+/**
+ * App auth: `user` is null while signed out and also before the first `onAuthStateChanged` fires — check `loading` first.
+ * Shape: `{ user, profile, loading, isConfigured, ...actions }`.
+ */
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within FirebaseAuthProvider");
   return ctx;
 }
 
+/** Same values as `useAuth` when inside `FirebaseAuthProvider`; `null` only if the provider is missing. */
 export function useAuthOptional() {
   return useContext(AuthContext);
 }

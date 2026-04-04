@@ -14,7 +14,7 @@ export function OnboardingAccountScreen() {
   const returnTo = safeReturnPath(searchParams.get("returnTo"), "/scan");
   const stepQ = onboardingReturnToQuery(searchParams);
   const auth = useAuthOptional();
-  const authLoading = auth?.loading ?? false;
+  const authLoading = auth?.loading ?? true;
   const user = auth?.user ?? null;
   const [tab, setTab] = useState<AuthTab>("magic");
   const [magicEmail, setMagicEmail] = useState("");

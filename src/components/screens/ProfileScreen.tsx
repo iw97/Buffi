@@ -21,7 +21,7 @@ export function ProfileScreen() {
   const auth = useAuthOptional();
   const user = auth?.user ?? null;
   const profile = auth?.profile;
-  const loading = auth?.loading ?? false;
+  const loading = auth?.loading ?? true;
   const isConfigured = auth?.isConfigured ?? false;
 
   const showAsLoggedIn = TESTING_ALWAYS_SHOW_LOGGED_IN || !!user;

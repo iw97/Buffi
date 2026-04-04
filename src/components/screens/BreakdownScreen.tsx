@@ -12,28 +12,72 @@ import type { BetterAlternativeCard, BetterAlternativesPayload } from "@/lib/bet
 
 type InfoId = "material" | "cpw" | "markup";
 
-/** Always synthetic; never tag as natural. */
-const SYNTHETIC_FIBERS = [
-  "polyurethane",
+/** Petroleum-based only (matches verdict taxonomy). */
+const PETROLEUM_SYNTHETIC_FIBERS = [
+  "repreve",
+  "oceancycle",
+  "ocean cycle",
+  "recycled polyester",
+  "recycled nylon",
   "polyester",
-  "nylon",
   "polyamide",
+  "nylon",
+  "microfiber",
+  "polyurethane",
+  "polypropylene",
+  "gore-tex",
+  "acrylic",
   "elastane",
   "spandex",
-  "acrylic",
   "lycra",
-  "gore-tex",
-  "viscose",
-  "rayon"
+  "pvc"
 ];
 
-/** Cellulosic acetates / Naia — wood pulp derived; not counted as synthetic. */
-const CELLULOSIC_NOT_SYNTHETIC = ["naia renew", "naia", "cellulose acetate", "triacetate", "acetate"];
+/** Natural + cellulosic — not counted as “synthetic” in UI. */
+const NATURAL_OR_CELLULOSIC = [
+  "naia renew",
+  "naia",
+  "organic cotton",
+  "pima cotton",
+  "egyptian cotton",
+  "merino wool",
+  "bamboo lyocell",
+  "bamboo viscose",
+  "bamboo rayon",
+  "cellulose acetate",
+  "triacetate",
+  "tencel",
+  "lyocell",
+  "lenzing",
+  "ecovero",
+  "modal",
+  "cupro",
+  "viscose",
+  "rayon",
+  "acetate",
+  "pima",
+  "egyptian",
+  "merino",
+  "cashmere",
+  "silk",
+  "linen",
+  "wool",
+  "cotton",
+  "hemp",
+  "alpaca",
+  "angora",
+  "ramie",
+  "jute",
+  "kapok",
+  "flax",
+  "bamboo"
+];
 
 function fiberKind(fiber: string): "synthetic" | "natural" {
   const lower = fiber.toLowerCase();
-  if (CELLULOSIC_NOT_SYNTHETIC.some((c) => lower.includes(c))) return "natural";
-  return SYNTHETIC_FIBERS.some((s) => lower.includes(s)) ? "synthetic" : "natural";
+  if (PETROLEUM_SYNTHETIC_FIBERS.some((s) => lower.includes(s))) return "synthetic";
+  if (NATURAL_OR_CELLULOSIC.some((c) => lower.includes(c))) return "natural";
+  return "natural";
 }
 
 function badgeForKind(kind: "synthetic" | "natural"): string {

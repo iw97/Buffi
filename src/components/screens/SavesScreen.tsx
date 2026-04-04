@@ -66,7 +66,7 @@ export function SavesScreen() {
   }, [auth?.user?.uid, auth?.isConfigured]);
 
   const isLoggedIn = TESTING_ALWAYS_SHOW_LOGGED_IN || !!auth?.user;
-  const loading = !TESTING_ALWAYS_SHOW_LOGGED_IN && (auth?.loading ?? false);
+  const loading = !TESTING_ALWAYS_SHOW_LOGGED_IN && (auth?.loading ?? true);
 
   if (loading) {
     return (
