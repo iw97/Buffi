@@ -29,7 +29,9 @@ export function ScanScreen() {
   const [tagScannerOpen, setTagScannerOpen] = useState(false);
   const [tagStepComposition, setTagStepComposition] = useState<string | null>(null);
   const [tagExtractResult, setTagExtractResult] = useState<TagExtraction | null>(null);
-  const [tagScanError, setTagScanError] = useState<string | null>(null);
+  /** After a failed OCR, show the captured image plus tips and actions (never fail silently). */
+  const [tagOcrFailure, setTagOcrFailure] = useState<{ previewUrl: string; hint?: string } | null>(null);
+  const [tagFileReadError, setTagFileReadError] = useState<string | null>(null);
   const [ocrStatus, setOcrStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -62,8 +64,23 @@ export function ScanScreen() {
     router.push("/analyzing");
   }
 
+  function tagImagePreviewUrl(base64Image: string): string {
+    const t = base64Image.trim();
+    return t.startsWith("data:") ? t : `data:image/jpeg;base64,${t}`;
+  }
+
+  function isSuccessfulTagExtraction(e: TagExtraction): boolean {
+    return (
+      Array.isArray(e.fibers) &&
+      e.fibers.length > 0 &&
+      (e.confidence === "high" || e.confidence === "medium")
+    );
+  }
+
   async function sendImageToScanTag(base64Image: string) {
-    setTagScanError(null);
+    const previewUrl = tagImagePreviewUrl(base64Image);
+    setTagOcrFailure(null);
+    setTagFileReadError(null);
     setTagExtractResult(null);
     setOcrStatus("loading");
     try {
@@ -72,26 +89,57 @@ export function ScanScreen() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: base64Image })
       });
-      const data = (await res.json()) as
-        | TagExtraction
-        | { ok?: false; confidence: "low"; message: string };
+
+      let data: unknown;
+      try {
+        data = await res.json();
+      } catch {
+        setTagOcrFailure({
+          previewUrl,
+          hint: "We could not read the server response. Check your connection and try again."
+        });
+        return;
+      }
+
       if (!res.ok) {
-        setTagScanError("Could not read label. Try again or enter details manually.");
+        setTagOcrFailure({
+          previewUrl,
+          hint:
+            res.status >= 500
+              ? "Our label reader had a problem. Please try again in a moment."
+              : "We could not process this photo. Try again or enter details manually."
+        });
         return;
       }
-      if ("message" in data && data.ok === false) {
-        setTagScanError(data.message || "We couldn't read this label.");
+
+      const errBody = data as { ok?: boolean; message?: string } | null;
+      if (errBody && errBody.ok === false) {
+        const msg = typeof errBody.message === "string" ? errBody.message.trim() : "";
+        setTagOcrFailure({
+          previewUrl,
+          hint: msg || "No readable composition was found on this image."
+        });
         return;
       }
+
       const extraction = data as TagExtraction;
-      if (extraction.confidence === "low" && (!extraction.fibers || extraction.fibers.length === 0)) {
-        setTagScanError("We couldn't read this label — try again in better lighting or enter details manually.");
+      if (!isSuccessfulTagExtraction(extraction)) {
+        const hint =
+          extraction?.confidence === "low"
+            ? "The label text was too unclear for a reliable read."
+            : !extraction?.fibers?.length
+              ? "We could not find a fiber composition on this label."
+              : "We could not confirm the composition from this label.";
+        setTagOcrFailure({ previewUrl, hint });
         return;
       }
+
       setTagExtractResult(extraction);
-      setTagScanError(null);
     } catch {
-      setTagScanError("We couldn't read this label — try again in better lighting or enter details manually.");
+      setTagOcrFailure({
+        previewUrl,
+        hint: "We couldn't reach the server. Check your connection and try again."
+      });
     } finally {
       setOcrStatus("idle");
     }
@@ -112,7 +160,8 @@ export function ScanScreen() {
 
   function handleScanTagClick() {
     clearError();
-    setTagScanError(null);
+    setTagOcrFailure(null);
+    setTagFileReadError(null);
     setTagScannerOpen(true);
   }
 
@@ -138,18 +187,19 @@ export function ScanScreen() {
     e.target.value = "";
     if (!file || !file.type.startsWith("image/")) return;
     setTagScannerOpen(false);
+    setTagFileReadError(null);
     try {
       const base64 = await fileToBase64(file);
       await sendImageToScanTag(base64);
     } catch {
-      setTagScanError("We couldn't read this label — try again or enter details manually.");
+      setTagFileReadError("We couldn't open that photo. Try a different image.");
       setOcrStatus("idle");
     }
   }
 
   function handleTagConfirmBack() {
     setTagExtractResult(null);
-    setTagScanError(null);
+    setTagOcrFailure(null);
   }
 
   function handleTagConfirmSubmit(payload: { composition: string; brand: string; price?: number }) {
@@ -162,13 +212,14 @@ export function ScanScreen() {
       }
     });
     setTagExtractResult(null);
-    setTagScanError(null);
+    setTagOcrFailure(null);
     setOcrStatus("idle");
     router.push("/analyzing");
   }
 
   function handleTagDetailsBack() {
     setTagStepComposition(null);
+    setTagOcrFailure(null);
     setOcrStatus("idle");
   }
 
@@ -176,6 +227,7 @@ export function ScanScreen() {
     clearError();
     setPending({ tag: payload });
     setTagStepComposition(null);
+    setTagOcrFailure(null);
     setOcrStatus("idle");
     router.push("/analyzing");
   }
@@ -286,14 +338,14 @@ export function ScanScreen() {
           </div>
         )}
 
-        {tagScanError && (
+        {tagFileReadError && (
           <div
-            className="scan-error tag-scan-error"
+            className="scan-error"
             role="alert"
             style={{
               width: "100%",
-              padding: "14px 18px",
-              background: "rgba(232, 96, 74, 0.08)",
+              padding: "12px 16px",
+              background: "rgba(232, 96, 74, 0.1)",
               border: "1px solid var(--red)",
               borderRadius: 6,
               fontFamily: "var(--font-sans)",
@@ -301,28 +353,109 @@ export function ScanScreen() {
               color: "var(--red)"
             }}
           >
-            <p style={{ margin: "0 0 12px 0" }}>{tagScanError}</p>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={() => {
-                  setTagScanError(null);
-                  handleScanTagClick();
+            <p style={{ margin: 0 }}>{tagFileReadError}</p>
+          </div>
+        )}
+
+        {tagOcrFailure && (
+          <div
+            className="tag-ocr-failure-panel"
+            role="alert"
+            style={{
+              width: "100%",
+              padding: "16px 0 8px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 14
+            }}
+          >
+            <img
+              src={tagOcrFailure.previewUrl}
+              alt="Photo of the label we could not read"
+              style={{
+                width: "100%",
+                maxWidth: 320,
+                maxHeight: 220,
+                objectFit: "contain",
+                borderRadius: 8,
+                border: "1px solid var(--border-light)",
+                background: "var(--black)"
+              }}
+            />
+            <div style={{ width: "100%", maxWidth: 360, textAlign: "center" }}>
+              <p
+                style={{
+                  margin: "0 0 8px 0",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 15,
+                  lineHeight: 1.45,
+                  color: "var(--text)"
                 }}
               >
-                Retry
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => {
-                  setTagScanError(null);
-                  setTagStepComposition("");
+                We had trouble reading this label.
+              </p>
+              {tagOcrFailure.hint ? (
+                <p
+                  style={{
+                    margin: "0 0 14px 0",
+                    fontFamily: "var(--font-sans)",
+                    fontSize: 13,
+                    lineHeight: 1.45,
+                    color: "var(--text-dim)"
+                  }}
+                >
+                  {tagOcrFailure.hint}
+                </p>
+              ) : null}
+              <p
+                style={{
+                  margin: "0 0 8px 0",
+                  fontFamily: "var(--font-mono, monospace)",
+                  fontSize: 12,
+                  color: "var(--teal)",
+                  textAlign: "center"
                 }}
               >
-                Enter details manually
-              </button>
+                Try these tips:
+              </p>
+              <ul
+                style={{
+                  margin: "0 0 18px 0",
+                  padding: "0 0 0 20px",
+                  textAlign: "left",
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 13,
+                  lineHeight: 1.55,
+                  color: "var(--text-dim)"
+                }}
+              >
+                <li>Flatten the label completely</li>
+                <li>Make sure the text is in focus</li>
+                <li>Try in brighter light</li>
+              </ul>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => {
+                    setTagOcrFailure(null);
+                    handleScanTagClick();
+                  }}
+                >
+                  Try again
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => {
+                    setTagOcrFailure(null);
+                    setTagStepComposition("");
+                  }}
+                >
+                  Enter manually
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -340,25 +473,27 @@ export function ScanScreen() {
             Reading label…
           </p>
         )}
-        <div
-          className="viewfinder"
-          onClick={ocrStatus === "loading" ? undefined : handleScanTagClick}
-          role="button"
-          tabIndex={ocrStatus === "loading" ? -1 : 0}
-          onKeyDown={(e) => ocrStatus !== "loading" && e.key === "Enter" && handleScanTagClick()}
-          aria-label="Scan clothing tag"
-          style={ocrStatus === "loading" ? { pointerEvents: "none", opacity: 0.7 } : undefined}
-        >
-          <div className="viewfinder-inner">
-            <div className="vf-corners" />
-            <div className="vf-corners-b" />
-            <div className="scan-line" />
-            <div className="vf-icon" aria-hidden>
-              🏷️
+        {!tagOcrFailure && (
+          <div
+            className="viewfinder"
+            onClick={ocrStatus === "loading" ? undefined : handleScanTagClick}
+            role="button"
+            tabIndex={ocrStatus === "loading" ? -1 : 0}
+            onKeyDown={(e) => ocrStatus !== "loading" && e.key === "Enter" && handleScanTagClick()}
+            aria-label="Scan clothing tag"
+            style={ocrStatus === "loading" ? { pointerEvents: "none", opacity: 0.7 } : undefined}
+          >
+            <div className="viewfinder-inner">
+              <div className="vf-corners" />
+              <div className="vf-corners-b" />
+              <div className="scan-line" />
+              <div className="vf-icon" aria-hidden>
+                🏷️
+              </div>
+              <div className="vf-label">Tap to Scan Tag</div>
             </div>
-            <div className="vf-label">Tap to Scan Tag</div>
           </div>
-        </div>
+        )}
         <div className="scan-actions">
           <button
             className="btn-secondary scan-btn-secondary"
