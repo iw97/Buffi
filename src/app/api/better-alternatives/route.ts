@@ -6,10 +6,11 @@ import { scrapeProductFromUrl } from "@/lib/scan/scrape";
 import { getGoogleShoppingResults } from "@/lib/scan/serpapi";
 import {
   dominantFiberLine,
-  inferGarmentCategory,
+  getCrossBrandShoppingQueries,
+  getSameBrandShoppingQueries,
   isClearlyBetterFiberComposition,
   meetsCrossBrandImprovement,
-  NATURAL_FIBER_OR_QUERY,
+  MIN_SERP_RESULTS_BEFORE_RETRY,
   normalizeBrand,
   pickComparisonBadge,
   titleMatchesBrand
@@ -60,14 +61,20 @@ async function findSameBrandBetter(original: ScanAnalysis): Promise<{
   card: BetterAlternativeCard | null;
   skippedMessage: string | null;
 }> {
-  const brand = (original.brand || "").trim();
-  if (!brand || /^unknown$/i.test(brand)) {
+  const queries = getSameBrandShoppingQueries(original);
+  if (!queries) {
     return { card: null, skippedMessage: null };
   }
-
-  const category = inferGarmentCategory(original.name);
-  const q = `${brand} ${category} ${NATURAL_FIBER_OR_QUERY}`.replace(/\s+/g, " ").trim();
-  const results = await getGoogleShoppingResults(q, 12);
+  const brand = (original.brand || "").trim();
+  const { primary: samePrimary, simplified: sameSimplified } = queries;
+  let results = await getGoogleShoppingResults(samePrimary, 12);
+  if (
+    results.length < MIN_SERP_RESULTS_BEFORE_RETRY &&
+    samePrimary !== sameSimplified
+  ) {
+    const more = await getGoogleShoppingResults(sameSimplified, 12);
+    if (more.length > results.length) results = more;
+  }
   const pool = results.filter((r) => titleMatchesBrand(r.title, brand)).slice(0, 3);
 
   if (pool.length === 0) {
@@ -107,12 +114,15 @@ async function findCrossBrandBetter(
   original: ScanAnalysis,
   excludeBrandNorm: string | null
 ): Promise<BetterAlternativeCard | null> {
-  const category = inferGarmentCategory(original.name);
-  const basePrice =
-    typeof original.price === "number" && original.price > 0 ? original.price : 50;
-  const cap = Math.ceil(basePrice * 1.2);
-  const q = `${category} ${NATURAL_FIBER_OR_QUERY} under $${cap}`.replace(/\s+/g, " ").trim();
-  const results = await getGoogleShoppingResults(q, 8);
+  const { primary: crossPrimary, simplified: crossSimplified } = getCrossBrandShoppingQueries(original);
+  let results = await getGoogleShoppingResults(crossPrimary, 8);
+  if (
+    results.length < MIN_SERP_RESULTS_BEFORE_RETRY &&
+    crossPrimary !== crossSimplified
+  ) {
+    const more = await getGoogleShoppingResults(crossSimplified, 8);
+    if (more.length > results.length) results = more;
+  }
   const top = results.slice(0, 5);
   if (top.length === 0) return null;
 

@@ -27,8 +27,12 @@ const SYNTHETIC_FIBERS = [
   "rayon"
 ];
 
+/** Cellulosic acetates / Naia — wood pulp derived; not counted as synthetic. */
+const CELLULOSIC_NOT_SYNTHETIC = ["naia renew", "naia", "cellulose acetate", "triacetate", "acetate"];
+
 function fiberKind(fiber: string): "synthetic" | "natural" {
   const lower = fiber.toLowerCase();
+  if (CELLULOSIC_NOT_SYNTHETIC.some((c) => lower.includes(c))) return "natural";
   return SYNTHETIC_FIBERS.some((s) => lower.includes(s)) ? "synthetic" : "natural";
 }
 

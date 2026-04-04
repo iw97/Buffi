@@ -10,7 +10,10 @@ Material cost estimation: Use these fabric costs per yard (USD): Basic cotton $2
 Yardage by category: T-shirt 1.5–2, Dress (simple) 2.5–3.5, Blazer/Jacket 2.5–3.5 plus lining, Trousers/Pants 2–3, Skirt (midi) 2–3, Outerwear coat 3.5–5.
 Add 15–25% for thread, labels, packaging, trimmings. Add 30–50% for labor on top of materials.
 Certified/recycled material premiums (apply when detected in product description, composition notes, or known brand context): recycled polyester 1.4x base polyester cost; REPREVE or OceanCycle recycled polyester 1.8x base polyester cost; recycled nylon 1.5x base nylon cost; GOTS certified organic cotton 1.6x base cotton cost; Bluesign-certified materials 1.3x relevant base cost. Fair Trade certified manufacturing adds an additional $8–$15 to total estimated production cost regardless of fiber type.
-When certified/recycled materials are detected, set hasCertifiedMaterials: true, return certifications as an array of strings (e.g. ["REPREVE", "OceanCycle", "Fair Trade"]), and acknowledge this context in verdictReason.
+**Cellulose acetate / acetate (fiber classification):** Wood-pulp-derived **cellulosic / semi-natural** — **not** a petroleum synthetic. Use a **baseline cellulose acetate** fabric cost of **~$4–6/yard** (USD) for generic acetate / cellulose acetate / triacetate when estimating materials (do not price like polyester).
+**Naia (Eastman):** Premium cellulose acetate from sustainably sourced wood pulp — **1.6×** the baseline cellulose acetate yard cost. Treat as **natural/cellulosic** in quality weighting; **never** as plastic or petroleum-based synthetic; do **not** flag as synthetic.
+**Naia Renew:** Premium certified sustainable cellulosic — **60%** sustainably sourced wood pulp, **40%** GRS-certified recycled content; OEKO-TEX Class I; biodegradable and compostable; TUV Austria certified — **1.9×** the baseline cellulose acetate yard cost. Set **hasCertifiedMaterials: true** and include **"Naia Renew"** in the **certifications** array (and **"OEKO-TEX"** when the label or context states it). **Never** classify as synthetic or frame as petroleum-based / plastic; do **not** penalize “synthetic %” for this fiber — it is cellulosic.
+When certified/recycled materials are detected, set hasCertifiedMaterials: true, return certifications as an array of strings (e.g. ["REPREVE", "OceanCycle", "Fair Trade", "Naia Renew", "OEKO-TEX"]), and acknowledge this context in verdictReason.
 Return estimatedMaterialCostMin and estimatedMaterialCostMax (USD): total cost to produce including materials and basic labor. The range should reflect genuine uncertainty — typically ±30–40% around the midpoint for standard garments, wider for complex construction or specialty fibers.
 markupMin = (price / costMax - 1) * 100, markupMax = (price / costMin - 1) * 100 (so markupMin is the conservative/low markup, markupMax is the high markup).
 `;
@@ -19,7 +22,7 @@ const MINIMAL_SCAN_SYSTEM_PROMPT = `You are a material intelligence analyst for 
 
 Apply these rules:
 - Small/indie brand: if brandName suggests an independent or small brand (not a major retailer or fast-fashion chain), set isSmallBusiness: true; higher markups are normal for small-business sustainability.
-- Fiber quality: premium natural (cashmere, silk, merino wool, modal, linen, lyocell/Tencel) > standard natural (cotton, wool, hemp) > synthetic. Synthetics (never tag as natural): polyurethane, polyester, nylon, acrylic, spandex, elastane, lycra, Gore-Tex, viscose, rayon. Favor verdict for premium-natural-heavy garments.
+- Fiber quality: premium natural (cashmere, silk, merino wool, modal, linen, lyocell/Tencel, **Naia**, **Naia Renew**) > standard / semi-natural cellulosic (cotton, wool, hemp, **cellulose acetate**, **acetate**, **triacetate**) > petroleum synthetics. **Acetate / cellulose acetate / triacetate** are cellulosic (wood pulp), not synthetics. **Naia:** premium cellulosic (Eastman), not plastic — use 1.6× baseline acetate cost. **Naia Renew:** set hasCertifiedMaterials true, certifications includes "Naia Renew"; 1.9× baseline acetate cost; never synthetic. **Synthetics (never tag as natural):** polyurethane, polyester, nylon, acrylic, spandex, elastane, lycra, Gore-Tex, viscose, rayon. Favor verdict for premium-natural or premium-cellulosic-heavy garments.
 - verdictReason must include context (e.g. small-brand markup vs fast-fashion synthetic). Verdict stays "Retail Trap" or "Worth It".
 - markupContext: exactly one of "justified" | "partially justified" | "unjustified" based on fiber quality and small-business context.
 - functionalSynthetic: true when garment category makes synthetics appropriate (rainwear, activewear, swimwear, lingerie, hosiery, tights); false for formal/everyday/casual.
@@ -56,7 +59,7 @@ For each value in selectedValues, evaluate the product and return exactly one of
 - **Made in USA**: pass = country of manufacture confirmed USA; fail = country confirmed not USA; unverified = country not available.
 - **Secondhand first**: always return unverified with note: "Check secondhand options in Buffi Pro".
 - **Capsule wardrobe**: pass = natural fibers, neutral category, versatile construction; fail = very trend-specific or low durability; unverified = insufficient data.
-- **Certified sustainable**: pass = known certification in product data (GOTS, OEKO-TEX, Bluesign, B Corp); fail = no certification and brand is known fast fashion; unverified = most cases.
+- **Certified sustainable**: pass = known certification in product data (GOTS, OEKO-TEX, Bluesign, B Corp, **Naia Renew** with stated OEKO-TEX / GRS / TUV Austria context); fail = no certification and brand is known fast fashion; unverified = most cases.
 - **Union-made**: pass = union-made indicated; fail = known non-union; unverified = most cases.
 `;
 
@@ -96,11 +99,24 @@ ${
 These brands have a strong sustainability/ethics reputation; higher markup is expected and partially justified. Set isEthicalBrand: true when the brand is one of: Patagonia, Eileen Fisher, Reformation, Kotn, Pact, Thought Clothing, Amour Vert, Girlfriend Collective, Whimsy and Row, Colorful Standard, Organic Basics, tentree, prAna, Stella McCartney, Veja, Allbirds, Mara Hoffman (or the same company under another name). For these brands: note the brand's sustainability reputation and supply-chain transparency in verdictReason; apply the same higher markup threshold as indie brands before Retail Trap; return isEthicalBrand: true in the JSON response.
 
 **Fiber quality weighting (for verdict and verdictReason)**
-Not all natural fibers are equal. Weight fibers in this order for quality assessment:
-- Premium natural: cashmere, silk, merino wool, modal, linen, lyocell/Tencel
-- Standard natural: cotton, wool, hemp
-- Synthetic (these must never be tagged as natural): polyurethane, polyester, nylon, acrylic, spandex, elastane, lycra, Gore-Tex, viscose, rayon
-A garment that is predominantly premium natural fibers should receive a more favorable verdict than the same markup on synthetic fibers.
+Not all natural fibers are equal. Classify carefully:
+
+**Cellulosic acetates (not petroleum synthetics)**  
+**Cellulose acetate**, **acetate**, and **triacetate** are **semi-natural / cellulosic** (derived from wood pulp, not petroleum). Do **not** describe them as plastic or petroleum-based synthetics; do **not** use “synthetic-heavy” framing for blends dominated by these fibers.
+
+**Naia (Eastman)**  
+Premium cellulose acetate from sustainably sourced wood pulp. Treat as **natural/cellulosic**, **premium** tier for quality weighting. **Do not** flag as plastic or petroleum synthetic. Apply **1.6×** baseline cellulose acetate yard cost (see material cost rules).
+
+**Naia Renew**  
+Premium certified sustainable cellulosic: **60%** sustainably sourced wood pulp, **40%** GRS-certified recycled; OEKO-TEX Class I; biodegradable, compostable; TUV Austria certified. Apply **1.9×** baseline cellulose acetate yard cost. Set **hasCertifiedMaterials: true** and include **"Naia Renew"** in **certifications** when present (add **"OEKO-TEX"** when stated on label or copy). **Never** classify as synthetic or count toward negative “synthetic %” messaging — it is cellulosic.
+
+**Premium natural / premium cellulosic:** cashmere, silk, merino wool, modal, linen, lyocell/Tencel, **Naia**, **Naia Renew**.
+
+**Standard natural / semi-natural cellulosic:** cotton, wool, hemp; generic **cellulose acetate**, **acetate**, **triacetate** (without Naia branding).
+
+**Synthetic (petroleum-based; must never be tagged as natural):** polyurethane, polyester, nylon, acrylic, spandex, elastane, lycra, Gore-Tex, viscose, rayon.
+
+A garment that is predominantly premium natural or premium cellulosic fibers should receive a more favorable verdict than the same markup on petroleum synthetics.
 
 **Functional synthetic (garment category)**
 Synthetic fibers that are appropriate or necessary for the garment type should not be penalized. Set functionalSynthetic: true when synthetics are expected for the category; set false when synthetics are a quality compromise.
@@ -123,6 +139,7 @@ Fabric cost per yard (USD):
 - Polyester: $1–3/yard. Nylon: $3–6/yard.
 - Basic linen: $5–8/yard. Premium linen: $9–15/yard.
 - Viscose/Rayon: $2–5/yard. Modal: $6–10/yard. Lyocell/Tencel: $7–12/yard.
+- Cellulose acetate / generic acetate / triacetate: $4–6/yard baseline (cellulosic, not polyester); Naia ≈ 1.6× that baseline; Naia Renew ≈ 1.9× that baseline.
 - Acrylic: $1–3/yard.
 - Basic wool: $8–15/yard. Merino wool: $15–30/yard. Cashmere: $50–100/yard. Silk: $20–40/yard.
 - Elastane/spandex: treat as a small blend share; use blended yard cost for the main fabric and add a small amount for stretch content.
@@ -156,7 +173,7 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
 - functionalSynthetic (boolean: true if synthetic fibers are appropriate for the garment category, false if synthetics are a quality compromise)
 - isEthicalBrand (boolean: true if brand is a known ethical/sustainable brand from the list above — Patagonia, Eileen Fisher, Reformation, Kotn, Pact, Thought Clothing, Amour Vert, Girlfriend Collective, Whimsy and Row, Colorful Standard, Organic Basics, tentree, prAna, Stella McCartney, Veja, Allbirds, Mara Hoffman)
 - hasCertifiedMaterials (boolean: true when recycled/certified materials or certifications are detected from product text, composition notes, or known brand context)
-- certifications (array of strings: include detected labels, e.g. "REPREVE", "OceanCycle", "GOTS", "Fair Trade", "Bluesign"; empty array if none)${selectedValues.length > 0 ? `
+- certifications (array of strings: include detected labels, e.g. "REPREVE", "OceanCycle", "GOTS", "Fair Trade", "Bluesign", "Naia Renew", "OEKO-TEX"; empty array if none)${selectedValues.length > 0 ? `
 - valuesMatch (array of objects, one per value in selectedValues: { value: string (the value label), state: "pass" | "fail" | "unverified", note: string (one short phrase) })` : ""}`;
 
   const controller = new AbortController();

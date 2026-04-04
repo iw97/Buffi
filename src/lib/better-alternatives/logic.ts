@@ -1,8 +1,114 @@
 import type { ScanAnalysis } from "@/lib/scan/types";
 import { getFiberBreakdown } from "@/lib/scan/verdict";
 
-/** Natural-fiber preference fragment for Google Shopping queries (not sponsored). */
-export const NATURAL_FIBER_OR_QUERY = "linen OR cotton OR wool OR merino OR silk OR modal OR lyocell";
+/** Cross-brand “better natural fiber” target — listings rarely use branded names (Naia, Tencel, etc.). */
+export const CROSS_BRAND_NATURAL_OR_QUERY = "linen OR cotton OR silk";
+
+/** @deprecated Use CROSS_BRAND_NATURAL_OR_QUERY or getCrossBrandShoppingQueries. */
+export const NATURAL_FIBER_OR_QUERY = CROSS_BRAND_NATURAL_OR_QUERY;
+
+const MIN_SERP_RESULTS_BEFORE_RETRY = 3;
+
+export { MIN_SERP_RESULTS_BEFORE_RETRY };
+
+/** How to qualify a same-brand Shopping query from the dominant fiber label. */
+export type SameBrandFiberQualifier =
+  | { kind: "none" }
+  | { kind: "exact"; term: string }
+  | { kind: "polyester" };
+
+/**
+ * Map label fiber strings to Shopping query terms. Branded / regenerated cellulosics → no qualifier
+ * (those words rarely appear in product titles). Recycled / REPREVE → "polyester". Standard naturals → exact name.
+ */
+export function dominantFiberSearchQualifier(
+  materials: { fiber: string; percentage: number }[]
+): SameBrandFiberQualifier {
+  if (!materials.length) return { kind: "none" };
+  const sorted = [...materials].sort((a, b) => b.percentage - a.percentage);
+  const f = sorted[0].fiber.toLowerCase();
+
+  if (f.includes("repreve") || (f.includes("recycled") && f.includes("polyester"))) {
+    return { kind: "polyester" };
+  }
+  if (f.includes("nylon") || f.includes("polyamide")) {
+    return { kind: "exact", term: "nylon" };
+  }
+  if (f.includes("polyester")) {
+    return { kind: "exact", term: "polyester" };
+  }
+
+  if (
+    f.includes("naia renew") ||
+    f.includes("naia") ||
+    f.includes("cellulose acetate") ||
+    f.includes("triacetate") ||
+    f.includes("acetate")
+  ) {
+    return { kind: "none" };
+  }
+  if (f.includes("lyocell") || f.includes("tencel") || f.includes("modal")) {
+    return { kind: "none" };
+  }
+  if (f.includes("viscose") || f.includes("rayon")) {
+    return { kind: "none" };
+  }
+
+  const naturals: { needle: string; term: string }[] = [
+    { needle: "cashmere", term: "cashmere" },
+    { needle: "merino", term: "merino wool" },
+    { needle: "wool", term: "wool" },
+    { needle: "silk", term: "silk" },
+    { needle: "linen", term: "linen" },
+    { needle: "cotton", term: "cotton" },
+    { needle: "hemp", term: "hemp" }
+  ];
+  for (const { needle, term } of naturals) {
+    if (f.includes(needle)) return { kind: "exact", term };
+  }
+
+  return { kind: "none" };
+}
+
+export function shoppingPriceCapUsd(scan: ScanAnalysis): number {
+  const basePrice = typeof scan.price === "number" && scan.price > 0 ? scan.price : 50;
+  return Math.ceil(basePrice * 1.2);
+}
+
+/**
+ * Same-brand Shopping: `[brand] [category] [optional fiber] under $cap`.
+ * Fiber phrase omitted for branded/obscure materials; simplified fallback drops any fiber qualifier.
+ */
+export function getSameBrandShoppingQueries(scan: ScanAnalysis): { primary: string; simplified: string } | null {
+  const brand = (scan.brand || "").trim();
+  if (!brand || /^unknown$/i.test(brand)) return null;
+
+  const category = inferGarmentCategory(scan.name);
+  const cap = shoppingPriceCapUsd(scan);
+  const pricePart = `under $${cap}`;
+
+  const simplified = `${brand} ${category} ${pricePart}`.replace(/\s+/g, " ").trim();
+  const qual = dominantFiberSearchQualifier(scan.materials);
+
+  if (qual.kind === "none") {
+    return { primary: simplified, simplified };
+  }
+  if (qual.kind === "polyester") {
+    const primary = `${brand} ${category} polyester ${pricePart}`.replace(/\s+/g, " ").trim();
+    return { primary, simplified };
+  }
+  const primary = `${brand} ${category} ${qual.term} ${pricePart}`.replace(/\s+/g, " ").trim();
+  return { primary, simplified };
+}
+
+/** Cross-brand: genuinely natural fibers as improvement target; simplified = category + price only. */
+export function getCrossBrandShoppingQueries(scan: ScanAnalysis): { primary: string; simplified: string } {
+  const category = inferGarmentCategory(scan.name);
+  const cap = shoppingPriceCapUsd(scan);
+  const primary = `${category} ${CROSS_BRAND_NATURAL_OR_QUERY} under $${cap}`.replace(/\s+/g, " ").trim();
+  const simplified = `${category} under $${cap}`.replace(/\s+/g, " ").trim();
+  return { primary, simplified };
+}
 
 export function inferGarmentCategory(productName: string): string {
   const n = productName.toLowerCase();

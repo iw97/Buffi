@@ -84,6 +84,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanTagExtrac
   "styleNumber": string or null,
   "confidence": "high" | "medium" | "low"
 }
+Preserve branded fiber names exactly when printed on the label (e.g. "Naia Renew", "Naia") — do not rename them to generic "acetate" if the label specifies the brand. Cellulose acetate / acetate / triacetate are cellulosic (wood pulp); they are not the same as polyester.
 If no composition data is found return confidence: "low" and empty fibers array.
 Raw label text:
 ${rawText.slice(0, 8000)}`;

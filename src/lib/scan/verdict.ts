@@ -8,6 +8,10 @@ import type { VerdictTier } from "./types";
 export type { VerdictTier } from "./types";
 
 const PREMIUM_NATURAL = ["modal", "cashmere", "silk", "merino", "linen", "lyocell", "tencel"];
+/** Eastman Naia / Naia Renew — premium cellulosic acetate; not petroleum synthetic. */
+const CELLULOSIC_PREMIUM = ["naia renew", "naia"];
+/** Generic cellulose acetate fibers (wood pulp); not petroleum synthetic. */
+const CELLULOSIC_STANDARD = ["cellulose acetate", "triacetate", "acetate"];
 const STANDARD_NATURAL = ["cotton", "wool", "hemp"];
 /** These fibers are always synthetic; never classify as natural. */
 const SYNTHETIC = [
@@ -31,6 +35,8 @@ function normalizeFiber(fiber: string): string {
 function categoryForFiber(fiber: string): "premium" | "standard" | "synthetic" | "other" {
   const n = normalizeFiber(fiber);
   if (PREMIUM_NATURAL.some((p) => n.includes(p))) return "premium";
+  if (CELLULOSIC_PREMIUM.some((p) => n.includes(p))) return "premium";
+  if (CELLULOSIC_STANDARD.some((p) => n.includes(p))) return "standard";
   if (STANDARD_NATURAL.some((s) => n.includes(s))) return "standard";
   if (SYNTHETIC.some((s) => n.includes(s))) return "synthetic";
   return "other";
