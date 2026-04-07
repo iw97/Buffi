@@ -9,11 +9,19 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // users/{uid} — owner read/write. `setDoc` with `{ merge: true }` is a create (new doc) or update (existing); both allowed here.
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+    }
+
     // TEMPORARY: permissive rules for other collections. Tighten before launch.
+    // `users` is excluded so only the rule above applies (owner-only).
     match /{document=**} {
       allow read, write: if
         request.path.split('/')[0] != 'productScans'
-        && request.path.split('/')[0] != 'productMappings';
+        && request.path.split('/')[0] != 'productMappings'
+        && request.path.split('/')[0] != 'users';
     }
   }
 }

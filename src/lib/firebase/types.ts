@@ -1,3 +1,4 @@
+import type { Timestamp } from "firebase/firestore";
 import type { MarkupContext, ValuesMatchEntry, VerdictTier } from "@/lib/scan/types";
 
 /**
@@ -76,12 +77,18 @@ export interface ProductMappingDocument {
   staleAt?: unknown;
 }
 
-/** User profile and preferences (stored in users/{uid}) */
+/**
+ * User profile and preferences (stored in users/{uid}).
+ * Time fields are Firestore `Timestamp` when written with `serverTimestamp()` (e.g. `ensureUserDocument`, `setUserProfile`).
+ * `createdAt` may be an ISO string from older client-only writes (`setUserProfile` with `toISOString()`).
+ */
 export interface UserProfile {
   displayName: string | null;
   email: string | null;
   photoURL: string | null;
-  createdAt: string;
+  createdAt: Timestamp | string;
+  /** Set on every merged profile write via `serverTimestamp()`. */
+  updatedAt: Timestamp;
   valuesSelected?: string[];
   priorities?: Record<string, number>;
   budgetPerItem?: number;
@@ -92,7 +99,8 @@ export interface UserProfile {
   isPro?: boolean;
   /** Scan count (can be reset) */
   scanCount?: number;
-  scanCountResetAt?: string;
+  /** Present after `ensureUserDocument`; stored as Firestore `Timestamp`. */
+  scanCountResetAt?: Timestamp | string;
   /** Saved items count */
   saveCount?: number;
 }

@@ -94,9 +94,9 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
           setProfile(null);
           setLoading(false);
           if (u) {
-            ensureUserDocument(u.uid, u.email ?? null, u.displayName ?? null, u.photoURL ?? null).catch(
-              () => {}
-            );
+            ensureUserDocument(u.uid, u.email ?? null, u.displayName ?? null, u.photoURL ?? null)
+              .then(() => getUserProfile(u.uid).then(setProfile))
+              .catch(() => {});
           }
         });
       })

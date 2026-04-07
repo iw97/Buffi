@@ -62,10 +62,13 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   });
 }
 
+function userFieldMissing(data: Record<string, unknown>, key: string): boolean {
+  return !(key in data) || data[key] === undefined;
+}
+
 /**
- * Ensure a user document exists in users/{uid}. If it exists, do nothing.
- * If not (new signup or first time), create it with email, displayName, and default fields.
- * Call from onAuthStateChanged to handle both new signups and returning users.
+ * Ensures users/{uid} has required profile + counter fields. Runs on every sign-in (OAuth, magic link, etc.).
+ * Uses setDoc(merge: true) so existing values are kept; only fills keys that are missing or undefined.
  */
 export async function ensureUserDocument(
   uid: string,
@@ -79,19 +82,22 @@ export async function ensureUserDocument(
     const db = getDb();
     const ref = doc(db, COLLECTIONS.USERS, uid);
     const snap = await getDoc(ref);
-    if (snap.exists()) return;
-    await setDoc(ref, {
-      email: email ?? null,
-      displayName: displayName ?? "",
-      photoURL: photoURL ?? null,
-      createdAt: serverTimestamp(),
-      isPro: false,
-      scanCount: 0,
-      scanCountResetAt: serverTimestamp(),
-      saveCount: 0,
-      savedCount: 0,
-      scannedCount: 0
-    });
+    const data = (snap.exists() ? snap.data() : {}) as Record<string, unknown>;
+    const patch: Record<string, unknown> = {};
+
+    if (userFieldMissing(data, "email")) patch.email = email ?? null;
+    if (userFieldMissing(data, "displayName")) patch.displayName = displayName ?? "";
+    if (userFieldMissing(data, "photoURL")) patch.photoURL = photoURL ?? "";
+    if (userFieldMissing(data, "createdAt")) patch.createdAt = serverTimestamp();
+    if (userFieldMissing(data, "updatedAt")) patch.updatedAt = serverTimestamp();
+    if (userFieldMissing(data, "isPro")) patch.isPro = false;
+    if (userFieldMissing(data, "scanCount")) patch.scanCount = 0;
+    if (userFieldMissing(data, "scanCountResetAt")) patch.scanCountResetAt = serverTimestamp();
+    if (userFieldMissing(data, "saveCount")) patch.saveCount = 0;
+
+    if (Object.keys(patch).length === 0) return;
+
+    await setDoc(ref, patch, { merge: true });
   });
 }
 
