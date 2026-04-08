@@ -21,11 +21,11 @@ import {
   signInWithEmailLink as firebaseSignInWithEmailLink
 } from "firebase/auth";
 import {
-  firebaseAuth,
+  auth,
   firebaseAuthReady,
   isFirebaseConfigured,
   BUFFI_SIGNIN_EMAIL_KEY
-} from "@/lib/firebase/client";
+} from "@/lib/firebase";
 import { setUserProfile, getUserProfile, ensureUserDocument } from "@/lib/firebase/firestore";
 import type { UserProfile } from "@/lib/firebase/types";
 
@@ -88,7 +88,6 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
 
     firebaseAuthReady
       .then(() => {
-        const auth = firebaseAuth;
         if (cancelled) return;
         if (!auth) {
           setLoading(false);
@@ -129,10 +128,10 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   }, [user?.uid, isConfigured]);
 
   const signInWithGoogle = useCallback(async () => {
-    if (!firebaseAuth || !isConfigured) return;
+    if (!auth || !isConfigured) return;
     const provider = new GoogleAuthProvider();
     console.log("calling Firebase auth");
-    const result = await signInWithPopup(firebaseAuth, provider);
+    const result = await signInWithPopup(auth, provider);
     console.log("Firebase auth called", result);
     const u = result.user;
     await setUserProfile(u.uid, {
@@ -145,8 +144,8 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
 
   const signUpWithEmail = useCallback(
     async (email: string, password: string) => {
-      if (!firebaseAuth || !isConfigured) return;
-      const result = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+      if (!auth || !isConfigured) return;
+      const result = await createUserWithEmailAndPassword(auth, email, password);
       const u = result.user;
       await setUserProfile(u.uid, {
         displayName: u.displayName ?? null,
@@ -160,15 +159,15 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
 
   const signInWithEmail = useCallback(
     async (email: string, password: string) => {
-      if (!firebaseAuth || !isConfigured) return;
-      await signInWithEmailAndPassword(firebaseAuth, email, password);
+      if (!auth || !isConfigured) return;
+      await signInWithEmailAndPassword(auth, email, password);
     },
     [isConfigured]
   );
 
   const sendSignInLinkToEmailAction = useCallback(
     async (email: string, returnTo?: string) => {
-      if (!firebaseAuth || !isConfigured) return;
+      if (!auth || !isConfigured) return;
       const baseUrl = typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL ?? "";
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || baseUrl;
       let callbackUrl = `${appUrl.replace(/\/$/, "")}/auth/callback`;
@@ -177,7 +176,7 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
         callbackUrl += `?returnTo=${encodeURIComponent(rt)}`;
       }
       console.log("calling Firebase auth");
-      await sendSignInLinkToEmail(firebaseAuth, email.trim(), {
+      await sendSignInLinkToEmail(auth, email.trim(), {
         url: callbackUrl,
         handleCodeInApp: true
       });
@@ -187,14 +186,14 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   );
 
   const isSignInWithEmailLinkAction = useCallback((url: string) => {
-    if (!firebaseAuth) return false;
-    return firebaseIsSignInWithEmailLink(firebaseAuth, url);
+    if (!auth) return false;
+    return firebaseIsSignInWithEmailLink(auth, url);
   }, []);
 
   const completeSignInWithEmailLink = useCallback(
     async (email: string, linkOrFullUrl: string) => {
-      if (!firebaseAuth || !isConfigured) return;
-      await firebaseSignInWithEmailLink(firebaseAuth, email.trim(), linkOrFullUrl);
+      if (!auth || !isConfigured) return;
+      await firebaseSignInWithEmailLink(auth, email.trim(), linkOrFullUrl);
       if (typeof window !== "undefined") {
         try {
           window.localStorage.removeItem(BUFFI_SIGNIN_EMAIL_KEY);
@@ -208,8 +207,8 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   );
 
   const signOut = useCallback(async () => {
-    if (!firebaseAuth) return;
-    await firebaseSignOut(firebaseAuth);
+    if (!auth) return;
+    await firebaseSignOut(auth);
   }, []);
 
   const value = useMemo(

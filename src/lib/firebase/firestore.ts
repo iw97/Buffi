@@ -17,7 +17,7 @@ import {
 } from "firebase/firestore";
 import type { Unsubscribe } from "firebase/firestore";
 import type { Timestamp } from "firebase/firestore";
-import { firestore, firebaseAuth } from "./client";
+import { auth, firestore } from "@/lib/firebase";
 import { COLLECTIONS, type UserProfile, type SavedItem, type ScanHistoryEntry } from "./types";
 
 function timestampToIso(t: unknown): string {
@@ -33,7 +33,7 @@ function getDb() {
 
 function requireAuth(operation: string): boolean {
   if (typeof window === "undefined") return false;
-  if (!firebaseAuth?.currentUser) {
+  if (!auth?.currentUser) {
     console.warn("[Firestore] skipped (not authenticated):", operation);
     return false;
   }

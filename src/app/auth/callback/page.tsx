@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "firebase/auth";
 import { useAuthOptional } from "@/contexts/AuthContext";
-import { BUFFI_SIGNIN_EMAIL_KEY, firebaseAuth } from "@/lib/firebase/client";
+import { auth as firebaseAuth, BUFFI_SIGNIN_EMAIL_KEY } from "@/lib/firebase";
 import { safeReturnPath } from "@/lib/auth/returnTo";
 
 type Status = "checking" | "need-email" | "signing-in" | "success" | "error";

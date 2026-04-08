@@ -6,7 +6,7 @@ import { useAuthOptional } from "@/contexts/AuthContext";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { useScanResult, getStoredScanResult, isValidScanResult, normalizeScanResult } from "@/contexts/ScanResultContext";
 import { addSavedItem, removeSavedItem, setUserProfile } from "@/lib/firebase/firestore";
-import { isFirebaseConfigured } from "@/lib/firebase/client";
+import { isFirebaseConfigured } from "@/lib/firebase";
 import type { ScanAnalysis } from "@/lib/scan/types";
 import type { BetterAlternativeCard, BetterAlternativesPayload } from "@/lib/better-alternatives/types";
 

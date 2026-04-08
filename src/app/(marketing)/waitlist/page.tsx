@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { addDoc, collection, getDocs, limit, query, serverTimestamp, where } from "firebase/firestore";
-import { firestore } from "@/lib/firebase/client";
+import { firestore } from "@/lib/firebase";
 
 type SubmitState = "idle" | "submitting" | "success" | "duplicate" | "error";
 
