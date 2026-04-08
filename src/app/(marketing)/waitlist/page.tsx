@@ -45,6 +45,15 @@ export default function WaitlistPage() {
       setSubmitState("success");
       setFirstName("");
       setEmail("");
+
+      void fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName: trimmedFirstName,
+          email: normalizedEmail
+        })
+      }).catch((err) => console.error("Waitlist notification request failed:", err));
     } catch (error) {
       console.error("Failed to join waitlist:", error);
       setSubmitState("error");
