@@ -82,19 +82,20 @@ export function OnboardingAccountScreen() {
   }
 
   const handleGoogle = async () => {
-    console.log("sign in button clicked");
-    setError(null);
-    if (isConfigured && auth) {
-      try {
+    try {
+      console.log("sign in button clicked");
+      setError(null);
+      if (isConfigured && auth) {
         console.log("calling Firebase auth");
         await auth.signInWithGoogle();
         console.log("Firebase auth called", { method: "google" });
         router.push(returnTo);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Sign-in failed");
+        return;
       }
-    } else {
       router.push("/scan");
+    } catch (error) {
+      console.log("sign in error", error);
+      setError(error instanceof Error ? error.message : "Sign-in failed");
     }
   };
 
