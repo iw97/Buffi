@@ -6,7 +6,7 @@ import { useAuthOptional } from "@/contexts/AuthContext";
 import { safeReturnPath } from "@/lib/auth/returnTo";
 import { useSignIn } from "@/hooks/useSignIn";
 
-export function OnboardingAccountScreen() {
+export function SignInScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = safeReturnPath(searchParams.get("returnTo"), "/scan");
@@ -16,7 +16,7 @@ export function OnboardingAccountScreen() {
   const [magicEmail, setMagicEmail] = useState("");
   const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { handleGoogle: signInWithGoogle, handleEmailLink: sendMagicLink } = useSignIn();
+  const { handleGoogle, handleEmailLink } = useSignIn();
 
   const isConfigured = auth?.isConfigured ?? false;
 
@@ -32,43 +32,21 @@ export function OnboardingAccountScreen() {
   }
 
   if (isConfigured && user) {
-    const signedInAs = user.email?.trim() || user.displayName?.trim() || "your account";
-    return (
-      <div className="min-h-screen">
-        <div className="ob-shell">
-          <div className="ob-step-label" style={{ marginBottom: 12 }}>
-            You&apos;re signed in
-          </div>
-          <h2 className="ob-title">
-            Create your
-            <br />
-            <em>account.</em>
-          </h2>
-          <p className="ob-desc">
-            You&apos;re already signed in as <strong style={{ color: "var(--ivory)" }}>{signedInAs}</strong>.
-          </p>
-          <button className="ob-next" type="button" onClick={() => router.push(returnTo)}>
-            Continue →
-          </button>
-        </div>
-      </div>
-    );
+    router.replace(returnTo);
+    return null;
   }
 
   const onGoogle = async () => {
     try {
       setError(null);
-      const signedInUser = await signInWithGoogle();
-      const isNewUser =
-        !!signedInUser.metadata.creationTime &&
-        signedInUser.metadata.creationTime === signedInUser.metadata.lastSignInTime;
-      router.push(isNewUser ? "/scan" : returnTo);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Sign-in failed");
+      await handleGoogle();
+      router.push(returnTo);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Sign-in failed");
     }
   };
 
-  const handleSendSignInLink = async () => {
+  const onMagicLink = async () => {
     setError(null);
     const email = magicEmail.trim();
     if (!email) {
@@ -76,26 +54,22 @@ export function OnboardingAccountScreen() {
       return;
     }
     try {
-      await sendMagicLink(email, { returnTo, mode: "signup" });
+      await handleEmailLink(email, { returnTo, mode: "signin" });
       setLinkSentTo(email);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to send sign-in link");
     }
   };
 
-  const linkSentVisible = linkSentTo !== null;
-
   return (
     <div className="min-h-screen">
       <div className="ob-shell">
         <h2 className="ob-title">
-          Create your
+          Welcome
           <br />
-          <em>account.</em>
+          <em>back.</em>
         </h2>
-        <p className="ob-desc">
-          Free to join. No credit card needed.
-        </p>
+        <p className="ob-desc">Sign in to your Buffi account</p>
 
         <div className="auth-block">
           <button className="btn-google" type="button" onClick={onGoogle}>
@@ -115,38 +89,37 @@ export function OnboardingAccountScreen() {
             <div className="auth-divider-line" />
           </div>
 
-          {!linkSentVisible ? (
-            <div className="auth-input-wrap">
-              <div className="auth-input-label">Email Address</div>
-              <input
-                className="auth-input"
-                type="email"
-                placeholder="you@example.com"
-                value={magicEmail}
-                onChange={(e) => setMagicEmail(e.target.value)}
-              />
-            </div>
+          {!linkSentTo ? (
+            <>
+              <div className="auth-input-wrap">
+                <div className="auth-input-label">Email Address</div>
+                <input
+                  className="auth-input"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={magicEmail}
+                  onChange={(e) => setMagicEmail(e.target.value)}
+                />
+              </div>
+              <button type="button" className="btn-primary" style={{ width: "100%", marginTop: 12 }} onClick={onMagicLink}>
+                Send magic link
+              </button>
+            </>
           ) : (
             <p className="auth-legal" style={{ marginTop: 0, marginBottom: 8 }}>
-              Check your email — we sent you a link to sign in or create your account at{" "}
+              Check your email — we sent you a sign-in link at{" "}
               <strong style={{ color: "var(--ivory)" }}>{linkSentTo}</strong>.
             </p>
           )}
 
-          {!linkSentVisible ? (
-            <button type="button" className="btn-primary" style={{ width: "100%", marginTop: 12 }} onClick={handleSendSignInLink}>
-              Send magic link
-            </button>
-          ) : null}
-
           <p className="auth-legal" style={{ marginTop: 12 }}>
-            Already have an account?{" "}
+            New to Buffi?{" "}
             <button
               type="button"
               className="auth-tab"
-              onClick={() => router.push(`/signin?${new URLSearchParams({ returnTo }).toString()}`)}
+              onClick={() => router.push(`/onboarding/account?${new URLSearchParams({ returnTo }).toString()}`)}
             >
-              Sign in
+              Create account
             </button>
           </p>
         </div>
@@ -154,4 +127,3 @@ export function OnboardingAccountScreen() {
     </div>
   );
 }
-

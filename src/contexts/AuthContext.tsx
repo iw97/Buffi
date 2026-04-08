@@ -96,6 +96,13 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
         }
         unsubscribe = onAuthStateChanged(auth, (u) => {
           console.log("auth state changed", u);
+          if (typeof document !== "undefined") {
+            if (u) {
+              document.cookie = "buffi_auth=1; path=/; max-age=2592000; samesite=lax";
+            } else {
+              document.cookie = "buffi_auth=; path=/; max-age=0; samesite=lax";
+            }
+          }
           setUser(TESTING_FORCE_LOGGED_IN && !u ? MOCK_USER : u);
           setProfile(null);
           setLoading(false);

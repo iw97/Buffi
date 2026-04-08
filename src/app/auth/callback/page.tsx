@@ -2,15 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { User } from "firebase/auth";
 import { useAuthOptional } from "@/contexts/AuthContext";
-import { BUFFI_SIGNIN_EMAIL_KEY } from "@/lib/firebase/client";
+import { BUFFI_SIGNIN_EMAIL_KEY, firebaseAuth } from "@/lib/firebase/client";
 import { safeReturnPath } from "@/lib/auth/returnTo";
 
 type Status = "checking" | "need-email" | "signing-in" | "success" | "error";
 
-function afterSignInPath(): string {
+function afterSignInPath(user: User | null): string {
   if (typeof window === "undefined") return "/scan";
-  return safeReturnPath(new URL(window.location.href).searchParams.get("returnTo"), "/scan");
+  const url = new URL(window.location.href);
+  const returnTo = safeReturnPath(url.searchParams.get("returnTo"), "/scan");
+  const mode = url.searchParams.get("mode");
+  if (mode === "signup") {
+    const created = user?.metadata.creationTime ?? null;
+    const last = user?.metadata.lastSignInTime ?? null;
+    const isBrandNew = !!created && created === last;
+    return isBrandNew ? "/scan" : returnTo;
+  }
+  return returnTo;
 }
 
 export default function AuthCallbackPage() {
@@ -45,7 +55,7 @@ export default function AuthCallbackPage() {
         .completeSignInWithEmailLink(storedEmail, fullUrl)
         .then(() => {
           setStatus("success");
-          router.replace(afterSignInPath());
+          router.replace(afterSignInPath(firebaseAuth?.currentUser ?? null));
         })
         .catch(() => {
           setStatus("error");
@@ -68,7 +78,7 @@ export default function AuthCallbackPage() {
     try {
       await auth.completeSignInWithEmailLink(email, window.location.href);
       setStatus("success");
-      router.replace(afterSignInPath());
+      router.replace(afterSignInPath(firebaseAuth?.currentUser ?? null));
     } catch {
       setStatus("error");
       setErrorMessage("This link has expired or already been used. Request a new one.");
