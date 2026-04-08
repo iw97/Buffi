@@ -82,10 +82,13 @@ export function OnboardingAccountScreen() {
   }
 
   const handleGoogle = async () => {
+    console.log("sign in button clicked");
     setError(null);
     if (isConfigured && auth) {
       try {
+        console.log("calling Firebase auth");
         await auth.signInWithGoogle();
+        console.log("Firebase auth called", { method: "google" });
         router.push(returnTo);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Sign-in failed");
@@ -128,6 +131,7 @@ export function OnboardingAccountScreen() {
   };
 
   const handleSendSignInLink = async () => {
+    console.log("sign in button clicked");
     setError(null);
     const email = magicEmail.trim();
     if (!email) {
@@ -139,7 +143,9 @@ export function OnboardingAccountScreen() {
       return;
     }
     try {
+      console.log("calling Firebase auth");
       await auth.sendSignInLinkToEmail(email, returnTo);
+      console.log("Firebase auth called", { method: "magic-link", email });
       try {
         window.localStorage.setItem(BUFFI_SIGNIN_EMAIL_KEY, email);
       } catch {

@@ -95,6 +95,7 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
           return;
         }
         unsubscribe = onAuthStateChanged(auth, (u) => {
+          console.log("auth state changed", u);
           setUser(TESTING_FORCE_LOGGED_IN && !u ? MOCK_USER : u);
           setProfile(null);
           setLoading(false);
@@ -123,7 +124,9 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   const signInWithGoogle = useCallback(async () => {
     if (!firebaseAuth || !isConfigured) return;
     const provider = new GoogleAuthProvider();
+    console.log("calling Firebase auth");
     const result = await signInWithPopup(firebaseAuth, provider);
+    console.log("Firebase auth called", result);
     const u = result.user;
     await setUserProfile(u.uid, {
       displayName: u.displayName ?? null,
@@ -166,10 +169,12 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
       if (rt && rt.startsWith("/") && !rt.startsWith("//") && !rt.includes("://")) {
         callbackUrl += `?returnTo=${encodeURIComponent(rt)}`;
       }
+      console.log("calling Firebase auth");
       await sendSignInLinkToEmail(firebaseAuth, email.trim(), {
         url: callbackUrl,
         handleCodeInApp: true
       });
+      console.log("Firebase auth called", { method: "magic-link", email: email.trim() });
     },
     [isConfigured]
   );
