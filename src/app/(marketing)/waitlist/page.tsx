@@ -2,8 +2,6 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { addDoc, collection, getDocs, limit, query, serverTimestamp, where } from "firebase/firestore";
-import { firestore } from "@/lib/firebase";
 
 type SubmitState = "idle" | "submitting" | "success" | "duplicate" | "error";
 
@@ -11,51 +9,55 @@ export default function WaitlistPage() {
   const [firstName, setFirstName] = useState("");
   const [email, setEmail] = useState("");
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-
-    if (!firestore) {
-      setSubmitState("error");
-      return;
-    }
 
     const trimmedFirstName = firstName.trim();
     const normalizedEmail = email.trim().toLowerCase();
     if (!trimmedFirstName || !normalizedEmail) return;
 
     setSubmitState("submitting");
+    setErrorDetail(null);
 
     try {
-      const waitlistRef = collection(firestore, "waitlist");
-      const existingQuery = query(waitlistRef, where("email", "==", normalizedEmail), limit(1));
-      const existing = await getDocs(existingQuery);
-
-      if (!existing.empty) {
-        setSubmitState("duplicate");
-        return;
-      }
-
-      await addDoc(waitlistRef, {
-        firstName: trimmedFirstName,
-        email: normalizedEmail,
-        joinedAt: serverTimestamp()
-      });
-
-      setSubmitState("success");
-      setFirstName("");
-      setEmail("");
-
-      void fetch("/api/waitlist", {
+      const res = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           firstName: trimmedFirstName,
           email: normalizedEmail
         })
-      }).catch((err) => console.error("Waitlist notification request failed:", err));
+      });
+
+      const data = (await res.json()) as {
+        ok?: boolean;
+        duplicate?: boolean;
+        error?: string;
+        message?: string;
+      };
+
+      if (!res.ok || data.ok === false) {
+        console.error("Waitlist API error:", res.status, data);
+        setErrorDetail(
+          typeof data.message === "string" ? data.message : "Something went wrong. Try again."
+        );
+        setSubmitState("error");
+        return;
+      }
+
+      if (data.duplicate) {
+        setSubmitState("duplicate");
+        return;
+      }
+
+      setSubmitState("success");
+      setFirstName("");
+      setEmail("");
     } catch (error) {
       console.error("Failed to join waitlist:", error);
+      setErrorDetail(null);
       setSubmitState("error");
     }
   }
@@ -103,7 +105,9 @@ export default function WaitlistPage() {
             <p className="waitlist-status-message">You&apos;re already on the list.</p>
           ) : null}
           {submitState === "error" ? (
-            <p className="waitlist-status-message">Something went wrong. Try again.</p>
+            <p className="waitlist-status-message">
+              {errorDetail ?? "Something went wrong. Try again."}
+            </p>
           ) : null}
 
           <button type="submit" className="waitlist-submit" disabled={submitState === "submitting"}>

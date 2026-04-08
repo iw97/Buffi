@@ -43,11 +43,14 @@ export default function AuthCallbackPage() {
 
     if (!isLink) {
       setStatus("error");
-      setErrorMessage("This page is for completing sign-in. Use the link from your email.");
+      setErrorMessage(
+        "This page is for completing sign-in. Use the link from your email.",
+      );
       return;
     }
 
-    const storedEmail = window.localStorage.getItem(BUFFI_SIGNIN_EMAIL_KEY)?.trim() || null;
+    const storedEmail =
+      window.localStorage.getItem(BUFFI_SIGNIN_EMAIL_KEY)?.trim() || null;
 
     if (storedEmail) {
       setStatus("signing-in");
@@ -59,7 +62,9 @@ export default function AuthCallbackPage() {
         })
         .catch(() => {
           setStatus("error");
-          setErrorMessage("This link has expired or already been used. Request a new one.");
+          setErrorMessage(
+            "This link has expired or already been used. Request a new one.",
+          );
         });
       return;
     }
@@ -81,7 +86,9 @@ export default function AuthCallbackPage() {
       router.replace(afterSignInPath(firebaseAuth?.currentUser ?? null));
     } catch {
       setStatus("error");
-      setErrorMessage("This link has expired or already been used. Request a new one.");
+      setErrorMessage(
+        "This link has expired or already been used. Request a new one.",
+      );
     }
   }
 
@@ -103,7 +110,8 @@ export default function AuthCallbackPage() {
             Enter your email
           </h2>
           <p className="auth-legal" style={{ marginBottom: 16 }}>
-            You opened this link on a different device. Enter the email address where we sent the sign-in link.
+            You opened this link on a different device. Enter the email address
+            where we sent the sign-in link.
           </p>
           <form onSubmit={handleSubmitEmail}>
             <div className="auth-input-wrap">
@@ -118,7 +126,11 @@ export default function AuthCallbackPage() {
                 autoFocus
               />
             </div>
-            <button type="submit" className="btn-primary" style={{ width: "100%", marginTop: 12 }}>
+            <button
+              type="submit"
+              className="btn-primary"
+              style={{ width: "100%", marginTop: 12 }}
+            >
               Continue
             </button>
           </form>
@@ -131,10 +143,17 @@ export default function AuthCallbackPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6">
         <div className="auth-block" style={{ maxWidth: 360 }}>
-          <p className="auth-legal" style={{ color: "var(--red)", marginBottom: 16 }}>
+          <p
+            className="auth-legal"
+            style={{ color: "var(--red)", marginBottom: 16 }}
+          >
             {errorMessage}
           </p>
-          <a href="/onboarding/account" className="btn-primary" style={{ display: "inline-block" }}>
+          <a
+            href="/onboarding/account"
+            className="btn-primary"
+            style={{ display: "inline-block" }}
+          >
             Request a new link
           </a>
         </div>
