@@ -3,6 +3,7 @@
 import { GoogleAuthProvider, sendSignInLinkToEmail, signInWithPopup, type User } from "firebase/auth";
 import { auth, BUFFI_SIGNIN_EMAIL_KEY } from "@/lib/firebase";
 import { safeReturnPath } from "@/lib/auth/returnTo";
+import { getPublicAppUrl } from "@/lib/publicAppUrl";
 
 type SignInMode = "signup" | "signin";
 
@@ -26,7 +27,8 @@ export function useSignIn() {
     if (!trimmed) throw new Error("Email is required");
 
     const returnTo = safeReturnPath(options.returnTo, "/scan");
-    const callback = new URL("/auth/callback", window.location.origin);
+    const base = getPublicAppUrl();
+    const callback = new URL("/auth/callback", `${base}/`);
     callback.searchParams.set("mode", options.mode);
     callback.searchParams.set("returnTo", returnTo);
 

@@ -3,8 +3,9 @@ import { Cormorant_Garamond, DM_Mono, DM_Sans } from "next/font/google";
 
 import "./globals.css";
 import { Providers } from "@/components/Providers";
+import { getPublicAppUrl } from "@/lib/publicAppUrl";
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://buffi.app";
+const appUrl = getPublicAppUrl();
 
 const cormorant = Cormorant_Garamond({
   subsets: ["latin"],

@@ -26,6 +26,7 @@ import {
   isFirebaseConfigured,
   BUFFI_SIGNIN_EMAIL_KEY
 } from "@/lib/firebase";
+import { getPublicAppUrl } from "@/lib/publicAppUrl";
 import { setUserProfile, getUserProfile, ensureUserDocument } from "@/lib/firebase/firestore";
 import type { UserProfile } from "@/lib/firebase/types";
 
@@ -168,19 +169,16 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   const sendSignInLinkToEmailAction = useCallback(
     async (email: string, returnTo?: string) => {
       if (!auth || !isConfigured) return;
-      const baseUrl = typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL ?? "";
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || baseUrl;
-      let callbackUrl = `${appUrl.replace(/\/$/, "")}/auth/callback`;
+      const base = getPublicAppUrl();
+      let callbackUrl = `${base}/auth/callback`;
       const rt = returnTo?.trim();
       if (rt && rt.startsWith("/") && !rt.startsWith("//") && !rt.includes("://")) {
         callbackUrl += `?returnTo=${encodeURIComponent(rt)}`;
       }
-      console.log("calling Firebase auth");
       await sendSignInLinkToEmail(auth, email.trim(), {
         url: callbackUrl,
         handleCodeInApp: true
       });
-      console.log("Firebase auth called", { method: "magic-link", email: email.trim() });
     },
     [isConfigured]
   );

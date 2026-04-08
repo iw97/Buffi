@@ -35,7 +35,7 @@ export const auth: Auth | null = app ? getAuth(app) : null;
 export const firestore: Firestore | null = app ? getFirestore(app) : null;
 
 /**
- * Run on client before relying on persisted sessions (e.g. Netlify previews).
+ * Run on client before relying on persisted sessions (e.g. Vercel previews).
  */
 export const firebaseAuthReady =
   auth && typeof window !== "undefined"
