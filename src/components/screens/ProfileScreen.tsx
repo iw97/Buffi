@@ -19,14 +19,11 @@ const MOCK_DISPLAY = {
 export function ProfileScreen() {
   const router = useRouter();
   const auth = useAuthOptional();
-  const user = auth?.user ?? null;
+  const user = TESTING_ALWAYS_SHOW_LOGGED_IN ? null : (auth?.user ?? null);
   const profile = auth?.profile;
   const loading = auth?.loading ?? true;
-  const isConfigured = auth?.isConfigured ?? false;
 
-  const showAsLoggedIn = TESTING_ALWAYS_SHOW_LOGGED_IN || !!user;
-
-  if (!showAsLoggedIn && loading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="auth-legal">Loading…</p>
@@ -34,7 +31,7 @@ export function ProfileScreen() {
     );
   }
 
-  if (!showAsLoggedIn && !user && isConfigured) {
+  if (!user && !TESTING_ALWAYS_SHOW_LOGGED_IN) {
     return (
       <div className="min-h-screen flex items-center justify-center px-8 text-center">
         <div style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.7 }}>
@@ -58,24 +55,11 @@ export function ProfileScreen() {
     );
   }
 
-  if (!showAsLoggedIn && !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-8 text-center">
-        <div style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.7 }}>
-          You&apos;re logged out.
-          <div style={{ marginTop: 14 }}>
-            <button className="btn-primary" type="button" onClick={() => router.push("/")}>
-              HOME
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const displayName = showAsLoggedIn && !user ? MOCK_DISPLAY.displayName : (user!.displayName ?? profile?.displayName ?? user!.email?.split("@")[0] ?? "User");
-  const initial = showAsLoggedIn && !user ? MOCK_DISPLAY.initial : displayName.charAt(0).toUpperCase();
-  const email = showAsLoggedIn && !user ? MOCK_DISPLAY.email : (user!.email ?? profile?.email ?? "");
+  const displayName = TESTING_ALWAYS_SHOW_LOGGED_IN
+    ? MOCK_DISPLAY.displayName
+    : (user!.displayName ?? profile?.displayName ?? user!.email?.split("@")[0] ?? "User");
+  const initial = TESTING_ALWAYS_SHOW_LOGGED_IN ? MOCK_DISPLAY.initial : displayName.charAt(0).toUpperCase();
+  const email = TESTING_ALWAYS_SHOW_LOGGED_IN ? MOCK_DISPLAY.email : (user!.email ?? profile?.email ?? "");
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -94,20 +78,20 @@ export function ProfileScreen() {
           </div>
         </div>
         <div className="profile-since">
-          Member since {showAsLoggedIn && !user ? MOCK_DISPLAY.memberSince : (user!.metadata?.creationTime ? new Date(user!.metadata.creationTime).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "—")}
+          Member since {TESTING_ALWAYS_SHOW_LOGGED_IN ? MOCK_DISPLAY.memberSince : (user!.metadata?.creationTime ? new Date(user!.metadata.creationTime).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "—")}
         </div>
 
         <div className="profile-stats-row">
           <div className="profile-stat">
-            <div className="profile-stat-val">{showAsLoggedIn && !user ? MOCK_DISPLAY.savedCount : (profile?.savedCount ?? 0)}</div>
+            <div className="profile-stat-val">{TESTING_ALWAYS_SHOW_LOGGED_IN ? MOCK_DISPLAY.savedCount : (profile?.savedCount ?? 0)}</div>
             <div className="profile-stat-key">Saved</div>
           </div>
           <div className="profile-stat">
-            <div className="profile-stat-val">{showAsLoggedIn && !user ? MOCK_DISPLAY.scannedCount : (profile?.scannedCount ?? 0)}</div>
+            <div className="profile-stat-val">{TESTING_ALWAYS_SHOW_LOGGED_IN ? MOCK_DISPLAY.scannedCount : (profile?.scannedCount ?? 0)}</div>
             <div className="profile-stat-key">Scanned</div>
           </div>
           <div className="profile-stat">
-            <div className="profile-stat-val">${showAsLoggedIn && !user ? MOCK_DISPLAY.trapsAvoidedDollars : (profile?.trapsAvoidedDollars ?? 0)}</div>
+            <div className="profile-stat-val">${TESTING_ALWAYS_SHOW_LOGGED_IN ? MOCK_DISPLAY.trapsAvoidedDollars : (profile?.trapsAvoidedDollars ?? 0)}</div>
             <div className="profile-stat-key">Traps Avoided</div>
           </div>
         </div>
@@ -123,11 +107,11 @@ export function ProfileScreen() {
             </div>
             <div className="menu-item-text">
               <div className="menu-item-label">Saved Items</div>
-              <div className="menu-item-sub">{(showAsLoggedIn && !user ? MOCK_DISPLAY.savedCount : (profile?.savedCount ?? 0))} items in your collection</div>
+              <div className="menu-item-sub">{(TESTING_ALWAYS_SHOW_LOGGED_IN ? MOCK_DISPLAY.savedCount : (profile?.savedCount ?? 0))} items in your collection</div>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span className="menu-item-badge">{showAsLoggedIn && !user ? MOCK_DISPLAY.savedCount : (profile?.savedCount ?? 0)}</span>
+            <span className="menu-item-badge">{TESTING_ALWAYS_SHOW_LOGGED_IN ? MOCK_DISPLAY.savedCount : (profile?.savedCount ?? 0)}</span>
             <span className="menu-item-arrow" aria-hidden>
               →
             </span>

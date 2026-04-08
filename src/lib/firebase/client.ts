@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { browserLocalPersistence, getAuth, setPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -29,6 +29,16 @@ export const firebaseApp =
 
 export const firebaseAuth = firebaseApp ? getAuth(firebaseApp) : null;
 export const firestore = firebaseApp ? getFirestore(firebaseApp) : null;
+
+/**
+ * Ensure auth state persists across reloads/previews.
+ * This runs during Firebase initialization, before app auth operations.
+ */
+export const firebaseAuthReady = firebaseAuth
+  ? setPersistence(firebaseAuth, browserLocalPersistence).catch((e) => {
+      console.warn("[firebase] failed to set browserLocalPersistence:", e);
+    })
+  : Promise.resolve();
 
 /** localStorage key for email when completing email-link sign-in (e.g. from another device). */
 export const BUFFI_SIGNIN_EMAIL_KEY = "buffiSignInEmail";

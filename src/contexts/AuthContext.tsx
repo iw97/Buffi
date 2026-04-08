@@ -20,8 +20,12 @@ import {
   isSignInWithEmailLink as firebaseIsSignInWithEmailLink,
   signInWithEmailLink as firebaseSignInWithEmailLink
 } from "firebase/auth";
-/** Top-level `firebaseAuth` is for sign-in/out actions; listener uses dynamic import so the client always attaches after `window` + app init. */
-import { firebaseAuth, isFirebaseConfigured, BUFFI_SIGNIN_EMAIL_KEY } from "@/lib/firebase/client";
+import {
+  firebaseAuth,
+  firebaseAuthReady,
+  isFirebaseConfigured,
+  BUFFI_SIGNIN_EMAIL_KEY
+} from "@/lib/firebase/client";
 import { setUserProfile, getUserProfile, ensureUserDocument } from "@/lib/firebase/firestore";
 import type { UserProfile } from "@/lib/firebase/types";
 
@@ -82,8 +86,9 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
     let cancelled = false;
     let unsubscribe: (() => void) | undefined;
 
-    import("@/lib/firebase/client")
-      .then(({ firebaseAuth: auth }) => {
+    firebaseAuthReady
+      .then(() => {
+        const auth = firebaseAuth;
         if (cancelled) return;
         if (!auth) {
           setLoading(false);
