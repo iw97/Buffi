@@ -2,7 +2,8 @@
  * Zara-specific extraction: internal JSON APIs first (JS-heavy PDP), then HTML, Claude title parse, with logging.
  */
 
-import { parseFiberCompositionFromZaraTitle } from "./analyze";
+import { parseFiberCompositionFromZaraContext } from "./analyze";
+import { getGoogleShoppingResults } from "./serpapi";
 
 const LOG = "[zara]";
 
@@ -23,7 +24,8 @@ export type ZaraScrapeMethod =
   | "zara_extra_detail"
   | "zara_itxrest_detail"
   | "zara_html_dom"
-  | "zara_api_merged";
+  | "zara_api_merged"
+  | "zara_slug_serpapi";
 
 function normalizePrice(n: number): number | undefined {
   if (!Number.isFinite(n) || n <= 0 || n > 100_000) return undefined;
@@ -43,6 +45,25 @@ export function extractZaraProductId(url: string): string | null {
     return m ? m[1].toLowerCase() : null;
   } catch {
     return null;
+  }
+}
+
+/** e.g. /100-herringbone-linen-fitted-blazer-p02633808.html -> "100 Herringbone Linen Fitted Blazer" */
+export function extractZaraNameFromUrlSlug(url: string): string | undefined {
+  try {
+    const pathname = new URL(url).pathname;
+    const leaf = pathname.split("/").filter(Boolean).pop();
+    if (!leaf) return undefined;
+    const withoutHtml = leaf.replace(/\.html$/i, "");
+    const noProductId = withoutHtml.replace(/-p\d{6,}$/i, "");
+    const words = noProductId
+      .split("-")
+      .map((w) => w.trim())
+      .filter(Boolean);
+    if (!words.length) return undefined;
+    return words.map((w) => (w.length > 0 ? w[0].toUpperCase() + w.slice(1) : w)).join(" ").trim();
+  } catch {
+    return undefined;
   }
 }
 
@@ -208,6 +229,24 @@ export interface ZaraScrapeResult {
   method: ZaraScrapeMethod;
 }
 
+async function fetchZaraSerpSignals(nameFromSlug: string): Promise<{
+  price?: number;
+  description?: string;
+}> {
+  const rows = await getGoogleShoppingResults(`Zara ${nameFromSlug}`, 3);
+  if (!rows.length) return {};
+  const firstWithPrice = rows.find((r) => typeof r.price === "number" && r.price > 0);
+  const description = rows
+    .map((r) => [r.title?.trim(), r.source?.trim()].filter(Boolean).join(" — "))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join(" | ");
+  return {
+    price: firstWithPrice?.price ?? undefined,
+    description: description || undefined
+  };
+}
+
 async function scrapeZaraHtml(url: string): Promise<{
   name?: string;
   materials?: string;
@@ -261,6 +300,7 @@ function resolveZaraMethod(extraOk: boolean, itxOk: boolean, htmlWasOnlySource: 
  */
 export async function scrapeZaraFromUrl(productPageUrl: string): Promise<ZaraScrapeResult | null> {
   const id = extractZaraProductId(productPageUrl);
+  const slugName = extractZaraNameFromUrlSlug(productPageUrl);
   const locale = zaraLocalePrefix(productPageUrl);
   const origin = (() => {
     try {
@@ -282,6 +322,26 @@ export async function scrapeZaraFromUrl(productPageUrl: string): Promise<ZaraScr
   let extraDetailComposition = false;
   let itxrestComposition = false;
   let htmlComposition = false;
+  let serpOk = false;
+  let serpDescription: string | undefined;
+
+  if (slugName) {
+    name = slugName;
+    const serp = await fetchZaraSerpSignals(slugName);
+    if (serp.price != null || serp.description) {
+      serpOk = true;
+      if (serp.price != null) price = serp.price;
+      if (serp.description) serpDescription = serp.description;
+      description = description || serp.description;
+      console.log(LOG, "slug+SerpAPI succeeded", {
+        nameFromSlug: slugName.slice(0, 60),
+        hasSerpPrice: serp.price != null,
+        hasSerpDescription: !!serp.description
+      });
+    } else {
+      console.log(LOG, "slug extracted, SerpAPI empty", { nameFromSlug: slugName.slice(0, 60) });
+    }
+  }
 
   if (id) {
     const extraUrls = [
@@ -376,20 +436,25 @@ export async function scrapeZaraFromUrl(productPageUrl: string): Promise<ZaraScr
   else if (itxrestComposition) compositionFrom = "itxrest";
   else if (htmlComposition) compositionFrom = "html";
 
-  const method = resolveZaraMethod(extraOk, itxOk, htmlWasOnlySource);
+  let method = resolveZaraMethod(extraOk, itxOk, htmlWasOnlySource);
   let usedClaudeForComposition = false;
 
   if (!materials?.trim() && name?.trim()) {
-    const fromClaude = await parseFiberCompositionFromZaraTitle(name);
+    const fromClaude = await parseFiberCompositionFromZaraContext({
+      productName: slugName || name,
+      searchDescription: [serpDescription, description].filter(Boolean).join("\n")
+    });
     if (fromClaude) {
       materials = fromClaude;
       usedClaudeForComposition = true;
       compositionFrom = "claude_title";
-      console.log(LOG, "composition from Claude (product title)", { preview: fromClaude.slice(0, 80) });
+      console.log(LOG, "composition from Claude (slug + search description)", { preview: fromClaude.slice(0, 80) });
     } else {
       console.log(LOG, "Claude title composition: no fiber content inferred");
     }
   }
+
+  if (method === "zara_html_dom" && serpOk) method = "zara_slug_serpapi";
 
   if (!name && !materials && price == null) {
     console.log(LOG, "Zara scrape produced no usable fields");
@@ -400,6 +465,7 @@ export async function scrapeZaraFromUrl(productPageUrl: string): Promise<ZaraScr
     productId: id ?? "(none)",
     extraDetailOk: extraOk,
     itxrestOk: itxOk,
+    serpapiOk: serpOk,
     htmlDomOk: !!htmlPart,
     compositionSource: compositionFrom,
     scrapeMethod: method,

@@ -212,7 +212,7 @@ function analysisToSavedItem(a: ScanAnalysis) {
     verdictReason: a.verdictReason,
     tags: a.tags,
     isEstimated: true,
-    confidenceTier: 1
+    confidenceTier: a.confidenceTier ?? 1
   };
 }
 
@@ -548,6 +548,8 @@ export function BreakdownScreen() {
     ? result.certifications.filter((c): c is string => typeof c === "string" && c.trim().length > 0)
     : [];
   const showCertifiedMaterials = Boolean(result?.hasCertifiedMaterials) && certifications.length > 0;
+  const isZaraEstimatedComposition =
+    (result?.brand || "").trim().toLowerCase() === "zara" && (result?.confidenceTier ?? 0) >= 2;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -769,6 +771,11 @@ export function BreakdownScreen() {
 
         <div className="pad">
           <div className="section-eyebrow">— Fiber Composition</div>
+          {isZaraEstimatedComposition && (
+            <p className="better-alt-disclaimer">
+              Composition estimated from product name — scan the physical tag for exact materials
+            </p>
+          )}
           {showCertifiedMaterials && (
             <div className="certified-materials-wrap">
               <span className="certified-materials-badge">Certified materials</span>
@@ -784,7 +791,9 @@ export function BreakdownScreen() {
                     <div className="fiber-name">
                       {f.fiber} <span className={`fiber-badge ${kind}`}>{badgeForKind(kind)}</span>
                     </div>
-                    <div className="fiber-pct">{f.percentage}%</div>
+                    <div className="fiber-pct">
+                      {f.percentage}%{isZaraEstimatedComposition ? " Est." : ""}
+                    </div>
                   </div>
                   <div className="fiber-track">
                     <div className={`fiber-fill ${kind}`} data-width={f.percentage} />

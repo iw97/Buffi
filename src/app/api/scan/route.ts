@@ -3,7 +3,7 @@ import { scrapeProductFromUrl } from "@/lib/scan/scrape";
 import { getPriceFromGoogleShopping } from "@/lib/scan/serpapi";
 import { lookupBarcode } from "@/lib/scan/barcode";
 import { analyzeWithClaude, analyzeMinimalScan } from "@/lib/scan/analyze";
-import type { RawProductData, ScanResult, ScanError } from "@/lib/scan/types";
+import type { RawProductData, ScanResult, ScanError, ScanAnalysis } from "@/lib/scan/types";
 import { extractGtinAndUpsertMapping } from "@/lib/firebase/productMappingsServer";
 import {
   getCacheTtlDays,
@@ -11,6 +11,15 @@ import {
   productScanToScanAnalysis,
   recordProductScan
 } from "@/lib/firebase/productScansServer";
+
+function isZaraUrl(url: string | undefined): boolean {
+  return typeof url === "string" && /(^|\.)zara\.com$/i.test(new URL(url).hostname);
+}
+
+function applyZaraConfidence(analysis: ScanAnalysis, sourceUrl: string): ScanAnalysis {
+  if (!isZaraUrl(sourceUrl)) return analysis;
+  return { ...analysis, confidenceTier: 2 };
+}
 
 export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | ScanError | unknown>> {
   console.log("[api/scan] POST received");
@@ -81,7 +90,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
         const cached = await getCachedProductScanIfFresh(url, ttlDays);
         if (cached) {
           console.log(`[scan] cache hit for ${url}`);
-          const analysis = productScanToScanAnalysis(cached);
+          const analysis = applyZaraConfidence(productScanToScanAnalysis(cached), url);
           return NextResponse.json({ ok: true, source: "cache", analysis });
         }
       } catch (cacheErr) {
@@ -101,9 +110,9 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
       }
       let scrapedWithPrice = { ...scraped };
       const query = [scraped.brand, scraped.name].filter(Boolean).join(" ").trim();
-      const isZaraUrl = url.toLowerCase().includes("zara.com");
+      const isZara = isZaraUrl(url);
 
-      if (isZaraUrl && query) {
+      if (isZara && query) {
         const prior = scraped.price;
         const serpResult = await getPriceFromGoogleShopping(query);
         if (serpResult) {
@@ -168,7 +177,10 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
     }
 
     console.log("[api/scan] calling analyzeWithClaude", selectedValues.length ? { selectedValuesCount: selectedValues.length } : "");
-    const analysis = await analyzeWithClaude(raw, selectedValues);
+    let analysis = await analyzeWithClaude(raw, selectedValues);
+    if (raw.source === "url" && typeof raw.url === "string") {
+      analysis = applyZaraConfidence(analysis, raw.url);
+    }
     if (raw.imageUrl != null) analysis.imageUrl = raw.imageUrl;
     if (raw.source === "url" && typeof raw.url === "string" && raw.url.trim()) {
       const u = raw.url.trim();

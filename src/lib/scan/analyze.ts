@@ -371,12 +371,17 @@ export async function analyzeMinimalScan(input: {
 }
 
 /**
- * When Zara PDP/API does not expose composition, infer a care-label-style composition string
- * from the product title (e.g. "100% LINEN HERRINGBONE BLAZER" → "100% linen").
+ * Infer Zara composition from URL slug product name + optional search snippet.
+ * Returns a care-label-style composition string, if inferable.
  */
-export async function parseFiberCompositionFromZaraTitle(productTitle: string): Promise<string | undefined> {
+export async function parseFiberCompositionFromZaraContext(input: {
+  productName: string;
+  searchDescription?: string;
+}): Promise<string | undefined> {
   const key = process.env.ANTHROPIC_API_KEY;
-  if (!key?.trim() || !productTitle.trim()) return undefined;
+  const productName = input.productName.trim();
+  const searchDescription = input.searchDescription?.trim();
+  if (!key?.trim() || !productName) return undefined;
 
   const client = new Anthropic({ apiKey: key });
   const controller = new AbortController();
@@ -390,7 +395,19 @@ export async function parseFiberCompositionFromZaraTitle(productTitle: string): 
         messages: [
           {
             role: "user",
-            content: `Zara product title (may embed fiber content at the start):\n"${productTitle.trim()}"\n\nIf the title states fiber percentages or materials (e.g. "100% LINEN", "52% COTTON 48% POLYESTER"), return ONLY valid JSON: {"composition":"<single string suitable for a care label, same language/units as in title>"}.\nIf no fiber or material content can be inferred from the title, return {"composition":null}.\nNo markdown, no explanation.`
+            content: `Extract fiber composition from this Zara product name and description. Zara often includes fiber content in the product name itself (e.g. 100% LINEN, WOOL BLEND, FAUX LEATHER). Return your best estimate with confidence tier 2 if inferred from name only.
+
+Product name:
+"${productName}"
+
+Search/description context:
+"${searchDescription || "(none)"}"
+
+Respond ONLY as valid JSON:
+{"composition":"<single string suitable for a care label>","confidenceTier":2}
+If no fiber/material clue is inferable, return:
+{"composition":null,"confidenceTier":2}
+No markdown. No explanation.`
           }
         ]
       },
@@ -406,13 +423,13 @@ export async function parseFiberCompositionFromZaraTitle(productTitle: string): 
       .trim();
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return undefined;
-    const parsed = JSON.parse(jsonMatch[0]) as { composition?: string | null };
+    const parsed = JSON.parse(jsonMatch[0]) as { composition?: string | null; confidenceTier?: number };
     const c = parsed.composition;
     if (typeof c !== "string" || !c.trim()) return undefined;
     return c.trim().slice(0, 500);
   } catch (e) {
     clearTimeout(timeout);
-    console.warn("[analyze] parseFiberCompositionFromZaraTitle failed:", (e as Error).message);
+    console.warn("[analyze] parseFiberCompositionFromZaraContext failed:", (e as Error).message);
     return undefined;
   }
 }
