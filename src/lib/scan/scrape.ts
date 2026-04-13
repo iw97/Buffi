@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { cleanProductUrl } from "./cleanProductUrl";
 import { scrapeZaraFromUrl } from "./zara";
 
 const LOG_PREFIX = "[scrape]";
@@ -119,11 +120,20 @@ export async function scrapeProductFromUrl(url: string): Promise<{
   description?: string;
   imageUrl?: string | null;
 } | null> {
-  const parsedUrl = new URL(url);
+  const cleaned = cleanProductUrl(url);
+  console.log(LOG_PREFIX, "URL cleaned:", url.trim(), "→", cleaned);
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(cleaned);
+  } catch {
+    console.log(LOG_PREFIX, "invalid URL after cleaning");
+    return null;
+  }
   const host = parsedUrl.hostname.toLowerCase();
 
   // Shopify: try .json endpoint first (returns price when store allows it; image from images[0].src)
-  const shopifyResult = await fetchShopifyProductJson(url);
+  const shopifyResult = await fetchShopifyProductJson(cleaned);
   if (shopifyResult && (shopifyResult.name || shopifyResult.brand || shopifyResult.price != null)) {
     const out = {
       brand: shopifyResult.brand,
@@ -133,7 +143,7 @@ export async function scrapeProductFromUrl(url: string): Promise<{
       description: shopifyResult.description,
       imageUrl: shopifyResult.imageUrl ?? null
     };
-    console.log(LOG_PREFIX, "extracted (Shopify .json)", url.slice(0, 80), "->", {
+    console.log(LOG_PREFIX, "extracted (Shopify .json)", cleaned.slice(0, 80), "->", {
       brand: out.brand ?? "(missing)",
       name: out.name?.slice(0, 50) ?? "(missing)",
       price: out.price ?? "(missing)",
@@ -144,7 +154,7 @@ export async function scrapeProductFromUrl(url: string): Promise<{
   }
 
   if (host.includes("zara.com")) {
-    const zara = await scrapeZaraFromUrl(url);
+    const zara = await scrapeZaraFromUrl(cleaned);
     if (zara && (zara.name || zara.brand)) {
       const out = {
         brand: zara.brand,
@@ -154,7 +164,7 @@ export async function scrapeProductFromUrl(url: string): Promise<{
         description: zara.description,
         imageUrl: zara.imageUrl ?? null
       };
-      console.log(LOG_PREFIX, "extracted (Zara)", url.slice(0, 80), "scrapeMethod=", zara.method, "->", {
+      console.log(LOG_PREFIX, "extracted (Zara)", cleaned.slice(0, 80), "scrapeMethod=", zara.method, "->", {
         brand: out.brand ?? "(missing)",
         name: out.name?.slice(0, 50) ?? "(missing)",
         price: out.price ?? "(missing)",
@@ -163,10 +173,10 @@ export async function scrapeProductFromUrl(url: string): Promise<{
       });
       return out;
     }
-    console.log(LOG_PREFIX, "Zara-specific scrape empty; falling back to generic HTML", url.slice(0, 80));
+    console.log(LOG_PREFIX, "Zara-specific scrape empty; falling back to generic HTML", cleaned.slice(0, 80));
   }
 
-  const res = await fetch(url, {
+  const res = await fetch(cleaned, {
     headers: FETCH_HEADERS,
     signal: AbortSignal.timeout(15000)
   });
@@ -257,7 +267,7 @@ export async function scrapeProductFromUrl(url: string): Promise<{
   if (!name && !brand) return null;
 
   const out = { brand, name, materials, description, imageUrl };
-  console.log(LOG_PREFIX, "extracted from HTML", url.slice(0, 80), "->", {
+  console.log(LOG_PREFIX, "extracted from HTML", cleaned.slice(0, 80), "->", {
     brand: out.brand ?? "(missing)",
     name: out.name?.slice(0, 50) ?? "(missing)",
     hasMaterials: !!out.materials,

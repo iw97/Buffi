@@ -11,12 +11,13 @@ import {
   type ProductScanLatestSnapshot,
   type VerdictDistribution
 } from "./types";
+import { cleanProductUrl } from "@/lib/scan/cleanProductUrl";
 
 const LOG = "[productScans]";
 
-/** Normalize URL for stable hashing (lowercase host, strip hash, trim trailing slash on path). */
+/** Normalize URL for stable hashing: clean tracking params, lowercase host, strip hash, trim trailing slash on path. */
 export function normalizeProductUrl(url: string): string {
-  const trimmed = url.trim();
+  const trimmed = cleanProductUrl(url.trim());
   try {
     const u = new URL(trimmed);
     u.hash = "";

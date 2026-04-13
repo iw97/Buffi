@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cleanProductUrl } from "@/lib/scan/cleanProductUrl";
 import { scrapeProductFromUrl } from "@/lib/scan/scrape";
 import { getPriceFromGoogleShopping } from "@/lib/scan/serpapi";
 import { lookupBarcode } from "@/lib/scan/barcode";
@@ -85,21 +86,23 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
         );
       }
 
+      const productUrl = cleanProductUrl(url);
+
       const ttlDays = getCacheTtlDays();
       try {
-        const cached = await getCachedProductScanIfFresh(url, ttlDays);
+        const cached = await getCachedProductScanIfFresh(productUrl, ttlDays);
         if (cached) {
-          console.log(`[scan] cache hit for ${url}`);
-          const analysis = applyZaraConfidence(productScanToScanAnalysis(cached), url);
+          console.log(`[scan] cache hit for ${productUrl}`);
+          const analysis = applyZaraConfidence(productScanToScanAnalysis(cached), productUrl);
           return NextResponse.json({ ok: true, source: "cache", analysis });
         }
       } catch (cacheErr) {
         console.warn("[api/scan] productScans cache lookup failed:", (cacheErr as Error).message);
       }
 
-      console.log(`[scan] fresh scan for ${url}`);
-      console.log("[api/scan] scraping URL", url.slice(0, 60));
-      const scraped = await scrapeProductFromUrl(url);
+      console.log(`[scan] fresh scan for ${productUrl}`);
+      console.log("[api/scan] scraping URL", productUrl.slice(0, 60));
+      const scraped = await scrapeProductFromUrl(productUrl);
       console.log("[api/scan] scrape result", scraped ? { name: !!scraped.name, brand: !!scraped.brand, price: !!scraped.price } : "null");
       if (!scraped || (!scraped.name && !scraped.brand)) {
         console.log("[api/scan] scrape failed or empty (need at least name or brand)");
@@ -110,7 +113,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
       }
       let scrapedWithPrice = { ...scraped };
       const query = [scraped.brand, scraped.name].filter(Boolean).join(" ").trim();
-      const isZara = isZaraUrl(url);
+      const isZara = isZaraUrl(productUrl);
 
       if (isZara && query) {
         const prior = scraped.price;
@@ -144,7 +147,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
           }
         }
       }
-      raw = { ...scrapedWithPrice, url, source: "url" };
+      raw = { ...scrapedWithPrice, url: productUrl, source: "url" };
       console.log("[api/scan] raw built from URL", raw.price != null ? `price=${raw.price}` : "no price (manual fallback)");
     } else if (barcode) {
       console.log("[api/scan] barcode flow, looking up", barcode.slice(0, 16));
