@@ -262,7 +262,12 @@ export async function scrapeProductFromUrl(url: string): Promise<{
   }
 
   if (!name) name = $("h1").first().text().trim() || ogTitle;
-  if (!materials) materials = $('[class*="material"]').first().text().trim() || $('[class*="composition"]').first().text().trim();
+  // Non-Zara: do not use vague `[class*="material"]` matching — it pulls unrelated copy (e.g. "denim" from merchandising).
+  // Zara-only fallback when the dedicated Zara scraper already fell through to generic HTML.
+  if (!materials && host.includes("zara.com")) {
+    materials =
+      $('[class*="material"]').first().text().trim() || $('[class*="composition"]').first().text().trim() || undefined;
+  }
 
   if (!name && !brand) return null;
 

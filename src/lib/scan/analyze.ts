@@ -2,7 +2,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { RawProductData } from "./types";
 import type { ScanAnalysis, MinimalScanResponse, ValuesMatchEntry, ValuesMatchState } from "./types";
 import { ETHICAL_BRANDS_CLAUSE, MATERIAL_COST_AND_TAXONOMY_PROMPT } from "./materialCostPrompt";
+import { isZaraProductPageUrl } from "./zaraHints";
 import { computeVerdict, computeVerdictFromRange, parseFibersToMaterials } from "./verdict";
+
+const MATERIALS_NOT_DETECTED_TAG = "Materials not detected";
 
 const CLAUDE_TIMEOUT_MS = 45000;
 const ZARA_TITLE_COMPOSITION_TIMEOUT_MS = 15000;
@@ -63,23 +66,49 @@ export async function analyzeWithClaude(raw: RawProductData, selectedValues: str
   const hasBrand = !!raw.brand?.trim();
   const runFullAnalysis = isTagSource ? hasPrice : true;
 
-  const prompt = `You are a material intelligence analyst for clothing and apparel. Given the following raw product data, produce a structured analysis.
+  const zaraUrl =
+    raw.source === "url" && typeof raw.url === "string" && isZaraProductPageUrl(raw.url);
+  const nonZaraUrlMissingPageComposition =
+    raw.source === "url" && typeof raw.url === "string" && !zaraUrl && !raw.materials?.trim();
 
-Raw product data:
-${JSON.stringify(raw, null, 2)}
-${selectedValues.length > 0 ? `\nUser selected values to evaluate (return one entry per value in valuesMatch):\n${JSON.stringify(selectedValues)}\n${VALUES_EVALUATION_RULES}` : ""}
+  const rawForPrompt: RawProductData = nonZaraUrlMissingPageComposition
+    ? { ...raw, url: undefined, description: undefined, materials: undefined }
+    : raw;
 
-${
-  isTagSource && !runFullAnalysis
-    ? `This is a TAG/CARE-LABEL input: we have composition (materials) but NO retail price. Do a PARTIAL analysis:
+  let dataSourceInstructions: string;
+  if (isTagSource && !runFullAnalysis) {
+    dataSourceInstructions = `This is a TAG/CARE-LABEL input: we have composition (materials) but NO retail price. Do a PARTIAL analysis:
 - Focus on material quality only: parse materials using Part 1 taxonomy; estimate material cost from Part 2–3; judge value using **petroleum synthetic %** vs natural/cellulosic (cellulosic is not plastic).
 - Set markup to 0 and costPerWear to 0 (markup analysis requires a price).
 - Include in tags: "Partial analysis", "Markup requires price". If brand was not provided, also add "Brand unknown".
-- Set isSmallBusiness and markupContext using the rules below where applicable.`
-    : isTagSource
-      ? `This is a TAG/CARE-LABEL input with composition and optional brand/price. If brand or price was not provided, still produce a full analysis using what you have, and add to tags any missing data (e.g. "Brand unknown" or "Price estimated") so the user knows the confidence level. Apply the small-brand, fiber-quality, and markup-context rules below.`
-      : `If the raw data is sparse, make reasonable inferences for clothing/apparel. Apply the rules below.`
-}
+- Set isSmallBusiness and markupContext using the rules below where applicable.`;
+  } else if (isTagSource) {
+    dataSourceInstructions = `This is a TAG/CARE-LABEL input with composition and optional brand/price. If brand or price was not provided, still produce a full analysis using what you have, and add to tags any missing data (e.g. "Brand unknown" or "Price estimated") so the user knows the confidence level. Apply the small-brand, fiber-quality, and markup-context rules below.`;
+  } else if (raw.source === "url") {
+    if (zaraUrl) {
+      dataSourceInstructions = `This is a Zara product URL. If raw data is sparse, you may use naming context — Zara often states fiber content in product titles. Apply the rules below.`;
+    } else if (raw.materials?.trim()) {
+      dataSourceInstructions = `This is a non-Zara retailer URL. Treat raw.materials as the only page-derived fiber composition. Do not invent or adjust fiber percentages from product name, URL path, or marketing description. Apply the rules below.`;
+    } else {
+      dataSourceInstructions = `This is a non-Zara retailer URL without page-extracted composition. Follow the CRITICAL block below exactly. Apply the rules below.`;
+    }
+  } else {
+    dataSourceInstructions = `If the raw data is sparse, make reasonable inferences for clothing/apparel. Apply the rules below.`;
+  }
+
+  const criticalNonZaraNoComposition = nonZaraUrlMissingPageComposition
+    ? `
+
+**CRITICAL (non-Zara URL, no composition from page):** The scraper did not extract a care-label-style composition string. Do NOT infer fibers from product title, URL, slug, or description. Return materials as exactly one entry: { "fiber": "Unknown", "percentage": 100 }. Use broad conservative estimatedMaterialCostMin/Max for unknown generic apparel. Include tag "${MATERIALS_NOT_DETECTED_TAG}".`
+    : "";
+
+  const prompt = `You are a material intelligence analyst for clothing and apparel. Given the following raw product data, produce a structured analysis.
+
+Raw product data:
+${JSON.stringify(rawForPrompt, null, 2)}
+${selectedValues.length > 0 ? `\nUser selected values to evaluate (return one entry per value in valuesMatch):\n${JSON.stringify(selectedValues)}\n${VALUES_EVALUATION_RULES}` : ""}
+
+${dataSourceInstructions}${criticalNonZaraNoComposition}
 
 **Small / indie brand detection**
 - If the brand appears to be an independent or small brand (not a major retailer or fast-fashion chain), treat higher markups as normal and necessary for small-business sustainability. Set isSmallBusiness: true in that case.
@@ -209,6 +238,16 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
           .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
           .map((x) => x.trim())
       : [];
+
+    if (nonZaraUrlMissingPageComposition) {
+      parsed.materials = [{ fiber: "Unknown", percentage: 100 }];
+      parsed.confidenceTier = 3;
+      const tagSet = new Set(parsed.tags);
+      tagSet.add(MATERIALS_NOT_DETECTED_TAG);
+      parsed.tags = [...tagSet];
+      parsed.hasCertifiedMaterials = false;
+      parsed.certifications = [];
+    }
 
     const { verdict, verdictReason, verdictSpanNote } = computeVerdictFromRange({
       markupMin: parsed.markupMin,
@@ -371,8 +410,10 @@ export async function analyzeMinimalScan(input: {
 }
 
 /**
- * Infer Zara composition from URL slug product name + optional search snippet.
- * Returns a care-label-style composition string, if inferable.
+ * Infer composition from Zara-style title + optional shopping snippet.
+ * Callers must only invoke this for zara.com URLs — see scrapeZaraFromUrl.
+ * Name inference is Zara-only because Zara consistently includes fiber content in product titles.
+ * For other brands this causes incorrect readings.
  */
 export async function parseFiberCompositionFromZaraContext(input: {
   productName: string;

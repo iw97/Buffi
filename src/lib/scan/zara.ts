@@ -439,7 +439,13 @@ export async function scrapeZaraFromUrl(productPageUrl: string): Promise<ZaraScr
   let method = resolveZaraMethod(extraOk, itxOk, htmlWasOnlySource);
   let usedClaudeForComposition = false;
 
-  if (!materials?.trim() && name?.trim()) {
+  // Name inference is Zara-only because Zara consistently includes fiber content in product titles.
+  // For other brands this causes incorrect readings.
+  if (
+    productPageUrl.toLowerCase().includes("zara.com") &&
+    !materials?.trim() &&
+    name?.trim()
+  ) {
     const fromClaude = await parseFiberCompositionFromZaraContext({
       productName: slugName || name,
       searchDescription: [serpDescription, description].filter(Boolean).join("\n")

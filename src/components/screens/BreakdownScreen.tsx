@@ -550,6 +550,8 @@ export function BreakdownScreen() {
   const showCertifiedMaterials = Boolean(result?.hasCertifiedMaterials) && certifications.length > 0;
   const isZaraEstimatedComposition =
     (result?.brand || "").trim().toLowerCase() === "zara" && (result?.confidenceTier ?? 0) >= 2;
+  const showMaterialsNotReadFromPage =
+    result?.confidenceTier === 3 && result?.tags?.includes("Materials not detected");
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -700,7 +702,7 @@ export function BreakdownScreen() {
               <div
                 className={`receipt-val ${result!.functionalSynthetic ? "good" : syntheticPct > 50 ? "bad" : "good"}`}
               >
-                {Math.round(syntheticPct)}%
+                {showMaterialsNotReadFromPage ? "—" : `${Math.round(syntheticPct)}%`}
               </div>
             </div>
 
@@ -782,26 +784,32 @@ export function BreakdownScreen() {
               <div className="certified-materials-list">{certifications.join(" · ")}</div>
             </div>
           )}
-          <div className="fiber-bars">
-            {result!.materials.map((f) => {
-              const kind = fiberKind(f.fiber);
-              return (
-                <div key={f.fiber} className="fiber-row">
-                  <div className="fiber-row-label">
-                    <div className="fiber-name">
-                      {f.fiber} <span className={`fiber-badge ${kind}`}>{badgeForKind(kind)}</span>
+          {showMaterialsNotReadFromPage ? (
+            <p className="scan-zara-tag-hint auth-legal">
+              We couldn&apos;t read the materials for this product. Scan the physical tag for an accurate breakdown.
+            </p>
+          ) : (
+            <div className="fiber-bars">
+              {result!.materials.map((f) => {
+                const kind = fiberKind(f.fiber);
+                return (
+                  <div key={f.fiber} className="fiber-row">
+                    <div className="fiber-row-label">
+                      <div className="fiber-name">
+                        {f.fiber} <span className={`fiber-badge ${kind}`}>{badgeForKind(kind)}</span>
+                      </div>
+                      <div className="fiber-pct">
+                        {f.percentage}%{isZaraEstimatedComposition ? " Est." : ""}
+                      </div>
                     </div>
-                    <div className="fiber-pct">
-                      {f.percentage}%{isZaraEstimatedComposition ? " Est." : ""}
+                    <div className="fiber-track">
+                      <div className={`fiber-fill ${kind}`} data-width={f.percentage} />
                     </div>
                   </div>
-                  <div className="fiber-track">
-                    <div className={`fiber-fill ${kind}`} data-width={f.percentage} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="section-divider" />
@@ -842,7 +850,7 @@ export function BreakdownScreen() {
             <div className="pad">
               <div className="section-eyebrow">— Found something better?</div>
               <p className="better-alt-disclaimer">
-                Based on fiber quality and value — not sponsored.
+                Based on fiber quality and value.
               </p>
               {betterAltsLoading ? (
                 <div className="better-alt-skeletons" aria-hidden>
