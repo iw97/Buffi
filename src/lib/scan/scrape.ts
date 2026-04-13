@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { scrapeZaraFromUrl } from "./zara";
 
 const LOG_PREFIX = "[scrape]";
 
@@ -140,6 +141,29 @@ export async function scrapeProductFromUrl(url: string): Promise<{
       hasImage: !!out.imageUrl
     });
     return out;
+  }
+
+  if (host.includes("zara.com")) {
+    const zara = await scrapeZaraFromUrl(url);
+    if (zara && (zara.name || zara.brand)) {
+      const out = {
+        brand: zara.brand,
+        name: zara.name,
+        price: zara.price,
+        materials: zara.materials,
+        description: zara.description,
+        imageUrl: zara.imageUrl ?? null
+      };
+      console.log(LOG_PREFIX, "extracted (Zara)", url.slice(0, 80), "scrapeMethod=", zara.method, "->", {
+        brand: out.brand ?? "(missing)",
+        name: out.name?.slice(0, 50) ?? "(missing)",
+        price: out.price ?? "(missing)",
+        hasMaterials: !!out.materials,
+        hasImage: !!out.imageUrl
+      });
+      return out;
+    }
+    console.log(LOG_PREFIX, "Zara-specific scrape empty; falling back to generic HTML", url.slice(0, 80));
   }
 
   const res = await fetch(url, {

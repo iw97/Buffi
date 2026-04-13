@@ -100,8 +100,31 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
         );
       }
       let scrapedWithPrice = { ...scraped };
-      if ((scraped.name || scraped.brand) && (scraped.price == null || scraped.price <= 0)) {
-        const query = [scraped.brand, scraped.name].filter(Boolean).join(" ").trim();
+      const query = [scraped.brand, scraped.name].filter(Boolean).join(" ").trim();
+      const isZaraUrl = url.toLowerCase().includes("zara.com");
+
+      if (isZaraUrl && query) {
+        const prior = scraped.price;
+        const serpResult = await getPriceFromGoogleShopping(query);
+        if (serpResult) {
+          scrapedWithPrice = { ...scrapedWithPrice, price: serpResult.price };
+          console.log(
+            "[api/scan] Zara: SerpAPI price lookup succeeded:",
+            serpResult.price,
+            "query:",
+            query.slice(0, 100),
+            "priorPriceFromScrape:",
+            prior ?? "none"
+          );
+        } else {
+          console.log(
+            "[api/scan] Zara: SerpAPI price lookup failed or empty; keeping scrape/API price:",
+            prior ?? "none",
+            "query:",
+            query.slice(0, 100)
+          );
+        }
+      } else if ((scraped.name || scraped.brand) && (scraped.price == null || scraped.price <= 0)) {
         if (query) {
           const serpResult = await getPriceFromGoogleShopping(query);
           if (serpResult) {

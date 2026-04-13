@@ -28,7 +28,8 @@ export default function WaitlistPage() {
         body: JSON.stringify({
           firstName: trimmedFirstName,
           email: normalizedEmail
-        })
+        }),
+        cache: "no-store"
       });
 
       const data = (await res.json()) as {
@@ -56,8 +57,9 @@ export default function WaitlistPage() {
       setFirstName("");
       setEmail("");
     } catch (error) {
-      console.error("Failed to join waitlist:", error);
-      setErrorDetail(null);
+      // Network / parse errors only — Firestore "permission denied" means an old cached bundle is still calling the client SDK; redeploy + hard refresh, and deploy firestore.rules.
+      console.error("Waitlist request failed (network or stale bundle):", error);
+      setErrorDetail("Could not reach the server. Check your connection or try a hard refresh (clear cache).");
       setSubmitState("error");
     }
   }

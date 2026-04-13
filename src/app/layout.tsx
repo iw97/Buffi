@@ -30,6 +30,10 @@ export const metadata: Metadata = {
   title: "Buffi",
   description: "Material intelligence",
   metadataBase: new URL(appUrl),
+  icons: {
+    icon: "/og-image.png",
+    apple: "/og-image.png"
+  },
   openGraph: {
     title: "Buffi",
     description: "Material intelligence",

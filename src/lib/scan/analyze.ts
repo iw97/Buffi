@@ -5,6 +5,7 @@ import { ETHICAL_BRANDS_CLAUSE, MATERIAL_COST_AND_TAXONOMY_PROMPT } from "./mate
 import { computeVerdict, computeVerdictFromRange, parseFibersToMaterials } from "./verdict";
 
 const CLAUDE_TIMEOUT_MS = 45000;
+const ZARA_TITLE_COMPOSITION_TIMEOUT_MS = 15000;
 
 const MINIMAL_SCAN_SYSTEM_PROMPT = `You are a material intelligence analyst for clothing and apparel. You will receive JSON input with: brandName, fibers (array of strings, e.g. "Cotton 100%" or "Polyester 80%, Elastane 20%"), price (retail price in USD), and confidenceTier (number).
 
@@ -366,5 +367,52 @@ export async function analyzeMinimalScan(input: {
       throw timeoutErr;
     }
     throw err;
+  }
+}
+
+/**
+ * When Zara PDP/API does not expose composition, infer a care-label-style composition string
+ * from the product title (e.g. "100% LINEN HERRINGBONE BLAZER" → "100% linen").
+ */
+export async function parseFiberCompositionFromZaraTitle(productTitle: string): Promise<string | undefined> {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key?.trim() || !productTitle.trim()) return undefined;
+
+  const client = new Anthropic({ apiKey: key });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ZARA_TITLE_COMPOSITION_TIMEOUT_MS);
+
+  try {
+    const message = await client.messages.create(
+      {
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 256,
+        messages: [
+          {
+            role: "user",
+            content: `Zara product title (may embed fiber content at the start):\n"${productTitle.trim()}"\n\nIf the title states fiber percentages or materials (e.g. "100% LINEN", "52% COTTON 48% POLYESTER"), return ONLY valid JSON: {"composition":"<single string suitable for a care label, same language/units as in title>"}.\nIf no fiber or material content can be inferred from the title, return {"composition":null}.\nNo markdown, no explanation.`
+          }
+        ]
+      },
+      { signal: controller.signal }
+    );
+
+    clearTimeout(timeout);
+
+    const text = (message.content as Array<{ type?: string; text?: string }>)
+      .filter((c) => c.type === "text" && c.text)
+      .map((c) => c.text!)
+      .join("")
+      .trim();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return undefined;
+    const parsed = JSON.parse(jsonMatch[0]) as { composition?: string | null };
+    const c = parsed.composition;
+    if (typeof c !== "string" || !c.trim()) return undefined;
+    return c.trim().slice(0, 500);
+  } catch (e) {
+    clearTimeout(timeout);
+    console.warn("[analyze] parseFiberCompositionFromZaraTitle failed:", (e as Error).message);
+    return undefined;
   }
 }

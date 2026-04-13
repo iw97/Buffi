@@ -6,6 +6,8 @@ import { getAdminFirestore } from "@/lib/firebase/admin";
 const NOTIFY_TO = "heybuffi@gmail.com";
 const WAITLIST_COLLECTION = "waitlist";
 
+export const dynamic = "force-dynamic";
+
 /**
  * POST /api/waitlist — persist signup (Admin Firestore, bypasses client rules),
  * then send optional Resend notification. Duplicate emails return { duplicate: true }.

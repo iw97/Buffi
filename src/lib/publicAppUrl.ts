@@ -1,13 +1,20 @@
 /**
  * Canonical public site origin (metadata, Firebase email-link `continueUrl`, etc.).
  *
- * Vercel production: set `NEXT_PUBLIC_APP_URL=https://buffi.app`.
- * Vercel previews: `VERCEL_URL` is set per deployment; Next injects it into the client
- * bundle as `NEXT_PUBLIC_VERCEL_URL` via `next.config.js` so magic links use the preview host.
+ * - **Production:** set `NEXT_PUBLIC_APP_URL=https://buffi.app` in Vercel (Production env).
+ * - **Previews:** leave `NEXT_PUBLIC_APP_URL` unset for Preview; in the browser we use
+ *   `window.location.origin` so the magic link matches the tab (avoids build-time `VERCEL_URL`
+ *   pointing at `*.vercel.app` while the user opened a different host, which triggers
+ *   `auth/unauthorized-continue-uri`).
+ * - **Server / metadata:** falls back to `VERCEL_URL` (via `NEXT_PUBLIC_VERCEL_URL` in next.config).
  */
 export function getPublicAppUrl(): string {
   const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim();
   if (explicit) return explicit.replace(/\/$/, "");
+
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin.replace(/\/$/, "");
+  }
 
   const vercel =
     process.env.NEXT_PUBLIC_VERCEL_URL?.trim() || process.env.VERCEL_URL?.trim();

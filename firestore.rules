@@ -15,6 +15,22 @@ service cloud.firestore {
       allow create, update: if request.auth != null && request.auth.uid == userId;
     }
 
+    // Marketing waitlist — anonymous read/write for duplicate query + addDoc (legacy client).
+    // Primary path: POST /api/waitlist (Admin SDK, bypasses rules). Deploy these rules if production
+    // uses default-deny or omits the catch-all below. `read: if true` allows listing; tighten before launch.
+    match /waitlist/{entryId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasOnly(['firstName', 'email', 'joinedAt'])
+        && request.resource.data.firstName is string
+        && request.resource.data.email is string
+        && request.resource.data.joinedAt is timestamp
+        && request.resource.data.firstName.size() > 0
+        && request.resource.data.firstName.size() < 200
+        && request.resource.data.email.size() > 3
+        && request.resource.data.email.size() < 320;
+      allow update, delete: if false;
+    }
+
     // TEMPORARY: permissive rules for other collections. Tighten before launch.
     // `users` is excluded so only the rule above applies (owner-only).
     match /{document=**} {
