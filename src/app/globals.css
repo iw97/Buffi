@@ -1721,6 +1721,17 @@ input[type="range"]::-webkit-slider-thumb:hover {
   display: flex;
 }
 
+.scan-zara-tag-hint {
+  margin: 0;
+  padding: 0 4px;
+  max-width: 320px;
+  align-self: center;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
 .url-input {
   flex: 1;
   padding: 14px 16px;

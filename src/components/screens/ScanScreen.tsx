@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
-import { usePendingScan, useScanError } from "@/contexts/ScanResultContext";
+import { usePendingScan, useScanError, readZaraUrlTagScanHint, setZaraUrlTagScanHint } from "@/contexts/ScanResultContext";
 import { TagDetailsStep } from "@/components/scan/TagDetailsStep";
 import { TagConfirmStep, type TagExtraction } from "@/components/scan/TagConfirmStep";
 
@@ -24,6 +24,7 @@ export function ScanScreen() {
   const { lastError, setLastError } = useScanError();
   const [urlOpen, setUrlOpen] = useState(false);
   const [urlValue, setUrlValue] = useState("");
+  const [showZaraTagHint, setShowZaraTagHint] = useState(false);
   const [tagScannerOpen, setTagScannerOpen] = useState(false);
   const [tagStepComposition, setTagStepComposition] = useState<string | null>(null);
   const [tagExtractResult, setTagExtractResult] = useState<TagExtraction | null>(null);
@@ -34,6 +35,13 @@ export function ScanScreen() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const error = lastError;
+
+  useEffect(() => {
+    if (readZaraUrlTagScanHint()) {
+      setShowZaraTagHint(true);
+      setUrlOpen(true);
+    }
+  }, []);
 
   function clearError() {
     setLastError(null);
@@ -54,6 +62,8 @@ export function ScanScreen() {
     const url = urlValue.trim();
     if (!url) return;
     clearError();
+    setZaraUrlTagScanHint(false);
+    setShowZaraTagHint(false);
     setPending({ url });
     router.push("/analyzing");
   }
@@ -521,7 +531,7 @@ export function ScanScreen() {
           >
             Paste Product URL
           </button>
-          <div className={`url-input-row ${urlOpen ? "visible" : ""}`}>
+          <div className={`url-input-row ${urlOpen || showZaraTagHint ? "visible" : ""}`}>
             <input
               className="url-input"
               type="url"
@@ -534,6 +544,11 @@ export function ScanScreen() {
               →
             </button>
           </div>
+          {showZaraTagHint && (
+            <p className="scan-zara-tag-hint auth-legal">
+              For Zara items, scanning the physical tag gives you the most accurate results.
+            </p>
+          )}
           <button
             type="button"
             className="scan-manual-link"
