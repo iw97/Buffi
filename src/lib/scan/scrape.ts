@@ -39,6 +39,65 @@ function splitNameAndBrand(fullName: string): { name: string; brand?: string } {
   return { name: trimmed };
 }
 
+/** Heuristic: block looks like a care label / composition line, not random merchandising. */
+function looksLikeCompositionText(text: string): boolean {
+  const t = text.trim();
+  if (t.length < 6 || t.length > 2000) return false;
+  if (t.includes("%")) return true;
+  return /cotton|polyester|linen|silk|wool|nylon|viscose|lyocell|modal|cashmere|elastane|spandex|leather|acetate|ramie|hemp|polyamide|acrylic/i.test(
+    t
+  );
+}
+
+function extractMaterialFromJsonLdNode(node: Record<string, unknown>): string | undefined {
+  const mat = node.material;
+  if (typeof mat === "string" && mat.trim()) return mat.trim();
+  if (mat && typeof mat === "object") {
+    const n = (mat as { name?: string }).name;
+    if (typeof n === "string" && n.trim()) return n.trim();
+  }
+  const props = node.additionalProperty;
+  if (Array.isArray(props)) {
+    for (const p of props) {
+      if (!p || typeof p !== "object") continue;
+      const po = p as { name?: string; value?: unknown };
+      const propName = typeof po.name === "string" ? po.name : "";
+      if (!/material|composition|fabric/i.test(propName)) continue;
+      const v = po.value;
+      if (typeof v === "string" && v.trim()) return v.trim();
+      if (v != null && typeof v === "object" && "name" in (v as object)) {
+        const vn = (v as { name?: string }).name;
+        if (typeof vn === "string" && vn.trim()) return vn.trim();
+      }
+    }
+  }
+  const desc = node.description;
+  if (typeof desc === "string" && desc.trim() && looksLikeCompositionText(desc)) {
+    return desc.trim().slice(0, 500);
+  }
+  return undefined;
+}
+
+function tryExtractMaterialFromJsonLdScript(contentStr: string): string | undefined {
+  try {
+    const data = JSON.parse(contentStr) as Record<string, unknown>;
+    const graph = data["@graph"];
+    const nodes: Array<Record<string, unknown>> = Array.isArray(graph)
+      ? (graph as Record<string, unknown>[])
+      : [data];
+    for (const node of nodes) {
+      if (!node || typeof node !== "object") continue;
+      const m = extractMaterialFromJsonLdNode(node);
+      if (m && looksLikeCompositionText(m)) return m.slice(0, 500);
+    }
+    const top = extractMaterialFromJsonLdNode(data);
+    if (top && looksLikeCompositionText(top)) return top.slice(0, 500);
+  } catch {
+    /* ignore */
+  }
+  return undefined;
+}
+
 const FETCH_HEADERS = {
   "User-Agent":
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -259,17 +318,76 @@ export async function scrapeProductFromUrl(url: string): Promise<{
     brand = brand ?? "Shein";
     name = name ?? ($(".product-intro__head-name").first().text().trim() || $("h1").first().text().trim());
     materials = materials ?? ($(".product-intro__detail-description").text().trim() || $('[data-id="product-detail"]').text());
+  } else if (host.includes("thereformation.com")) {
+    name = name ?? $("h1").first().text().trim();
+    brand = brand ?? "Reformation";
+    materials =
+      materials ??
+      ($('[class*="composition"]').text().trim() ||
+        $('[class*="material"]').text().trim() ||
+        $(".product-composition").text().trim());
+  } else if (host.includes("miumiu.com") || host.includes("prada.com")) {
+    brand = brand ?? (host.includes("miumiu.com") ? "Miu Miu" : "Prada");
+    name = name ?? $("h1").first().text().trim();
+    materials =
+      materials ??
+      ($('[class*="material"]').text().trim() || $('[class*="composition"]').text().trim());
+  }
+
+  // Generic materials extraction for all other retailers (validated so we don't grab unrelated UI copy).
+  if (!materials) {
+    const materialSelectors = [
+      '[class*="composition"]',
+      '[class*="material"]',
+      '[class*="fabric"]',
+      '[class*="fiber"]',
+      '[class*="content"]',
+      '[data-qa*="composition"]',
+      '[data-qa*="material"]',
+      '[id*="composition"]',
+      '[id*="material"]',
+      ".product-composition",
+      ".fabric-content",
+      ".material-info"
+    ];
+    for (const selector of materialSelectors) {
+      const text = $(selector).first().text().trim();
+      if (text && text.length > 5 && text.length < 500 && looksLikeCompositionText(text)) {
+        materials = text;
+        console.log(LOG_PREFIX, "generic materials found via", selector);
+        break;
+      }
+    }
+  }
+
+  // JSON-LD: material / additionalProperty / composition-like description
+  if (!materials) {
+    for (const script of jsonLdScripts) {
+      const contentStr = ($(script).html() || "").trim();
+      if (!contentStr) continue;
+      const found = tryExtractMaterialFromJsonLdScript(contentStr);
+      if (found) {
+        materials = found;
+        console.log(LOG_PREFIX, "generic materials found via JSON-LD");
+        break;
+      }
+    }
   }
 
   if (!name) name = $("h1").first().text().trim() || ogTitle;
-  // Non-Zara: do not use vague `[class*="material"]` matching — it pulls unrelated copy (e.g. "denim" from merchandising).
-  // Zara-only fallback when the dedicated Zara scraper already fell through to generic HTML.
+  // Zara-only broad DOM fallback when the dedicated Zara scraper already fell through to generic HTML.
   if (!materials && host.includes("zara.com")) {
     materials =
       $('[class*="material"]').first().text().trim() || $('[class*="composition"]').first().text().trim() || undefined;
   }
 
   if (!name && !brand) return null;
+
+  console.log(LOG_PREFIX, "extraction result", {
+    hasMaterials: !!materials,
+    materialsPreview: materials?.slice(0, 80),
+    source: materials ? "scraped" : "none"
+  });
 
   const out = { brand, name, materials, description, imageUrl };
   console.log(LOG_PREFIX, "extracted from HTML", cleaned.slice(0, 80), "->", {
