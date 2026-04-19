@@ -9,6 +9,8 @@ export interface RawProductData {
   url?: string;
   barcode?: string;
   source: "url" | "barcode" | "tag";
+  /** When true, `materials` came from SerpAPI organic search (luxury JS-only PDP), not static HTML. */
+  materialsFromSerpSearch?: boolean;
 }
 
 /** Context for whether markup is justified; used to nuance verdict presentation. */
@@ -65,6 +67,8 @@ export interface ScanAnalysis {
   certifications?: string[];
   /** Set when analysis is served from productScans cache (URL scans). */
   confidenceTier?: number;
+  /** True when composition or cost signals are from search/snippet rather than PDP scrape. */
+  isEstimated?: boolean;
 }
 
 /** Full scan result returned by /api/scan */

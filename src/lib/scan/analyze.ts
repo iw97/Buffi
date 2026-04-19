@@ -87,6 +87,8 @@ export async function analyzeWithClaude(raw: RawProductData, selectedValues: str
   } else if (raw.source === "url") {
     if (zaraUrl) {
       dataSourceInstructions = `This is a Zara product URL. If raw data is sparse, you may use naming context — Zara often states fiber content in product titles. Apply the rules below.`;
+    } else if (raw.materialsFromSerpSearch && raw.materials?.trim()) {
+      dataSourceInstructions = `This is a non-Zara luxury retailer URL. Fiber composition was retrieved from web search snippets (SerpAPI Google organic), not the product page, because composition is often rendered only in client-side JavaScript. Treat raw.materials as a best-effort excerpt; parse percentages conservatively and reflect uncertainty in tags where appropriate. Apply the rules below.`;
     } else if (raw.materials?.trim()) {
       dataSourceInstructions = `This is a non-Zara retailer URL. Treat raw.materials as the only page-derived fiber composition. Do not invent or adjust fiber percentages from product name, URL path, or marketing description. Apply the rules below.`;
     } else {

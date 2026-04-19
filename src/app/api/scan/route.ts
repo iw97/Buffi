@@ -184,6 +184,9 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
     if (raw.source === "url" && typeof raw.url === "string") {
       analysis = applyZaraConfidence(analysis, raw.url);
     }
+    if (raw.source === "url" && raw.materialsFromSerpSearch) {
+      analysis = { ...analysis, confidenceTier: 2, isEstimated: true };
+    }
     if (raw.imageUrl != null) analysis.imageUrl = raw.imageUrl;
     if (raw.source === "url" && typeof raw.url === "string" && raw.url.trim()) {
       const u = raw.url.trim();

@@ -60,6 +60,10 @@ export function cleanProductUrl(url: string): string {
 
     const out = new URL(u.toString());
     out.hash = "";
+    /** Shein mobile serves a different shell than desktop; canonicalize for scrape + cache. */
+    if (out.hostname.toLowerCase() === "m.shein.com") {
+      out.hostname = "www.shein.com";
+    }
     stripTrackingSearchParams(out, gap);
     const q = out.searchParams.toString();
     out.search = q ? `?${q}` : "";
