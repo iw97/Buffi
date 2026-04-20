@@ -26,14 +26,19 @@ function cleanPriceString(raw: string): number | null {
   return Number.isNaN(value) || value <= 0 ? null : value;
 }
 
+/** Raw Google Shopping payload from SerpAPI (for diagnostics / tests). */
+export type GoogleShoppingSerpPayload = {
+  trimmedQuery: string;
+  /** Request URL with `api_key` redacted for safe logging. */
+  serpRequestUrlRedacted: string;
+  shopping_results?: Array<Record<string, unknown>>;
+  error?: string;
+};
+
 /**
- * Query Google Shopping via SerpAPI and return the first result's price.
- * Uses shopping_results[0].price (string), cleaned to a number.
- * Logs search query and raw price for verification.
+ * Single SerpAPI `google_shopping` request. Used by `getPriceFromGoogleShopping` and test scripts.
  */
-export async function getPriceFromGoogleShopping(
-  query: string
-): Promise<GoogleShoppingFirstResult | null> {
+export async function fetchGoogleShoppingSerpPayload(query: string): Promise<GoogleShoppingSerpPayload | null> {
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey?.trim()) {
     console.log(LOG_PREFIX, "SERPAPI_KEY not set, skipping Google Shopping lookup");
@@ -52,8 +57,7 @@ export async function getPriceFromGoogleShopping(
     api_key: apiKey
   });
   const url = `https://serpapi.com/search.json?${params.toString()}`;
-
-  console.log(LOG_PREFIX, "search query:", trimmed);
+  const serpRequestUrlRedacted = url.replace(/api_key=[^&]*/, "api_key=<redacted>");
 
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
@@ -63,59 +67,85 @@ export async function getPriceFromGoogleShopping(
     }
 
     const data = (await res.json()) as {
-      shopping_results?: Array<{
-        title?: string;
-        source?: string;
-        price?: string;
-      }>;
+      shopping_results?: Array<Record<string, unknown>>;
       error?: string;
     };
 
-    if (data.error) {
-      console.warn(LOG_PREFIX, "SerpAPI error:", data.error);
-      return null;
-    }
-
-    const results = data.shopping_results;
-    if (!Array.isArray(results) || results.length === 0) {
-      console.log(LOG_PREFIX, "no shopping results for query:", trimmed);
-      return null;
-    }
-
-    const first = results[0];
-    const rawPrice = first.price;
-    if (rawPrice == null || typeof rawPrice !== "string" || !rawPrice.trim()) {
-      console.log(LOG_PREFIX, "first result has no price", {
-        title: first.title?.slice(0, 60),
-        source: first.source
-      });
-      return null;
-    }
-
-    console.log(LOG_PREFIX, "raw price returned:", rawPrice);
-
-    const price = cleanPriceString(rawPrice);
-    if (price == null) {
-      console.log(LOG_PREFIX, "could not parse price from:", rawPrice);
-      return null;
-    }
-
-    const result: GoogleShoppingFirstResult = {
-      price,
-      title: first.title ?? "",
-      source: first.source ?? ""
+    return {
+      trimmedQuery: trimmed,
+      serpRequestUrlRedacted,
+      shopping_results: data.shopping_results,
+      error: data.error
     };
-    console.log(LOG_PREFIX, "first result:", {
-      query: trimmed,
-      title: result.title.slice(0, 60),
-      source: result.source,
-      price: result.price
-    });
-    return result;
   } catch (e) {
     console.warn(LOG_PREFIX, "fetch failed:", (e as Error).message);
     return null;
   }
+}
+
+export type GetPriceFromGoogleShoppingOptions = {
+  /** When set (e.g. from tests), skips a second SerpAPI request; must match `query` trim. */
+  reusePayload?: GoogleShoppingSerpPayload;
+};
+
+/**
+ * Query Google Shopping via SerpAPI and return the first result's price.
+ * Uses shopping_results[0].price (string), cleaned to a number.
+ * Logs search query and raw price for verification.
+ */
+export async function getPriceFromGoogleShopping(
+  query: string,
+  options?: GetPriceFromGoogleShoppingOptions
+): Promise<GoogleShoppingFirstResult | null> {
+  const trimmed = query.trim();
+  console.log(LOG_PREFIX, "search query:", trimmed);
+
+  const reused = options?.reusePayload;
+  const payload =
+    reused && reused.trimmedQuery === trimmed ? reused : await fetchGoogleShoppingSerpPayload(query);
+  if (!payload) return null;
+
+  if (payload.error) {
+    console.warn(LOG_PREFIX, "SerpAPI error:", payload.error);
+    return null;
+  }
+
+  const results = payload.shopping_results;
+  if (!Array.isArray(results) || results.length === 0) {
+    console.log(LOG_PREFIX, "no shopping results for query:", trimmed);
+    return null;
+  }
+
+  const first = results[0] as { title?: string; source?: string; price?: string };
+  const rawPrice = first.price;
+  if (rawPrice == null || typeof rawPrice !== "string" || !rawPrice.trim()) {
+    console.log(LOG_PREFIX, "first result has no price", {
+      title: first.title?.slice(0, 60),
+      source: first.source
+    });
+    return null;
+  }
+
+  console.log(LOG_PREFIX, "raw price returned:", rawPrice);
+
+  const price = cleanPriceString(rawPrice);
+  if (price == null) {
+    console.log(LOG_PREFIX, "could not parse price from:", rawPrice);
+    return null;
+  }
+
+  const result: GoogleShoppingFirstResult = {
+    price,
+    title: first.title ?? "",
+    source: first.source ?? ""
+  };
+  console.log(LOG_PREFIX, "first result:", {
+    query: trimmed,
+    title: result.title.slice(0, 60),
+    source: result.source,
+    price: result.price
+  });
+  return result;
 }
 
 /**

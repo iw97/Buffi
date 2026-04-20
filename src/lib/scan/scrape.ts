@@ -175,12 +175,80 @@ function tryExtractMaterialFromJsonLdScript(contentStr: string): string | undefi
   return undefined;
 }
 
-const FETCH_HEADERS = {
+/** Desktop Chrome — first attempt for retailer HTML / Shopify .json */
+const DESKTOP_CHROME_HEADERS: Record<string, string> = {
   "User-Agent":
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  Accept: "text/html,application/xhtml+xml,application/json",
-  "Accept-Language": "en-US,en;q=0.9"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  "Accept-Encoding": "gzip, deflate, br",
+  "Cache-Control": "no-cache",
+  Pragma: "no-cache",
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none",
+  "Sec-Fetch-User": "?1",
+  "Upgrade-Insecure-Requests": "1"
 };
+
+/** Mobile Safari — second attempt after 403/404 */
+const MOBILE_SAFARI_HEADERS: Record<string, string> = {
+  "User-Agent":
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  "Accept-Encoding": "gzip, deflate, br",
+  "Cache-Control": "no-cache",
+  Pragma: "no-cache",
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none",
+  "Upgrade-Insecure-Requests": "1"
+};
+
+function googleReferrerForPremiumRetail(hostname: string): Record<string, string> {
+  const h = hostname.toLowerCase();
+  if (h.includes("thereformation.com") || h.includes("miumiu.com")) {
+    return { Referer: "https://www.google.com/" };
+  }
+  return {};
+}
+
+/**
+ * Fetch with browser-like headers; on 403/404 retry with mobile Safari profile.
+ * Logs success: `[scrape] fetch succeeded on attempt N with profileName`.
+ */
+async function fetchWithBrowserRetry(
+  url: string,
+  hostnameForReferrer: string,
+  options?: { signal?: AbortSignal }
+): Promise<Response> {
+  const ref = googleReferrerForPremiumRetail(hostnameForReferrer);
+  const signal = options?.signal;
+  const profiles: Array<{ name: string; headers: Record<string, string> }> = [
+    { name: "desktopChrome", headers: { ...DESKTOP_CHROME_HEADERS, ...ref } },
+    { name: "mobileSafari", headers: { ...MOBILE_SAFARI_HEADERS, ...ref } }
+  ];
+
+  let last: Response | null = null;
+  for (let i = 0; i < profiles.length; i++) {
+    const { name, headers } = profiles[i];
+    const res = await fetch(url, { headers, signal });
+    last = res;
+    if (res.ok) {
+      console.log("[scrape] fetch succeeded on attempt", i + 1, "with", name);
+      return res;
+    }
+    const retry = (res.status === 403 || res.status === 404) && i < profiles.length - 1;
+    if (retry) {
+      console.log(LOG_PREFIX, "fetch retry after HTTP", res.status, "→", profiles[i + 1]?.name, url.slice(0, 100));
+      await res.arrayBuffer().catch(() => undefined);
+      continue;
+    }
+    return res;
+  }
+  return last as Response;
+}
 
 /**
  * Shopify product.json paths to try. Reformation-style URLs use `/products/handle/SKU.html`;
@@ -291,8 +359,7 @@ async function fetchShopifyProductJson(productUrl: string): Promise<{
       const jsonUrl = `${u.origin}${jsonPath}`;
       console.log(LOG_PREFIX, "Shopify .json attempt", { host, jsonUrl: jsonUrl.slice(0, 140) });
       try {
-        const res = await fetch(jsonUrl, {
-          headers: FETCH_HEADERS,
+        const res = await fetchWithBrowserRetry(jsonUrl, host, {
           signal: AbortSignal.timeout(10000)
         });
         if (!res.ok) {
@@ -397,10 +464,13 @@ export async function scrapeProductFromUrl(url: string): Promise<{
     return null;
   }
   const host = parsedUrl.hostname.toLowerCase();
-  console.log(LOG_PREFIX, "scrape start", { host, cleaned: cleaned.slice(0, 120) });
+  const shopifyPathEligible = parsedUrl.pathname.includes("/products/");
+  console.log("SCRAPE START", cleaned);
+  console.log("IS SHOPIFY ATTEMPT:", shopifyPathEligible);
 
   // Shopify: try .json endpoint first (returns price when store allows it; image from images[0].src)
   const shopifyResult = await fetchShopifyProductJson(cleaned);
+  console.log("SHOPIFY RESULT:", shopifyResult);
   if (shopifyResult && (shopifyResult.name || shopifyResult.brand || shopifyResult.price != null)) {
     const out = {
       brand: shopifyResult.brand,
@@ -476,8 +546,13 @@ export async function scrapeProductFromUrl(url: string): Promise<{
   let fetchOk = false;
   let fetchUrlUsed = cleaned;
   for (const tryUrl of fetchUrls) {
-    const res = await fetch(tryUrl, {
-      headers: FETCH_HEADERS,
+    let referHost = host;
+    try {
+      referHost = new URL(tryUrl).hostname;
+    } catch {
+      /* keep host */
+    }
+    const res = await fetchWithBrowserRetry(tryUrl, referHost, {
       signal: AbortSignal.timeout(15000)
     });
     if (res.ok) {
