@@ -1,9 +1,9 @@
 {
   "functions": {
-    "api/scan": {
+    "src/app/api/scan/route.ts": {
       "maxDuration": 30
     },
-    "src/app/api/scan/route.ts": {
+    "src/app/api/scan-tag/route.ts": {
       "maxDuration": 30
     }
   }
