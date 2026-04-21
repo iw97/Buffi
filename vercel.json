@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "api/scan": {
+      "maxDuration": 30
+    },
+    "src/app/api/scan/route.ts": {
+      "maxDuration": 30
+    }
+  }
+}

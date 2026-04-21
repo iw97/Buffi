@@ -13,6 +13,9 @@ import {
   recordProductScan
 } from "@/lib/firebase/productScansServer";
 
+/** Allow Bright Data Web Unlocker (~3–8s) plus scrape + Claude without platform timeout. */
+export const maxDuration = 30;
+
 function isZaraUrl(url: string | undefined): boolean {
   return typeof url === "string" && /(^|\.)zara\.com$/i.test(new URL(url).hostname);
 }
