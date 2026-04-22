@@ -251,11 +251,11 @@ async function fetchWithBrowserRetry(
 }
 
 /** Bright Data Web Unlocker REST fallback when direct fetch is blocked or composition is missing. */
-async function fetchWithBrightData(productUrl: string): Promise<string | null> {
+async function fetchWithBrightData(url: string): Promise<string | null> {
   const token = process.env.BRIGHT_DATA_TOKEN;
   const zone = process.env.BRIGHT_DATA_ZONE || "buffi_unlocker";
 
-  if (!token?.trim()) {
+  if (!token) {
     console.log(LOG_PREFIX, "Bright Data token not set, skipping fallback");
     return null;
   }
@@ -264,12 +264,12 @@ async function fetchWithBrightData(productUrl: string): Promise<string | null> {
     const response = await fetch("https://api.brightdata.com/request", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token.trim()}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
         zone,
-        url: productUrl,
+        url,
         format: "raw"
       }),
       signal: AbortSignal.timeout(30000)
@@ -371,7 +371,7 @@ function findSheinCompositionPanelText($: cheerio.CheerioAPI): string {
 }
 
 /** Try Shopify product JSON endpoint (e.g. /products/foo.json). Returns product data or null. Price only when endpoint provides it. */
-async function fetchShopifyProductJson(productUrl: string): Promise<{
+export async function fetchShopifyProductJson(productUrl: string): Promise<{
   name?: string;
   brand?: string;
   price?: number;
@@ -868,6 +868,7 @@ export async function scrapeProductFromUrl(url: string): Promise<{
 
   let bdExtraction: GenericHtmlExtraction | null = null;
   if (shouldTryBrightData) {
+    console.log(LOG_PREFIX, "scrape path taken", "Bright Data Web Unlocker (4th fallback)");
     console.log("[scrape] using Bright Data fallback for", cleaned.slice(0, 60));
     const brightDataHtml = await fetchWithBrightData(cleaned);
     if (brightDataHtml) {
