@@ -112,6 +112,26 @@ function clipJsonLdMaterial(s: string): string {
   return s.trim().slice(0, 500);
 }
 
+function extractCompositionFromBroadText($: cheerio.CheerioAPI): string | undefined {
+  const scriptText = $('script[type="application/json"], script:not([src])')
+    .toArray()
+    .map((el) => $(el).html() || "")
+    .join("\n");
+  const bodyText = $("body").text();
+  const combined = `${bodyText}\n${scriptText}`.replace(/\s+/g, " ");
+  if (!combined.trim()) return undefined;
+
+  // Matches common care-label style strings: "90% Cotton, 10% Elastane" etc.
+  const pairRe =
+    /(\d{1,3}\s*%\s*(?:cotton|polyester|linen|silk|wool|nylon|viscose|lyocell|modal|cashmere|elastane|spandex|leather|acetate|ramie|hemp|polyamide|acrylic))(?:\s*[,/]\s*\d{1,3}\s*%\s*(?:cotton|polyester|linen|silk|wool|nylon|viscose|lyocell|modal|cashmere|elastane|spandex|leather|acetate|ramie|hemp|polyamide|acrylic)){0,5}/i;
+
+  const m = combined.match(pairRe);
+  if (!m?.[0]) return undefined;
+  const candidate = m[0].replace(/\s+/g, " ").trim();
+  if (!looksLikeCompositionText(candidate)) return undefined;
+  return candidate.slice(0, 400);
+}
+
 /** First numeric price from schema.org Product offers (array or single Offer). */
 function parseSchemaOrgOfferPrice(item: Record<string, unknown>): number | undefined {
   const offers = item.offers;
@@ -252,6 +272,8 @@ async function fetchWithBrowserRetry(
 
 /** Bright Data Web Unlocker REST fallback when direct fetch is blocked or composition is missing. */
 async function fetchWithBrightData(url: string): Promise<string | null> {
+  console.log("[BD] token present:", !!process.env.BRIGHT_DATA_TOKEN);
+  console.log("[BD] zone:", process.env.BRIGHT_DATA_ZONE);
   const token = process.env.BRIGHT_DATA_TOKEN;
   const zone = process.env.BRIGHT_DATA_ZONE || "buffi_unlocker";
 
@@ -274,6 +296,7 @@ async function fetchWithBrightData(url: string): Promise<string | null> {
       }),
       signal: AbortSignal.timeout(30000)
     });
+    console.log("[BD] response status:", response.status);
 
     if (!response.ok) {
       console.log(LOG_PREFIX, "Bright Data returned non-OK", response.status);
@@ -281,9 +304,12 @@ async function fetchWithBrightData(url: string): Promise<string | null> {
     }
 
     const html = await response.text();
+    console.log("[BD] html length:", html.length);
+    console.log("[BD] html preview:", html.slice(0, 500));
     console.log(LOG_PREFIX, "Bright Data success, html length:", html.length);
     return html;
   } catch (err) {
+    console.log("[BD] fetch error:", err);
     console.log(LOG_PREFIX, "Bright Data error:", (err as Error).message);
     return null;
   }
@@ -481,6 +507,56 @@ export async function fetchShopifyProductJson(productUrl: string): Promise<{
   }
 }
 
+/** First numeric price from ProductGroup.hasVariant[].offers.price. */
+function parseSchemaOrgProductGroupVariantPrice(item: Record<string, unknown>): number | undefined {
+  const variants = item.hasVariant;
+  if (!Array.isArray(variants)) return undefined;
+  for (const v of variants) {
+    if (!v || typeof v !== "object") continue;
+    const price = parseSchemaOrgOfferPrice(v as Record<string, unknown>);
+    if (price != null) return price;
+  }
+  return undefined;
+}
+
+function extractSchemaOrgImageUrl(item: Record<string, unknown>): string | undefined {
+  const image = item.image;
+  if (typeof image === "string" && image.trim()) return image.trim();
+  if (Array.isArray(image)) {
+    for (const im of image) {
+      if (typeof im === "string" && im.trim()) return im.trim();
+      if (im && typeof im === "object") {
+        const url = (im as { url?: unknown }).url;
+        if (typeof url === "string" && url.trim()) return url.trim();
+      }
+    }
+  }
+  return undefined;
+}
+
+function extractSchemaOrgVariantGtin(item: Record<string, unknown>): string | undefined {
+  const variants = item.hasVariant;
+  if (!Array.isArray(variants)) return undefined;
+  for (const v of variants) {
+    if (!v || typeof v !== "object") continue;
+    const vo = v as Record<string, unknown>;
+    const keys = ["gtin", "gtin13", "gtin12", "gtin8", "sku"] as const;
+    for (const key of keys) {
+      const val = vo[key];
+      if (typeof val === "string" && val.trim()) return val.trim();
+      if (typeof val === "number" && Number.isFinite(val)) return String(val);
+    }
+  }
+  return undefined;
+}
+
+function hasSchemaOrgType(node: Record<string, unknown>, typeName: string): boolean {
+  const t = node["@type"];
+  if (typeof t === "string") return t === typeName;
+  if (Array.isArray(t)) return t.some((x) => typeof x === "string" && x === typeName);
+  return false;
+}
+
 type GenericHtmlExtraction = {
   brand?: string;
   name?: string;
@@ -488,6 +564,7 @@ type GenericHtmlExtraction = {
   description?: string;
   imageUrl: string | null;
   priceFromJsonLd?: number;
+  gtin?: string;
   materialsFromSerpSearch: boolean;
 };
 
@@ -504,6 +581,7 @@ function mergeGenericHtmlExtractions(
     description: a.description?.trim() || b.description?.trim(),
     imageUrl: a.imageUrl ?? b.imageUrl,
     priceFromJsonLd: a.priceFromJsonLd ?? b.priceFromJsonLd,
+    gtin: a.gtin?.trim() || b.gtin?.trim(),
     materialsFromSerpSearch: a.materialsFromSerpSearch || b.materialsFromSerpSearch
   };
 }
@@ -518,7 +596,7 @@ async function extractGenericProductFromLoadedCheerio(
     logJsonLdScriptBodies($, jsonLdScripts as unknown[], pipelineLabel);
     const ogTitle = $('meta[property="og:title"]').attr("content");
     const ogImage = $('meta[property="og:image"]').attr("content");
-    const imageUrl = typeof ogImage === "string" && ogImage.trim() ? ogImage.trim() : null;
+    let imageUrl = typeof ogImage === "string" && ogImage.trim() ? ogImage.trim() : null;
 
     let brand: string | undefined;
     let name: string | undefined;
@@ -526,6 +604,7 @@ async function extractGenericProductFromLoadedCheerio(
     let description: string | undefined;
     let materialsFromSerpSearch = false;
     let priceFromJsonLd: number | undefined;
+    let gtin: string | undefined;
 
     // Schema.org Product JSON-LD: name, brand, description, optional Offer price (e.g. Reformation when .json is 404)
     for (let i = 0; i < jsonLdScripts.length; i++) {
@@ -544,16 +623,42 @@ async function extractGenericProductFromLoadedCheerio(
         const list: Array<Record<string, unknown>> = Array.isArray(graph)
           ? (graph as Record<string, unknown>[])
           : [data];
-        const item = list.find((d) => d["@type"] === "Product") ?? (data["@type"] === "Product" ? data : null);
-        if (item) {
-          const itemName = item.name as string | undefined;
-          if (itemName?.trim()) name = itemName.trim();
-          const brandFromLd = extractBrandFromJsonLdItem(item);
-          if (brandFromLd) brand = brandFromLd;
-          const desc = item.description as string | undefined;
-          if (desc?.trim()) description = desc.trim();
-          const offerPrice = parseSchemaOrgOfferPrice(item);
-          if (offerPrice != null && priceFromJsonLd == null) priceFromJsonLd = offerPrice;
+        for (const item of list) {
+          if (!item || typeof item !== "object") continue;
+
+          if (hasSchemaOrgType(item, "Product")) {
+            const itemName = item.name as string | undefined;
+            if (itemName?.trim() && !name) name = itemName.trim();
+            const brandFromLd = extractBrandFromJsonLdItem(item);
+            if (brandFromLd && !brand) brand = brandFromLd;
+            const desc = item.description as string | undefined;
+            if (desc?.trim() && !description) description = desc.trim();
+            const imageFromLd = extractSchemaOrgImageUrl(item);
+            if (imageFromLd && !imageUrl) imageUrl = imageFromLd;
+            const offerPrice = parseSchemaOrgOfferPrice(item);
+            if (offerPrice != null && priceFromJsonLd == null) priceFromJsonLd = offerPrice;
+          }
+
+          // Shopify commonly uses ProductGroup + hasVariant[].offers.price when .json is blocked.
+          if (hasSchemaOrgType(item, "ProductGroup")) {
+            const groupName = item.name as string | undefined;
+            if (groupName?.trim() && !name) {
+              const normalizedGroupName = groupName.includes(" | ")
+                ? groupName.split(" | ")[0]?.trim() || groupName.trim()
+                : groupName.trim();
+              name = normalizedGroupName;
+            }
+            const brandFromGroup = extractBrandFromJsonLdItem(item);
+            if (brandFromGroup && !brand) brand = brandFromGroup;
+            const groupDesc = item.description as string | undefined;
+            if (groupDesc?.trim() && !description) description = groupDesc.trim();
+            const imageFromGroup = extractSchemaOrgImageUrl(item);
+            if (imageFromGroup && !imageUrl) imageUrl = imageFromGroup;
+            const groupVariantPrice = parseSchemaOrgProductGroupVariantPrice(item);
+            if (groupVariantPrice != null && priceFromJsonLd == null) priceFromJsonLd = groupVariantPrice;
+            const groupVariantGtin = extractSchemaOrgVariantGtin(item);
+            if (groupVariantGtin && !gtin) gtin = groupVariantGtin;
+          }
         }
       } catch {
         /* ignore */
@@ -561,6 +666,11 @@ async function extractGenericProductFromLoadedCheerio(
     }
 
     if (ogTitle && !name) name = ogTitle;
+
+    const h1Name = $("h1").first().text().trim();
+    if (name?.includes(" | ") && h1Name && name.toLowerCase().startsWith(h1Name.toLowerCase())) {
+      name = h1Name;
+    }
 
     if (name && !brand) {
       const split = splitNameAndBrand(name);
@@ -677,6 +787,14 @@ async function extractGenericProductFromLoadedCheerio(
       }
     }
 
+    if (!materials) {
+      const broad = extractCompositionFromBroadText($);
+      if (broad) {
+        materials = broad;
+        console.log(LOG_PREFIX, "materials found via broad text composition scan");
+      }
+    }
+
     if (!name) name = $("h1").first().text().trim() || ogTitle;
     // Zara-only broad DOM fallback when the dedicated Zara scraper already fell through to generic HTML.
     if (!materials && host.includes("zara.com")) {
@@ -715,6 +833,7 @@ async function extractGenericProductFromLoadedCheerio(
       description,
       imageUrl,
       priceFromJsonLd,
+      gtin,
       materialsFromSerpSearch
     };
 }
@@ -727,6 +846,7 @@ export async function scrapeProductFromUrl(url: string): Promise<{
   materials?: string;
   description?: string;
   imageUrl?: string | null;
+  gtin?: string;
   /** SerpAPI organic snippet used for composition (luxury JS-only sites). */
   materialsFromSerpSearch?: boolean;
 } | null> {
@@ -863,6 +983,11 @@ export async function scrapeProductFromUrl(url: string): Promise<{
   }
 
   const zaraHost = host.includes("zara.com");
+  console.log("[scrape] pre-BrightData condition check", {
+    zaraHost,
+    standardFetchFailed,
+    hasMaterialsFromGeneric: !!merged?.materials?.trim()
+  });
   const shouldTryBrightData =
     !zaraHost && (standardFetchFailed || !merged?.materials?.trim());
 
@@ -875,6 +1000,13 @@ export async function scrapeProductFromUrl(url: string): Promise<{
       console.log("[scrape] retrying parse with Bright Data HTML");
       const $bd = cheerio.load(brightDataHtml);
       bdExtraction = await extractGenericProductFromLoadedCheerio($bd, host, "Bright Data HTML (Cheerio)");
+      console.log("[BD] extraction result:", {
+        hasMaterials: !!bdExtraction?.materials,
+        hasName: !!bdExtraction?.name,
+        hasPrice: bdExtraction?.priceFromJsonLd != null,
+        materialsPreview: bdExtraction?.materials?.slice(0, 100),
+        namePreview: bdExtraction?.name?.slice(0, 50)
+      });
       console.log("[scrape] Bright Data parse result", {
         hasMaterials: !!bdExtraction?.materials,
         hasName: !!bdExtraction?.name,
@@ -900,6 +1032,7 @@ export async function scrapeProductFromUrl(url: string): Promise<{
     materials: merged.materials,
     description: merged.description,
     imageUrl: merged.imageUrl,
+    gtin: merged.gtin,
     ...(merged.priceFromJsonLd != null ? { price: merged.priceFromJsonLd } : {}),
     ...(merged.materialsFromSerpSearch ? { materialsFromSerpSearch: true as const } : {})
   };
@@ -916,7 +1049,7 @@ export async function scrapeProductFromUrl(url: string): Promise<{
     scrapedPriceSource:
       out.price != null
         ? merged.priceFromJsonLd != null
-          ? "JSON-LD Product offers[].price (schema.org)"
+          ? "JSON-LD Product/ProductGroup (offers[].price or hasVariant[].offers.price)"
           : "set in generic HTML path"
         : "none",
     serpApiNote: "SerpAPI may run in /api/scan after scrapeProductFromUrl when scraped price is missing"
