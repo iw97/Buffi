@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { safeReturnPath } from "@/lib/auth/returnTo";
 import { useSignIn } from "@/hooks/useSignIn";
+import { flushOnboardingAnswers } from "@/lib/auth/onboardingAnswers";
 
 export function OnboardingAccountScreen() {
   const router = useRouter();
@@ -62,6 +63,8 @@ export function OnboardingAccountScreen() {
       const isNewUser =
         !!signedInUser.metadata.creationTime &&
         signedInUser.metadata.creationTime === signedInUser.metadata.lastSignInTime;
+      // Fire-and-forget: flush onboarding answers to profile (no-op if empty)
+      void flushOnboardingAnswers(signedInUser.uid, signedInUser.displayName);
       router.push(isNewUser ? "/scan" : returnTo);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Sign-in failed");

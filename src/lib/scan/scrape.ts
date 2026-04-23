@@ -96,6 +96,44 @@ function looksLikeCompositionText(text: string): boolean {
   );
 }
 
+const SUB_COMPONENT_COMPOSITION_KEYWORDS = [
+  "gusset",
+  "lining",
+  "liner",
+  "trim",
+  "waistband",
+  "elastic",
+  "label",
+  "embroidery",
+  "interlining",
+  "pocket"
+];
+
+function hasSubComponentKeyword(text: string): boolean {
+  const t = text.toLowerCase();
+  return SUB_COMPONENT_COMPOSITION_KEYWORDS.some((k) => t.includes(k));
+}
+
+function isPrimaryGussetOrLiningComposition(text: string): boolean {
+  const t = text.toLowerCase().trim();
+  if (!t) return false;
+  const firstChunk = t.split(/[,;|]/)[0]?.trim() || t;
+  return (
+    /\bgusset\b/.test(firstChunk) ||
+    /\blining\b/.test(firstChunk) ||
+    /\b(gusset|lining)\b/.test(t.slice(0, 50))
+  );
+}
+
+function filterSubComponentFalsePositiveMaterials(materials: string | undefined): string | undefined {
+  if (!materials?.trim()) return materials;
+  const text = materials.trim();
+  const hasKeyword = hasSubComponentKeyword(text);
+  if (hasKeyword && text.length < 60) return undefined;
+  if (isPrimaryGussetOrLiningComposition(text)) return undefined;
+  return text;
+}
+
 /**
  * JSON-LD material strings only: require % or digit+%+fiber pattern.
  * Never treat Product.description / name as composition (marketing copy).
@@ -793,6 +831,18 @@ async function extractGenericProductFromLoadedCheerio(
         materials = broad;
         console.log(LOG_PREFIX, "materials found via broad text composition scan");
       }
+    }
+
+    const materialsBeforeFilter = materials;
+    materials = filterSubComponentFalsePositiveMaterials(materials);
+    if (pipelineLabel.includes("Bright Data")) {
+      console.log("[BD] materials before gusset/lining filter:", materialsBeforeFilter ?? null);
+      console.log("[BD] materials after gusset/lining filter:", materials ?? null);
+    }
+    if (materialsBeforeFilter && !materials) {
+      console.log(
+        "[scrape] rejected gusset/lining false positive, triggering Bright Data for real composition"
+      );
     }
 
     if (!name) name = $("h1").first().text().trim() || ogTitle;

@@ -92,6 +92,11 @@ export interface UserProfile {
   valuesSelected?: string[];
   priorities?: Record<string, number>;
   budgetPerItem?: number;
+  /** Onboarding quiz answers */
+  onboardingRegret?: string;
+  onboardingQuality?: string;
+  onboardingAwareness?: string;
+  shopperType?: string;
   savedCount?: number;
   scannedCount?: number;
   trapsAvoidedDollars?: number;

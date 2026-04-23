@@ -6,6 +6,7 @@ import type { User } from "firebase/auth";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { auth as firebaseAuth, BUFFI_SIGNIN_EMAIL_KEY } from "@/lib/firebase";
 import { safeReturnPath } from "@/lib/auth/returnTo";
+import { flushOnboardingAnswers } from "@/lib/auth/onboardingAnswers";
 
 type Status = "checking" | "need-email" | "signing-in" | "success" | "error";
 
@@ -58,7 +59,11 @@ export default function AuthCallbackPage() {
         .completeSignInWithEmailLink(storedEmail, fullUrl)
         .then(() => {
           setStatus("success");
-          router.replace(afterSignInPath(firebaseAuth?.currentUser ?? null));
+          const currentUser = firebaseAuth?.currentUser ?? null;
+          if (currentUser) {
+            void flushOnboardingAnswers(currentUser.uid, currentUser.displayName);
+          }
+          router.replace(afterSignInPath(currentUser));
         })
         .catch(() => {
           setStatus("error");
@@ -83,7 +88,11 @@ export default function AuthCallbackPage() {
     try {
       await auth.completeSignInWithEmailLink(email, window.location.href);
       setStatus("success");
-      router.replace(afterSignInPath(firebaseAuth?.currentUser ?? null));
+      const currentUser = firebaseAuth?.currentUser ?? null;
+      if (currentUser) {
+        void flushOnboardingAnswers(currentUser.uid, currentUser.displayName);
+      }
+      router.replace(afterSignInPath(currentUser));
     } catch {
       setStatus("error");
       setErrorMessage(

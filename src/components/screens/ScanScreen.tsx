@@ -20,8 +20,13 @@ export function ScanScreen() {
   const authLoading = auth?.loading ?? true;
   const user = auth?.user ?? null;
 
+  const scannedCount = auth?.profile?.scannedCount ?? 0;
+  const isPro = auth?.profile?.isPro ?? false;
+
   const { setPending } = usePendingScan();
   const { lastError, setLastError } = useScanError();
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [isProOverride, setIsProOverride] = useState(false);
   const [urlOpen, setUrlOpen] = useState(false);
   const [urlValue, setUrlValue] = useState("");
   const [showZaraTagHint, setShowZaraTagHint] = useState(false);
@@ -58,9 +63,18 @@ export function ScanScreen() {
     );
   }
 
+  function isPaywallBlocking(): boolean {
+    if (isPro || isProOverride) return false;
+    return scannedCount >= 1;
+  }
+
   function handleUrlSubmit() {
     const url = urlValue.trim();
     if (!url) return;
+    if (isPaywallBlocking()) {
+      setPaywallOpen(true);
+      return;
+    }
     clearError();
     setZaraUrlTagScanHint(false);
     setShowZaraTagHint(false);
@@ -163,6 +177,10 @@ export function ScanScreen() {
   }
 
   function handleScanTagClick() {
+    if (isPaywallBlocking()) {
+      setPaywallOpen(true);
+      return;
+    }
     clearError();
     setTagOcrFailure(null);
     setTagFileReadError(null);
@@ -170,6 +188,10 @@ export function ScanScreen() {
   }
 
   function handleChooseFromLibrary() {
+    if (isPaywallBlocking()) {
+      setPaywallOpen(true);
+      return;
+    }
     fileInputRef.current?.click();
   }
 
@@ -567,6 +589,44 @@ export function ScanScreen() {
         onError={handleTagScannerError}
         onChooseFromLibrary={handleChooseFromLibrary}
       />
+
+      {/* Paywall modal — shown before 2nd scan */}
+      <div
+        className={`premium-modal ${paywallOpen ? "open" : ""}`}
+        onClick={() => setPaywallOpen(false)}
+      >
+        <div className="premium-modal-inner" onClick={(e) => e.stopPropagation()}>
+          <div className="premium-eyebrow">Buffi Pro</div>
+          <div className="premium-title">
+            The full
+            <br />
+            <em>wardrobe.</em>
+          </div>
+          <div className="premium-subtitle">
+            You just found out what that item actually costs to make. Buffi does
+            this for everything in your wardrobe.
+          </div>
+          <button
+            className="ob-next"
+            type="button"
+            style={{ width: "100%" }}
+            onClick={() => {
+              setIsProOverride(true);
+              setPaywallOpen(false);
+            }}
+          >
+            Start Pro — $30 / year
+          </button>
+          <button
+            className="share-close"
+            type="button"
+            onClick={() => setPaywallOpen(false)}
+            style={{ marginTop: 8 }}
+          >
+            Maybe later
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

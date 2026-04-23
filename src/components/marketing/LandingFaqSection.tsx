@@ -19,14 +19,6 @@ const FAQ_ITEMS: { q: string; a: string }[] = [
     q: "What does Think Twice mean?",
     a: "Think Twice means the markup is high but there are mitigating factors — quality fibers, independent brand economics, or strong cost per wear. It is worth considering before buying, not necessarily worth avoiding.",
   },
-  {
-    q: "Is Buffi free?",
-    a: "Core scanning and analysis is free, always. Buffi Pro unlocks unlimited saves and additional features.",
-  },
-  {
-    q: "How does Buffi make money?",
-    a: "Buffi Pro subscription at $2.50/month or $30/year. We do not sell your data or accept brand sponsorships — our analysis is independent.",
-  },
 ];
 
 export default function LandingFaqSection() {

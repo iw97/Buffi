@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
@@ -311,6 +311,16 @@ export function BreakdownScreen() {
   const imageUrl = result?.imageUrl ?? null;
   const showProductImage = imageUrl && !imageError;
 
+  // Increment scannedCount once per session when a result is first shown.
+  const didIncrementScanCount = useRef(false);
+  useEffect(() => {
+    if (didIncrementScanCount.current) return;
+    if (!user || !isFirebaseConfigured() || !validResult) return;
+    didIncrementScanCount.current = true;
+    const current = auth?.profile?.scannedCount ?? 0;
+    void setUserProfile(user.uid, { scannedCount: current + 1 });
+  }, [user, validResult, auth?.profile?.scannedCount]);
+
   useEffect(() => {
     const t = window.setTimeout(() => {
       document.querySelectorAll<HTMLElement>(".fiber-fill[data-width]").forEach((el) => {
@@ -415,10 +425,6 @@ export function BreakdownScreen() {
     }
     if (!isLoggedIn) {
       setSavePromptOpen(true);
-      return;
-    }
-    if (!isPro && saveCount >= 2 && !isSaved) {
-      setPremiumOpen(true);
       return;
     }
     toggleSave();
@@ -975,10 +981,11 @@ export function BreakdownScreen() {
           <div className="premium-title">
             The full
             <br />
-            <em>picture.</em>
+            <em>wardrobe.</em>
           </div>
           <div className="premium-subtitle">
-            Unlock everything Buffi has to offer — unlimited saves, deep analytics, and real-time price comparisons.
+            You just found out what that item actually costs to make. Buffi does
+            this for everything in your wardrobe.
           </div>
 
           <button

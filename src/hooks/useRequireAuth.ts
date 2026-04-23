@@ -20,7 +20,7 @@ export function useRequireAuth(returnTo: string): void {
     if (loading) return;
     if (!user) {
       const params = new URLSearchParams({ returnTo });
-      router.replace(`/onboarding/account?${params.toString()}`);
+      router.replace(`/onboarding/intro?${params.toString()}`);
     }
   }, [isConfigured, loading, user, router, returnTo]);
 }
