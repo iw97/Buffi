@@ -9,7 +9,13 @@ export interface BetterAlternativeCard {
 }
 
 export interface BetterAlternativesPayload {
-  sameBrand: BetterAlternativeCard | null;
-  sameBrandSkippedMessage: string | null;
-  crossBrand: BetterAlternativeCard | null;
+  /** Best alternative found across all brands. */
+  primary: BetterAlternativeCard | null;
+  /** Second-best, from a different brand than primary. */
+  secondary: BetterAlternativeCard | null;
+  /**
+   * Populated whenever both primary and secondary are null.
+   * Always contains actionable fabric guidance — never empty.
+   */
+  fallbackMessage: string | null;
 }

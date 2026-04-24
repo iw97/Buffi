@@ -1,11 +1,14 @@
 import type { ScanAnalysis } from "@/lib/scan/types";
 import { getFiberBreakdown } from "@/lib/scan/verdict";
 
-/** Cross-brand “better natural fiber” target — listings rarely use branded names (Naia, Tencel, etc.). */
+/** Cross-brand "better natural fiber" target — listings rarely use branded names (Naia, Tencel, etc.). */
 export const CROSS_BRAND_NATURAL_OR_QUERY = "linen OR cotton OR silk";
 
 /** @deprecated Use CROSS_BRAND_NATURAL_OR_QUERY or getCrossBrandShoppingQueries. */
 export const NATURAL_FIBER_OR_QUERY = CROSS_BRAND_NATURAL_OR_QUERY;
+
+/** Broader natural-fiber search terms used by the unified alternatives query. */
+export const NATURAL_FIBERS_OR_QUERY = "cotton OR linen OR wool OR silk OR hemp";
 
 const MIN_SERP_RESULTS_BEFORE_RETRY = 3;
 
@@ -226,6 +229,14 @@ export function dominantFiberLine(materials: { fiber: string; percentage: number
   return `${top.fiber} ${Math.round(top.percentage)}%`;
 }
 
+export function scoreAlternative(original: ScanAnalysis, alt: ScanAnalysis): number {
+  const a = getFiberBreakdown(alt.materials);
+  const markupPenalty =
+    typeof alt.markupMax === "number" ? alt.markupMax : alt.markup ?? 50;
+  const cpw = alt.costPerWear > 0 ? alt.costPerWear : 99;
+  return a.naturalPct * 2 + a.premiumNaturalPct - markupPenalty * 0.15 - cpw * 3;
+}
+
 export function normalizeBrand(s: string): string {
   return s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
@@ -235,4 +246,60 @@ export function titleMatchesBrand(title: string, brand: string): boolean {
   const t = title.toLowerCase();
   const b = brand.toLowerCase();
   return t.includes(b);
+}
+
+/**
+ * Unified alternatives query — no brand restriction.
+ * Returns three tiers:
+ *   primary   — garment type + broad natural fibers + price cap
+ *   secondary — garment type + "natural fiber" phrase + price cap (catches listings that spell it out)
+ *   simplified — garment type + price cap only (last resort)
+ */
+export function getAlternativeShoppingQueries(
+  scan: ScanAnalysis
+): { primary: string; secondary: string; simplified: string } {
+  const category = inferGarmentCategory(scan.name);
+  const cap = shoppingPriceCapUsd(scan);
+  const primary = `${category} ${NATURAL_FIBERS_OR_QUERY} under $${cap}`;
+  const secondary = `${category} natural fiber under $${cap}`;
+  const simplified = `${category} under $${cap}`;
+  return { primary, secondary, simplified };
+}
+
+/**
+ * Looser qualification threshold — used as a fallback tier when nothing passes
+ * meetsCrossBrandImprovement. Accepts any item with strong absolute natural
+ * fiber content at a comparable price, even if it isn't strictly "better" than
+ * the original.
+ */
+export function isComparableAlternative(original: ScanAnalysis, alt: ScanAnalysis): boolean {
+  const a = getFiberBreakdown(alt.materials);
+  if (a.naturalPct < 60) return false;
+  const origPrice = typeof original.price === "number" && original.price > 0 ? original.price : 0;
+  const altPrice = typeof alt.price === "number" && alt.price > 0 ? alt.price : 0;
+  if (origPrice > 0 && altPrice > origPrice * 1.25) return false;
+  return true;
+}
+
+/**
+ * Always returns a non-empty fabric guidance string for the fallback slot.
+ * Copy adapts to how synthetic-heavy the original item is.
+ */
+export function fabricGuidanceMessage(scan: ScanAnalysis): string {
+  const category = inferGarmentCategory(scan.name);
+  const o = getFiberBreakdown(scan.materials);
+
+  let guidance: string;
+  if (o.syntheticPct >= 70) {
+    guidance =
+      "aim for at least 70% natural fibers — cotton, linen, or wool will wear better and hold up longer than synthetic blends at this price point";
+  } else if (o.syntheticPct >= 40) {
+    guidance =
+      "look for options with under 30% synthetic content and a dominant natural fiber — even a 60% cotton blend is a meaningful step up";
+  } else {
+    guidance =
+      "look for a higher proportion of premium natural fibers like linen, silk, or merino wool — the fiber quality is where the real value difference shows";
+  }
+
+  return `We couldn't find an exact match, but here's what to look for in a ${category} with better fabric content: ${guidance}.`;
 }

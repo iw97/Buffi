@@ -48,7 +48,14 @@ export function OnboardingAccountScreen() {
           <p className="ob-desc">
             You&apos;re already signed in as <strong style={{ color: "var(--ivory)" }}>{signedInAs}</strong>.
           </p>
-          <button className="ob-next" type="button" onClick={() => router.push(returnTo)}>
+          <button
+            className="ob-next"
+            type="button"
+            onClick={() => {
+              void flushOnboardingAnswers(user.uid, user.displayName);
+              router.push(returnTo);
+            }}
+          >
             Continue →
           </button>
         </div>

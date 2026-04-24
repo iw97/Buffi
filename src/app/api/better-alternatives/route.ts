@@ -6,16 +6,15 @@ import { scrapeProductFromUrl } from "@/lib/scan/scrape";
 import { getGoogleShoppingResults } from "@/lib/scan/serpapi";
 import {
   dominantFiberLine,
-  getCrossBrandShoppingQueries,
-  getSameBrandShoppingQueries,
-  isClearlyBetterFiberComposition,
+  fabricGuidanceMessage,
+  getAlternativeShoppingQueries,
+  isComparableAlternative,
   meetsCrossBrandImprovement,
   MIN_SERP_RESULTS_BEFORE_RETRY,
   normalizeBrand,
   pickComparisonBadge,
-  titleMatchesBrand
+  scoreAlternative
 } from "@/lib/better-alternatives/logic";
-import { getFiberBreakdown } from "@/lib/scan/verdict";
 import type { BetterAlternativeCard, BetterAlternativesPayload } from "@/lib/better-alternatives/types";
 
 export type { BetterAlternativeCard, BetterAlternativesPayload } from "@/lib/better-alternatives/types";
@@ -57,100 +56,85 @@ function toCard(alt: ScanAnalysis, url: string, original: ScanAnalysis): BetterA
   };
 }
 
-async function findSameBrandBetter(original: ScanAnalysis): Promise<{
-  card: BetterAlternativeCard | null;
-  skippedMessage: string | null;
-}> {
-  const queries = getSameBrandShoppingQueries(original);
-  if (!queries) {
-    return { card: null, skippedMessage: null };
-  }
-  const brand = (original.brand || "").trim();
-  const { primary: samePrimary, simplified: sameSimplified } = queries;
-  let results = await getGoogleShoppingResults(samePrimary, 12);
-  if (
-    results.length < MIN_SERP_RESULTS_BEFORE_RETRY &&
-    samePrimary !== sameSimplified
-  ) {
-    const more = await getGoogleShoppingResults(sameSimplified, 12);
-    if (more.length > results.length) results = more;
-  }
-  const pool = results.filter((r) => titleMatchesBrand(r.title, brand)).slice(0, 3);
-
-  if (pool.length === 0) {
-    return {
-      card: null,
-      skippedMessage: `We couldn't find a better option from ${brand} in this category.`
-    };
-  }
-
-  const analyses = await Promise.all(pool.map((p) => analyzeProductUrl(p.link)));
-  for (let i = 0; i < analyses.length; i++) {
-    const alt = analyses[i];
-    if (!alt) continue;
-    if (!titleMatchesBrand(alt.brand || alt.name, brand) && !titleMatchesBrand(pool[i].title, brand)) {
-      continue;
-    }
-    if (isClearlyBetterFiberComposition(original, alt)) {
-      return { card: toCard(alt, pool[i].link, original), skippedMessage: null };
-    }
-  }
-
-  return {
-    card: null,
-    skippedMessage: `We couldn't find a better option from ${brand} in this category.`
-  };
-}
-
-function scoreAlternative(original: ScanAnalysis, alt: ScanAnalysis): number {
-  const a = getFiberBreakdown(alt.materials);
-  const markupPenalty =
-    typeof alt.markupMax === "number" ? alt.markupMax : alt.markup ?? 50;
-  const cpw = alt.costPerWear > 0 ? alt.costPerWear : 99;
-  return a.naturalPct * 2 + a.premiumNaturalPct - markupPenalty * 0.15 - cpw * 3;
-}
-
-async function findCrossBrandBetter(
-  original: ScanAnalysis,
-  excludeBrandNorm: string | null
-): Promise<BetterAlternativeCard | null> {
-  const { primary: crossPrimary, simplified: crossSimplified } = getCrossBrandShoppingQueries(original);
-  let results = await getGoogleShoppingResults(crossPrimary, 8);
-  if (
-    results.length < MIN_SERP_RESULTS_BEFORE_RETRY &&
-    crossPrimary !== crossSimplified
-  ) {
-    const more = await getGoogleShoppingResults(crossSimplified, 8);
-    if (more.length > results.length) results = more;
-  }
-  const top = results.slice(0, 5);
-  if (top.length === 0) return null;
-
-  const analyses = await Promise.all(top.map((p) => analyzeProductUrl(p.link)));
-  const candidates: { alt: ScanAnalysis; url: string; score: number }[] = [];
+/**
+ * Single unified search across all brands.
+ * Priority: (1) same garment type, (2) higher natural fiber %, (3) similar/lower price.
+ *
+ * Two qualification tiers:
+ *   - Tier 1 (meetsCrossBrandImprovement): strictly better fiber, markup, or CPW
+ *   - Tier 2 (isComparableAlternative): strong absolute natural content at comparable price
+ *
+ * Always returns a fallbackMessage when no cards are found.
+ */
+async function findAlternatives(original: ScanAnalysis): Promise<BetterAlternativesPayload> {
+  const { primary: q1, secondary: q2, simplified: q3 } = getAlternativeShoppingQueries(original);
   const origNorm = normalizeBrand(original.brand || "");
 
+  // Fetch candidates — try progressively looser queries until we have enough
+  let results = await getGoogleShoppingResults(q1, 15);
+  if (results.length < MIN_SERP_RESULTS_BEFORE_RETRY) {
+    const more = await getGoogleShoppingResults(q2, 15);
+    if (more.length > results.length) results = more;
+  }
+  if (results.length < MIN_SERP_RESULTS_BEFORE_RETRY) {
+    const more = await getGoogleShoppingResults(q3, 15);
+    if (more.length > results.length) results = more;
+  }
+
+  const top = results.slice(0, 8);
+  if (top.length === 0) {
+    return { primary: null, secondary: null, fallbackMessage: fabricGuidanceMessage(original) };
+  }
+
+  // Scrape and analyze all candidates in parallel
+  const analyses = await Promise.all(top.map((p) => analyzeProductUrl(p.link)));
+
+  type Candidate = { alt: ScanAnalysis; url: string; score: number };
+  const tier1: Candidate[] = [];
+  const tier2: Candidate[] = [];
+
   for (let i = 0; i < analyses.length; i++) {
     const alt = analyses[i];
     if (!alt) continue;
-    if (!meetsCrossBrandImprovement(original, alt)) continue;
+    // Always exclude the same brand as the scanned item
     const b = normalizeBrand(alt.brand || "");
-    if (excludeBrandNorm && b && b === excludeBrandNorm) continue;
     if (origNorm && b === origNorm) continue;
-    candidates.push({
-      alt,
-      url: top[i].link,
-      score: scoreAlternative(original, alt)
-    });
+
+    const score = scoreAlternative(original, alt);
+    if (meetsCrossBrandImprovement(original, alt)) {
+      tier1.push({ alt, url: top[i].link, score });
+    } else if (isComparableAlternative(original, alt)) {
+      tier2.push({ alt, url: top[i].link, score });
+    }
   }
 
-  if (candidates.length === 0) return null;
-  candidates.sort((a, b) => b.score - a.score);
-  const best = candidates[0];
-  return toCard(best.alt, best.url, original);
+  // Prefer tier-1 candidates; fill from tier-2 if needed
+  const pool = tier1.length > 0 ? tier1 : tier2;
+  pool.sort((a, b) => b.score - a.score);
+
+  if (pool.length === 0) {
+    return { primary: null, secondary: null, fallbackMessage: fabricGuidanceMessage(original) };
+  }
+
+  const primaryCandidate = pool[0];
+  const primary = toCard(primaryCandidate.alt, primaryCandidate.url, original);
+
+  // Secondary must come from a different brand than primary
+  const primaryBrandNorm = normalizeBrand(primaryCandidate.alt.brand || "");
+  const secondaryCandidate = pool.slice(1).find((c) => {
+    const b = normalizeBrand(c.alt.brand || "");
+    return !primaryBrandNorm || b !== primaryBrandNorm;
+  }) ?? null;
+  const secondary = secondaryCandidate
+    ? toCard(secondaryCandidate.alt, secondaryCandidate.url, original)
+    : null;
+
+  return { primary, secondary, fallbackMessage: null };
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse<BetterAlternativesPayload | { error: string }>> {
+export async function POST(
+  req: NextRequest
+): Promise<NextResponse<BetterAlternativesPayload | { error: string }>> {
   try {
     const body = await req.json().catch(() => ({}));
     const scan = body?.scan as ScanAnalysis | undefined;
@@ -158,46 +142,10 @@ export async function POST(req: NextRequest): Promise<NextResponse<BetterAlterna
       return NextResponse.json({ error: "Invalid scan payload" }, { status: 400 });
     }
 
-    const [sameRes, crossFirst] = await Promise.all([
-      findSameBrandBetter(scan),
-      findCrossBrandBetter(scan, null)
-    ]);
-
-    let crossBrand = crossFirst;
-    const excludeSameAsCard =
-      sameRes.card != null ? normalizeBrand(sameRes.card.brand) : null;
-    if (
-      excludeSameAsCard &&
-      (!crossBrand || normalizeBrand(crossBrand.brand) === excludeSameAsCard)
-    ) {
-      crossBrand = await findCrossBrandBetter(scan, excludeSameAsCard);
-    }
-
-    const payload: BetterAlternativesPayload = {
-      sameBrand: sameRes.card,
-      sameBrandSkippedMessage: sameRes.card ? null : sameRes.skippedMessage,
-      crossBrand: crossBrand ?? null
-    };
-
-    const hasAny =
-      payload.sameBrand != null ||
-      payload.crossBrand != null ||
-      (payload.sameBrandSkippedMessage != null && payload.sameBrandSkippedMessage.length > 0);
-
-    if (!hasAny) {
-      return NextResponse.json({
-        sameBrand: null,
-        sameBrandSkippedMessage: null,
-        crossBrand: null
-      });
-    }
-
+    const payload = await findAlternatives(scan);
     return NextResponse.json(payload);
   } catch (e) {
     console.error(LOG, (e as Error).message);
-    return NextResponse.json(
-      { error: "Better alternatives failed" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Better alternatives failed" }, { status: 500 });
   }
 }

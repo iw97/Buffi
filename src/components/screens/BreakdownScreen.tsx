@@ -356,7 +356,7 @@ export function BreakdownScreen() {
       })
       .catch(() => {
         if (!cancelled) {
-          setBetterAlts({ sameBrand: null, sameBrandSkippedMessage: null, crossBrand: null });
+          setBetterAlts({ primary: null, secondary: null, fallbackMessage: null });
         }
       })
       .finally(() => {
@@ -539,17 +539,9 @@ export function BreakdownScreen() {
     showBetterAlternatives &&
     (betterAltsLoading ||
       (betterAlts &&
-        (betterAlts.sameBrand != null ||
-          betterAlts.crossBrand != null ||
-          (betterAlts.sameBrandSkippedMessage != null && betterAlts.sameBrandSkippedMessage.length > 0))));
-
-  const origBrandForAlts = (result?.brand || "").trim();
-  const showBetterAltFromRow =
-    origBrandForAlts.length > 0 &&
-    !/^unknown$/i.test(origBrandForAlts) &&
-    betterAlts &&
-    (betterAlts.sameBrand != null ||
-      (betterAlts.sameBrandSkippedMessage != null && betterAlts.sameBrandSkippedMessage.length > 0));
+        (betterAlts.primary != null ||
+          betterAlts.secondary != null ||
+          (betterAlts.fallbackMessage != null && betterAlts.fallbackMessage.length > 0))));
   const certifications = Array.isArray(result?.certifications)
     ? result.certifications.filter((c): c is string => typeof c === "string" && c.trim().length > 0)
     : [];
@@ -866,23 +858,20 @@ export function BreakdownScreen() {
               ) : (
                 betterAlts && (
                   <>
-                    {showBetterAltFromRow && (
+                    {betterAlts.primary && (
                       <>
-                        <div className="better-alt-slot-label better-alt-slot-from">
-                          FROM {origBrandForAlts.toUpperCase()}
-                        </div>
-                        {betterAlts.sameBrand ? (
-                          <BetterAltProductCard card={betterAlts.sameBrand} />
-                        ) : (
-                          <p className="better-alt-skip-msg">{betterAlts.sameBrandSkippedMessage}</p>
-                        )}
+                        <div className="better-alt-slot-label better-alt-slot-worth">BEST MATCH</div>
+                        <BetterAltProductCard card={betterAlts.primary} />
                       </>
                     )}
-                    {betterAlts.crossBrand && (
+                    {betterAlts.secondary && (
                       <>
-                        <div className="better-alt-slot-label better-alt-slot-worth">WORTH CONSIDERING</div>
-                        <BetterAltProductCard card={betterAlts.crossBrand} />
+                        <div className="better-alt-slot-label better-alt-slot-worth">ALSO WORTH CONSIDERING</div>
+                        <BetterAltProductCard card={betterAlts.secondary} />
                       </>
+                    )}
+                    {!betterAlts.primary && !betterAlts.secondary && betterAlts.fallbackMessage && (
+                      <p className="better-alt-skip-msg">{betterAlts.fallbackMessage}</p>
                     )}
                   </>
                 )
@@ -979,13 +968,17 @@ export function BreakdownScreen() {
         <div className="premium-modal-inner" onClick={(e) => e.stopPropagation()}>
           <div className="premium-eyebrow">Buffi Pro</div>
           <div className="premium-title">
-            The full
+            Buffi works for you,
             <br />
-            <em>wardrobe.</em>
+            <em>not for brands.</em>
           </div>
           <div className="premium-subtitle">
-            You just found out what that item actually costs to make. Buffi does
-            this for everything in your wardrobe.
+            We don&apos;t take sponsored posts, brand deals, or payments from
+            manufacturers. Our verdicts can&apos;t be bought. To keep it that
+            way, Buffi is funded entirely by the people who use it.
+          </div>
+          <div className="premium-sub-line">
+            Join the people who decided they deserved honest information.
           </div>
 
           <button

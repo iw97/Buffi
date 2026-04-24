@@ -598,13 +598,17 @@ export function ScanScreen() {
         <div className="premium-modal-inner" onClick={(e) => e.stopPropagation()}>
           <div className="premium-eyebrow">Buffi Pro</div>
           <div className="premium-title">
-            The full
+            Buffi works for you,
             <br />
-            <em>wardrobe.</em>
+            <em>not for brands.</em>
           </div>
           <div className="premium-subtitle">
-            You just found out what that item actually costs to make. Buffi does
-            this for everything in your wardrobe.
+            We don&apos;t take sponsored posts, brand deals, or payments from
+            manufacturers. Our verdicts can&apos;t be bought. To keep it that
+            way, Buffi is funded entirely by the people who use it.
+          </div>
+          <div className="premium-sub-line">
+            Join the people who decided they deserved honest information.
           </div>
           <button
             className="ob-next"
