@@ -1033,6 +1033,23 @@ body {
   color: var(--teal);
 }
 
+/* ===== Onboarding page transition ===== */
+@keyframes ob-page-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.ob-page-enter {
+  animation: ob-page-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform;
+}
+
 /* ===== Onboarding shell ===== */
 .ob-shell {
   flex: 1;
