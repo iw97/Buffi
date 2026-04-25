@@ -43,6 +43,8 @@ interface AuthState {
 }
 
 interface AuthActions {
+  /** Reload `profile` from Firestore (e.g. after mutating savedCount). */
+  refreshProfile: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
@@ -209,12 +211,24 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
     await firebaseSignOut(auth);
   }, []);
 
+  const refreshProfile = useCallback(async () => {
+    const u = user;
+    if (!u || !isConfigured) return;
+    try {
+      const p = await getUserProfile(u.uid);
+      setProfile(p);
+    } catch {
+      setProfile(null);
+    }
+  }, [user, isConfigured]);
+
   const value = useMemo(
     () => ({
       user,
       profile,
       loading,
       isConfigured,
+      refreshProfile,
       signInWithGoogle,
       signUpWithEmail,
       signInWithEmail,
@@ -228,6 +242,7 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
       profile,
       loading,
       isConfigured,
+      refreshProfile,
       signInWithGoogle,
       signUpWithEmail,
       signInWithEmail,

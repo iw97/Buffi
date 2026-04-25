@@ -6,6 +6,7 @@
  * (single line or standard JSON in env — for Vercel/Netlify, paste minified JSON).
  */
 import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
+import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 
 let adminApp: App | null | undefined;
@@ -48,4 +49,11 @@ export function getAdminFirestore(): Firestore | null {
   const app = tryInitAdmin();
   if (!app) return null;
   return getFirestore(app);
+}
+
+/** Firebase Admin Auth, or null if service account is not configured. */
+export function getAdminAuth(): Auth | null {
+  const app = tryInitAdmin();
+  if (!app) return null;
+  return getAuth(app);
 }

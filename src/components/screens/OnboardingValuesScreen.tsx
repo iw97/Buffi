@@ -8,7 +8,6 @@ import { saveObAnswer } from "@/lib/auth/onboardingAnswers";
 const DEFAULT_CHIPS = [
   { label: "Natural fibers only", selected: true },
   { label: "No virgin plastic", selected: false },
-  { label: "Secondhand first", selected: true },
   { label: "Made in USA", selected: false },
   { label: "Union-made", selected: false },
   { label: "Cost-per-wear thinker", selected: true },

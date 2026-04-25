@@ -104,6 +104,8 @@ export interface UserProfile {
   isPro?: boolean;
   /** Scan count (can be reset) */
   scanCount?: number;
+  /** Count of completed breakdown views used for scan paywall. */
+  completedScans?: number;
   /** Present after `ensureUserDocument`; stored as Firestore `Timestamp`. */
   scanCountResetAt?: Timestamp | string;
   /** Saved items count */
@@ -126,6 +128,8 @@ export interface SavedItem {
   tags: string[];
   isEstimated: boolean;
   confidenceTier: number;
+  /** Auto-pinned first completed scan for non-pro users. */
+  firstScan?: boolean;
   savedAt: string;
 }
 

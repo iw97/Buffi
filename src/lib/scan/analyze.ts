@@ -50,13 +50,15 @@ For each value in selectedValues, evaluate the product and return exactly one of
 - **No animal products**: pass = no wool, silk, cashmere, leather, fur, down; fail = any animal-derived fiber present; unverified = never.
 - **Fair labor**: pass = brand has known fair labor certification (Fair Trade, B Corp, SA8000); fail = brand has known labor violations on record; unverified = most cases — be honest that this cannot be confirmed from label data alone.
 - **Made in USA**: pass = country of manufacture confirmed USA; fail = country confirmed not USA; unverified = country not available.
-- **Secondhand first**: always return unverified with note: "Check secondhand options in Buffi Pro".
 - **Capsule wardrobe**: pass = natural and/or cellulosic fibers (not petroleum-heavy), neutral category, versatile construction; fail = very trend-specific or low durability; unverified = insufficient data.
 - **Certified sustainable**: pass = known certification in product data (GOTS, OEKO-TEX, Bluesign, B Corp, **Naia Renew** with stated OEKO-TEX / GRS / TUV Austria context); fail = no certification and brand is known fast fashion; unverified = most cases.
 - **Union-made**: pass = union-made indicated; fail = known non-union; unverified = most cases.
 `;
 
 export async function analyzeWithClaude(raw: RawProductData, selectedValues: string[] = []): Promise<ScanAnalysis> {
+  /** Retired onboarding label; ignore if still present on older profiles. */
+  selectedValues = selectedValues.filter((v) => v !== "Secondhand first");
+
   const client = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY
   });

@@ -3256,13 +3256,52 @@ input[type="range"]::-webkit-slider-thumb:hover {
   padding: 16px;
   display: flex;
   gap: 14px;
-  align-items: center;
-  cursor: pointer;
+  align-items: stretch;
   transition: all 0.2s;
   position: relative;
 }
 .save-card:hover {
   border-color: var(--border-light);
+}
+
+.save-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  cursor: pointer;
+  text-align: left;
+}
+
+.save-card-side {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.save-card-unsave {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  border: 1px solid var(--border-light);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.save-card-unsave:hover:not(:disabled) {
+  color: var(--ivory);
+  border-color: var(--text-dim);
+}
+.save-card-unsave:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .save-swatch {

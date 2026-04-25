@@ -62,7 +62,6 @@ export default function PrivacyPage() {
           <li>Anthropic Claude API - AI-powered material analysis</li>
           <li>Google Cloud Vision API - optical character recognition for tag photos</li>
           <li>SerpAPI - Google Shopping price lookups</li>
-          <li>Poshmark and eBay APIs - secondhand product search (Pro feature)</li>
         </ul>
         <p>
           We share only the minimum data necessary with each service to perform its function. We do not sell your

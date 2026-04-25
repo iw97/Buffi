@@ -92,6 +92,7 @@ export async function ensureUserDocument(
     if (userFieldMissing(data, "updatedAt")) patch.updatedAt = serverTimestamp();
     if (userFieldMissing(data, "isPro")) patch.isPro = false;
     if (userFieldMissing(data, "scanCount")) patch.scanCount = 0;
+    if (userFieldMissing(data, "completedScans")) patch.completedScans = 0;
     if (userFieldMissing(data, "scanCountResetAt")) patch.scanCountResetAt = serverTimestamp();
     if (userFieldMissing(data, "saveCount")) patch.saveCount = 0;
 
@@ -128,6 +129,7 @@ function toSavedItem(docId: string, data: Record<string, unknown>): SavedItem {
     tags: Array.isArray(data.tags) ? (data.tags as string[]) : [],
     isEstimated: (data.isEstimated as boolean) ?? true,
     confidenceTier: (data.confidenceTier as number) ?? 0,
+    firstScan: (data.firstScan as boolean) ?? false,
     savedAt: timestampToIso(data.savedAt)
   };
 }

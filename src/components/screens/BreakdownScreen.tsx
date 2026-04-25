@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { useScanResult, getStoredScanResult, isValidScanResult, normalizeScanResult } from "@/contexts/ScanResultContext";
-import { addSavedItem, removeSavedItem, setUserProfile } from "@/lib/firebase/firestore";
+import { addSavedItem, addScanHistoryEntry, removeSavedItem, setUserProfile } from "@/lib/firebase/firestore";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import type { ScanAnalysis } from "@/lib/scan/types";
 import type { BetterAlternativeCard, BetterAlternativesPayload } from "@/lib/better-alternatives/types";
@@ -216,6 +216,15 @@ function analysisToSavedItem(a: ScanAnalysis) {
   };
 }
 
+function analysisToScanHistoryEntry(a: ScanAnalysis) {
+  return {
+    brandName: a.brand,
+    itemName: a.name,
+    verdict: verdictToSavedVerdict(a.verdict),
+    confidenceTier: a.confidenceTier ?? 1
+  };
+}
+
 export function BreakdownScreen() {
   const router = useRouter();
   const auth = useAuthOptional();
@@ -298,6 +307,7 @@ export function BreakdownScreen() {
   const isProFromProfile = auth?.profile?.isPro ?? false;
   const [isProOverride, setIsProOverride] = useState(false);
   const isPro = isProFromProfile || isProOverride;
+  const completedScans = auth?.profile?.completedScans ?? 0;
 
   // When scraper (or Claude) cannot provide a price (e.g. JS-rendered + bot detection),
   // allow user to enter price manually and recompute markup / cost-per-wear client-side.
@@ -311,15 +321,60 @@ export function BreakdownScreen() {
   const imageUrl = result?.imageUrl ?? null;
   const showProductImage = imageUrl && !imageError;
 
-  // Increment scannedCount once per session when a result is first shown.
-  const didIncrementScanCount = useRef(false);
+  const hasFinalizedCurrentScan = useRef(false);
   useEffect(() => {
-    if (didIncrementScanCount.current) return;
-    if (!user || !isFirebaseConfigured() || !validResult) return;
-    didIncrementScanCount.current = true;
-    const current = auth?.profile?.scannedCount ?? 0;
-    void setUserProfile(user.uid, { scannedCount: current + 1 });
-  }, [user, validResult, auth?.profile?.scannedCount]);
+    if (hasFinalizedCurrentScan.current) return;
+    if (!isConfigured || authLoading || !user || !validResult) return;
+
+    if (!isPro && completedScans >= 2) {
+      hasFinalizedCurrentScan.current = true;
+      clearResult();
+      router.replace("/paywall");
+      return;
+    }
+
+    hasFinalizedCurrentScan.current = true;
+    if (isPro) {
+      void addScanHistoryEntry(user.uid, analysisToScanHistoryEntry(validResult));
+      return;
+    }
+
+    void (async () => {
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/increment-scan-count", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error("Could not increment scan count");
+        const data = (await res.json()) as { completedScans?: number; previousCompletedScans?: number };
+        const previousCompletedScans = data.previousCompletedScans ?? 0;
+
+        await addScanHistoryEntry(user.uid, analysisToScanHistoryEntry(validResult));
+
+        if (previousCompletedScans === 0 && scan) {
+          const firstScanSavedId = await addSavedItem(user.uid, { ...scan, firstScan: true });
+          await setUserProfile(user.uid, { savedCount: (auth?.profile?.savedCount ?? 0) + 1 });
+          setSavedItemId(firstScanSavedId);
+        }
+
+        await auth?.refreshProfile();
+      } catch (e) {
+        setSaveError(e instanceof Error ? e.message : "Could not finalize scan");
+      }
+    })();
+  }, [
+    isConfigured,
+    authLoading,
+    user,
+    validResult,
+    isPro,
+    completedScans,
+    clearResult,
+    router,
+    scan,
+    auth
+  ]);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -395,6 +450,7 @@ export function BreakdownScreen() {
       setSavedItemId(id);
       showToast();
       await setUserProfile(user.uid, { savedCount: (auth?.profile?.savedCount ?? 0) + 1 });
+      await auth?.refreshProfile();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Save failed");
     }
@@ -408,6 +464,7 @@ export function BreakdownScreen() {
       setSavedItemId(null);
       if (user && auth?.profile)
         await setUserProfile(user.uid, { savedCount: Math.max(0, (auth.profile.savedCount ?? 1) - 1) });
+      await auth?.refreshProfile();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Remove failed");
     }
@@ -471,6 +528,18 @@ export function BreakdownScreen() {
 
   if (isConfigured && !user) {
     return null;
+  }
+
+  const shouldShowPaywall = !!user && !isPro && completedScans >= 2;
+  if (shouldShowPaywall) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-10">
+        <div className="analyzing-label">Redirecting</div>
+        <p className="auth-legal" style={{ color: "var(--text-dim)" }}>
+          Free scans are used up.
+        </p>
+      </div>
+    );
   }
 
   if (waitingForData) {
@@ -891,7 +960,7 @@ export function BreakdownScreen() {
             type="button"
             onClick={handleSaveTap}
           >
-            {isSaved ? "✓ Saved" : "🔖 Save"}
+            {isSaved ? "Unsave" : "🔖 Save"}
           </button>
           <button className="btn-share" type="button" onClick={() => setShareOpen(true)}>
             ↑ Share

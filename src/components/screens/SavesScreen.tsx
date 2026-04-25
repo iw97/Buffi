@@ -1,62 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
-import { subscribeSavedItems } from "@/lib/firebase/firestore";
+import { removeSavedItem, setUserProfile, subscribeSavedItems } from "@/lib/firebase/firestore";
 import type { SavedItem } from "@/lib/firebase/types";
-
-/** Set to true to always show the logged-in saves UI (for testing). */
-const TESTING_ALWAYS_SHOW_LOGGED_IN = true;
-
-/** Mock saved items for testing the logged-in layout. */
-const MOCK_SAVED_ITEMS: SavedItem[] = [
-  {
-    id: "mock-1",
-    userId: "testing-uid",
-    brandName: "Zara · W/2024",
-    itemName: "Flowy Satin-Finish Blouse",
-    price: 89,
-    estimatedMaterialCost: 12,
-    markup: 85,
-    markupBand: "high",
-    fibers: ["Polyester 100%"],
-    verdict: "trap",
-    verdictReason: "High markup on synthetic fabric.",
-    tags: ["Retail Trap", "100% Synthetic"],
-    isEstimated: true,
-    confidenceTier: 1,
-    savedAt: new Date().toISOString()
-  },
-  {
-    id: "mock-2",
-    userId: "testing-uid",
-    brandName: "Everlane",
-    itemName: "Organic Cotton Crew",
-    price: 38,
-    estimatedMaterialCost: 14,
-    markup: 45,
-    markupBand: "medium",
-    fibers: ["Organic Cotton 100%"],
-    verdict: "win",
-    verdictReason: "Fair value for natural fibers.",
-    tags: ["Worth It", "Natural Fibers"],
-    isEstimated: true,
-    confidenceTier: 1,
-    savedAt: new Date().toISOString()
-  }
-];
 
 export function SavesScreen() {
   const router = useRouter();
   const auth = useAuthOptional();
-  const [items, setItems] = useState<SavedItem[]>(TESTING_ALWAYS_SHOW_LOGGED_IN ? MOCK_SAVED_ITEMS : []);
+  const [items, setItems] = useState<SavedItem[]>([]);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (TESTING_ALWAYS_SHOW_LOGGED_IN && (!auth?.user?.uid || !auth?.isConfigured)) {
-      setItems(MOCK_SAVED_ITEMS);
-      return;
-    }
     if (!auth?.user?.uid || !auth?.isConfigured) {
       setItems([]);
       return;
@@ -65,8 +22,30 @@ export function SavesScreen() {
     return () => unsub();
   }, [auth?.user?.uid, auth?.isConfigured]);
 
-  const isLoggedIn = TESTING_ALWAYS_SHOW_LOGGED_IN || !!auth?.user;
-  const loading = !TESTING_ALWAYS_SHOW_LOGGED_IN && (auth?.loading ?? true);
+  const handleUnsave = useCallback(
+    async (e: MouseEvent, item: SavedItem) => {
+      e.stopPropagation();
+      const id = item.id;
+      if (!id || !auth?.user?.uid || !auth?.isConfigured || removingId) return;
+      setListError(null);
+      setRemovingId(id);
+      try {
+        await removeSavedItem(id);
+        const prev = auth.profile?.savedCount ?? items.length;
+        const next = Math.max(0, prev - 1);
+        await setUserProfile(auth.user.uid, { savedCount: next });
+        await auth.refreshProfile();
+      } catch (err) {
+        setListError(err instanceof Error ? err.message : "Could not remove save");
+      } finally {
+        setRemovingId(null);
+      }
+    },
+    [auth, items.length, removingId]
+  );
+
+  const isLoggedIn = !!auth?.user;
+  const loading = auth?.loading ?? true;
 
   if (loading) {
     return (
@@ -76,7 +55,7 @@ export function SavesScreen() {
     );
   }
 
-  if (!isLoggedIn || (!auth?.isConfigured && !TESTING_ALWAYS_SHOW_LOGGED_IN)) {
+  if (!isLoggedIn || !auth?.isConfigured) {
     return (
       <div className="min-h-screen flex flex-col">
         <div className="saves-header">
@@ -103,6 +82,11 @@ export function SavesScreen() {
       </div>
 
       <div className="saves-scroll">
+        {listError && (
+          <p className="auth-legal" style={{ color: "var(--red)", padding: "0 4px 8px" }}>
+            {listError}
+          </p>
+        )}
         {items.length === 0 ? (
           <div className="saves-empty">
             <div className="saves-empty-icon" aria-hidden>🔖</div>
@@ -114,29 +98,40 @@ export function SavesScreen() {
           </div>
         ) : (
           items.map((item) => (
-            <div
-              key={item.id}
-              className="save-card"
-              onClick={() => router.push("/breakdown")}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => e.key === "Enter" && router.push("/breakdown")}
-            >
-              <div className="save-swatch" aria-hidden>
-                👕
-              </div>
-              <div className="save-meta">
-                <div className="save-brand">{item.brandName}</div>
-                <div className="save-name">{item.itemName}</div>
-                <div className="save-tags">
-                  {item.tags.map((t) => (
-                    <span key={t} className={`save-tag ${item.verdict}`}>
-                      {t}
-                    </span>
-                  ))}
+            <div key={item.id} className="save-card">
+              <div
+                className="save-card-main"
+                onClick={() => router.push("/breakdown")}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === "Enter" && router.push("/breakdown")}
+              >
+                <div className="save-swatch" aria-hidden>
+                  👕
+                </div>
+                <div className="save-meta">
+                  <div className="save-brand">{item.brandName}</div>
+                  <div className="save-name">{item.itemName}</div>
+                  <div className="save-tags">
+                    {item.tags.map((t) => (
+                      <span key={t} className={`save-tag ${item.verdict}`}>
+                        {t}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
-              <div className="save-price">${item.price}</div>
+              <div className="save-card-side">
+                <div className="save-price">${item.price}</div>
+                <button
+                  type="button"
+                  className="save-card-unsave"
+                  disabled={removingId === item.id}
+                  onClick={(e) => handleUnsave(e, item)}
+                >
+                  {removingId === item.id ? "…" : "Unsave"}
+                </button>
+              </div>
             </div>
           ))
         )}
@@ -144,4 +139,3 @@ export function SavesScreen() {
     </div>
   );
 }
-
