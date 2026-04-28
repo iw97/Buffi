@@ -738,6 +738,14 @@ async function extractGenericProductFromLoadedCheerio(
       brand = brand ?? "Everlane";
       name = name ?? ($("h1.product-title").first().text().trim() || $(".product__title").first().text().trim());
       materials = materials ?? ($(".product-details__materials").text().trim() || $('[data-id="materials"]').text().trim());
+    } else if (host.includes("girlfriend.com")) {
+      brand = brand ?? "Girlfriend Collective";
+      name = name ?? $("h1").first().text().trim();
+      materials =
+        materials ??
+        ($('[class*="material"]').text().trim() ||
+          $('[class*="composition"]').text().trim() ||
+          $('[class*="fabric"]').text().trim());
     } else if (host.includes("shein.com") || host.includes("shein.")) {
       brand = brand ?? "Shein";
       name = name ?? ($(".product-intro__head-name").first().text().trim() || $("h1").first().text().trim());
@@ -918,7 +926,12 @@ export async function scrapeProductFromUrl(url: string): Promise<{
   // Shopify: try .json endpoint first (returns price when store allows it; image from images[0].src)
   const shopifyResult = await fetchShopifyProductJson(cleaned);
   console.log("SHOPIFY RESULT:", shopifyResult);
-  if (shopifyResult && (shopifyResult.name || shopifyResult.brand || shopifyResult.price != null)) {
+  const step1ShopifyFoundMaterials = !!shopifyResult?.materials?.trim();
+  console.log(
+    "[scrape] step 1 Shopify .json:",
+    step1ShopifyFoundMaterials ? "success" : "failed"
+  );
+  if (step1ShopifyFoundMaterials) {
     const out = {
       brand: shopifyResult.brand,
       name: shopifyResult.name,
@@ -948,11 +961,19 @@ export async function scrapeProductFromUrl(url: string): Promise<{
     });
     return out;
   }
-  console.log(
-    LOG_PREFIX,
-    "Shopify.json branch skipped",
-    shopifyResult ? "(returned data but missing name/brand/price)" : "(null or not a /products/… URL)"
-  );
+  console.log(LOG_PREFIX, "Shopify.json did not provide materials; continuing pipeline");
+
+  const shopifySeed: GenericHtmlExtraction | null = shopifyResult
+    ? {
+        brand: shopifyResult.brand,
+        name: shopifyResult.name,
+        materials: shopifyResult.materials,
+        description: shopifyResult.description,
+        imageUrl: shopifyResult.imageUrl ?? null,
+        priceFromJsonLd: shopifyResult.price,
+        materialsFromSerpSearch: false
+      }
+    : null;
 
   if (host.includes("zara.com")) {
     const zara = await scrapeZaraFromUrl(cleaned);
@@ -1023,26 +1044,28 @@ export async function scrapeProductFromUrl(url: string): Promise<{
 
   const standardFetchFailed = !fetchOk || !html.trim();
 
-  let merged: GenericHtmlExtraction | null = null;
+  let cheerioExtraction: GenericHtmlExtraction | null = null;
   if (fetchOk && html.trim()) {
     console.log(LOG_PREFIX, "generic HTML fetched", fetchUrlUsed.slice(0, 120));
     const $std = cheerio.load(html);
-    merged = await extractGenericProductFromLoadedCheerio($std, host, "generic HTML (Cheerio)");
+    cheerioExtraction = await extractGenericProductFromLoadedCheerio($std, host, "generic HTML (Cheerio)");
   } else {
     console.log(LOG_PREFIX, "generic HTML fetch did not return OK body", { tried: fetchUrls.length });
   }
 
   const zaraHost = host.includes("zara.com");
+  const step2CheerioFoundMaterials = !!cheerioExtraction?.materials?.trim();
+  console.log("[scrape] step 2 Cheerio:", step2CheerioFoundMaterials ? "found" : "not found");
   console.log("[scrape] pre-BrightData condition check", {
     zaraHost,
     standardFetchFailed,
-    hasMaterialsFromGeneric: !!merged?.materials?.trim()
+    hasMaterialsFromGeneric: !!cheerioExtraction?.materials?.trim()
   });
-  const shouldTryBrightData =
-    !zaraHost && (standardFetchFailed || !merged?.materials?.trim());
+  const shouldTryBrightData = !zaraHost && !step2CheerioFoundMaterials;
 
   let bdExtraction: GenericHtmlExtraction | null = null;
   if (shouldTryBrightData) {
+    console.log("[scrape] step 2 failed, auto-triggering Bright Data step 3");
     console.log(LOG_PREFIX, "scrape path taken", "Bright Data Web Unlocker (4th fallback)");
     console.log("[scrape] using Bright Data fallback for", cleaned.slice(0, 60));
     const brightDataHtml = await fetchWithBrightData(cleaned);
@@ -1063,11 +1086,28 @@ export async function scrapeProductFromUrl(url: string): Promise<{
         materialsPreview: bdExtraction?.materials?.slice(0, 80)
       });
     }
+    console.log("[scrape] step 3 Bright Data:", bdExtraction?.materials?.trim() ? "found" : "not found");
+  } else if (zaraHost && !step2CheerioFoundMaterials) {
+    console.log("[scrape] step 2 failed; Bright Data step 3 skipped for Zara");
   }
 
+  let merged: GenericHtmlExtraction | null = null;
+  merged = mergeGenericHtmlExtractions(merged, shopifySeed);
+  merged = mergeGenericHtmlExtractions(merged, cheerioExtraction);
   merged = mergeGenericHtmlExtractions(merged, bdExtraction);
 
-  if (!merged || (!merged.name && !merged.brand)) {
+  if (!merged?.materials?.trim()) {
+    console.log("[scrape] all methods exhausted, returning null");
+    console.log(LOG_PREFIX, "scrape path taken", "composition not found after all eligible methods", {
+      tried: fetchUrls.length,
+      standardFetchFailed,
+      usedBrightData: shouldTryBrightData,
+      zaraHost
+    });
+    return null;
+  }
+
+  if (!merged.name && !merged.brand) {
     console.log(LOG_PREFIX, "scrape path taken", "generic HTML path exhausted", {
       tried: fetchUrls.length,
       standardFetchFailed,

@@ -45,4 +45,5 @@ When description or fiber name indicates these, set **hasCertifiedMaterials: tru
 
 **PART 6 — ETHICAL / SUSTAINABLE BRANDS**
 Set **isEthicalBrand: true** when brand matches: ${ETHICAL_BRANDS_CLAUSE}. Acknowledge in **verdictReason**; apply more forgiving markup interpretation per Part 5.
+Known ethical brand note: Girlfriend Collective — RPET recycled polyester, SA8000 Fair Trade certified, transparent supply chain, recycled materials program (ReGirlfriend).
 `.trim();
