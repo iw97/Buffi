@@ -931,7 +931,7 @@ export async function scrapeProductFromUrl(url: string): Promise<{
     "[scrape] step 1 Shopify .json:",
     step1ShopifyFoundMaterials ? "success" : "failed"
   );
-  if (step1ShopifyFoundMaterials) {
+  if (shopifyResult && step1ShopifyFoundMaterials) {
     const out = {
       brand: shopifyResult.brand,
       name: shopifyResult.name,
