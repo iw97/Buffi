@@ -1,9 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { RawProductData } from "./types";
 import type { ScanAnalysis, MinimalScanResponse, ValuesMatchEntry, ValuesMatchState } from "./types";
+import { normalizeMarkupLeniencyFlags } from "./brands";
 import { ETHICAL_BRANDS_CLAUSE, MATERIAL_COST_AND_TAXONOMY_PROMPT } from "./materialCostPrompt";
 import { isZaraProductPageUrl } from "./zaraHints";
-import { computeVerdict, computeVerdictFromRange, parseFibersToMaterials } from "./verdict";
+import { computeVerdictFromRange, parseFibersToMaterials } from "./verdict";
 
 const MATERIALS_NOT_DETECTED_TAG = "Materials not detected";
 
@@ -13,7 +14,7 @@ const ZARA_TITLE_COMPOSITION_TIMEOUT_MS = 15000;
 const MINIMAL_SCAN_SYSTEM_PROMPT = `You are a material intelligence analyst for clothing and apparel. You will receive JSON input with: brandName, fibers (array of strings, e.g. "Cotton 100%" or "Polyester 80%, Elastane 20%"), price (retail price in USD), and confidenceTier (number).
 
 Apply these rules:
-- Small/indie brand: if brandName suggests an independent or small brand (not a major retailer or fast-fashion chain), set isSmallBusiness: true; higher markups are normal for small-business sustainability.
+- Small/indie brand: if brandName suggests an independent or small brand (not a major retailer, global athletic label, or fast-fashion chain), set isSmallBusiness: true. Never set isSmallBusiness for megabrands such as Nike, Adidas, Under Armour, Lululemon, H&M, Zara, Uniqlo, Gap, or Shein — those are not indie economics.
 - Classify every fiber using **PART 1** taxonomy below. **Never** count cellulosic fibers (viscose, rayon, modal, Tencel, Naia, acetate, etc.) toward petroleum “synthetic %” / plastic framing — only Part 1 **SYNTHETIC / PETROLEUM-BASED** fibers count.
 - verdictReason must include context (fiber class, markup, brand). Verdict label is advisory only (app uses three tiers: Worth It | Think Twice | Retail Trap).
 - markupContext: exactly one of "justified" | "partially justified" | "unjustified" based on fiber quality and small-business context.
@@ -115,8 +116,8 @@ ${selectedValues.length > 0 ? `\nUser selected values to evaluate (return one en
 ${dataSourceInstructions}${criticalNonZaraNoComposition}
 
 **Small / indie brand detection**
-- If the brand appears to be an independent or small brand (not a major retailer or fast-fashion chain), treat higher markups as normal and necessary for small-business sustainability. Set isSmallBusiness: true in that case.
-- Major retailers and fast-fashion chains: set isSmallBusiness: false.
+- If the brand appears to be an independent or small brand (not a major retailer, global athletic brand, or fast-fashion chain), treat higher markups as normal for small-batch economics. Set isSmallBusiness: true in that case.
+- Major retailers, global athletic brands (Nike, Adidas, Under Armour, Puma, New Balance, Lululemon, Gymshark, etc.), and fast-fashion chains: set isSmallBusiness: false — they do not get indie markup leniency in the app.
 
 **Known ethical/sustainable brands**
 Set isEthicalBrand: true when the brand matches: ${ETHICAL_BRANDS_CLAUSE}. Note sustainability reputation in verdictReason; apply Part 5 markup thresholds.
@@ -126,13 +127,13 @@ Follow the block below exactly for classification, $/yard estimates, yardage, ce
 
 ${MATERIAL_COST_AND_TAXONOMY_PROMPT}
 
-**Functional synthetic (garment category)**
-Petroleum synthetics that are appropriate for the garment type should not be penalized. Set functionalSynthetic: true when synthetics are expected for the category; false when they are a quality compromise.
-- Rain jackets, waterproof outerwear, windbreakers: nylon, polyester, polyurethane expected — high petroleum synthetic % is normal; judge mainly on markup and brand.
+**Functional synthetic (garment category — display and verdictReason nuance only)**
+Set functionalSynthetic: true when petroleum synthetics are **expected** for the category; false when they are an avoidable compromise.
+- Rain jackets, waterproof outerwear, windbreakers: nylon, polyester, polyurethane expected.
 - Activewear, swimwear, athletic wear: nylon, polyester, spandex/elastane are functional.
 - Lingerie, hosiery, tights: nylon is standard.
-- Formal wear, everyday clothing, casualwear: prefer natural/cellulosic; penalize unnecessary petroleum synthetics.
-When functionalSynthetic is true: do not treat petroleum synthetic % as a negative in verdict framing; base judgment on markup and brand. In verdictReason you may note: "Synthetic materials are appropriate for this garment type."
+- Formal wear, everyday clothing, casualwear: prefer natural/cellulosic when synthetics are not functionally required.
+When functionalSynthetic is true: the app **does not** count that item’s petroleum synthetic % toward the user-facing “plastic” metric, and may soften **fiber** language in verdictReason. It does **not** widen Worth It / Think Twice / Retail Trap markup bands — those come only from markup plus Part 5 leniency (ethical, small business, certified materials). In verdictReason you may note: "Synthetic materials are appropriate for this garment type."
 
 **Verdict nuancing (for verdictReason and tags; app recomputes tier)**
 - verdictReason MUST include fiber class (natural vs cellulosic vs petroleum synthetic), markup context, and brand where relevant.
@@ -253,13 +254,20 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
       parsed.certifications = [];
     }
 
+    const leniencyFlags = normalizeMarkupLeniencyFlags(parsed.brand, {
+      isSmallBusiness: parsed.isSmallBusiness ?? false,
+      isEthicalBrand: parsed.isEthicalBrand ?? false
+    });
+    parsed.isSmallBusiness = leniencyFlags.isSmallBusiness;
+    parsed.isEthicalBrand = leniencyFlags.isEthicalBrand;
+
     const { verdict, verdictReason, verdictSpanNote } = computeVerdictFromRange({
       markupMin: parsed.markupMin,
       markupMax: parsed.markupMax,
       materials: parsed.materials,
       isSmallBusiness: parsed.isSmallBusiness,
       isEthicalBrand: parsed.isEthicalBrand,
-      costPerWear: parsed.costPerWear,
+      hasCertifiedMaterials: parsed.hasCertifiedMaterials,
       functionalSynthetic: parsed.functionalSynthetic
     });
     parsed.verdict = verdict;
@@ -376,6 +384,13 @@ export async function analyzeMinimalScan(input: {
           .map((x) => x.trim())
       : [];
 
+    const leniencyFlagsM = normalizeMarkupLeniencyFlags(input.brandName, {
+      isSmallBusiness: parsed.isSmallBusiness,
+      isEthicalBrand: parsed.isEthicalBrand
+    });
+    parsed.isSmallBusiness = leniencyFlagsM.isSmallBusiness;
+    parsed.isEthicalBrand = leniencyFlagsM.isEthicalBrand;
+
     const materials = parseFibersToMaterials(input.fibers);
     const { verdict, verdictReason, verdictSpanNote } = computeVerdictFromRange({
       markupMin: parsed.markupMin,
@@ -383,7 +398,7 @@ export async function analyzeMinimalScan(input: {
       materials,
       isSmallBusiness: parsed.isSmallBusiness,
       isEthicalBrand: parsed.isEthicalBrand,
-      costPerWear: 0,
+      hasCertifiedMaterials: parsed.hasCertifiedMaterials,
       functionalSynthetic: parsed.functionalSynthetic
     });
     parsed.verdict = verdict;

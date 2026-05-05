@@ -1,6 +1,20 @@
+/**
+ * Better Alternatives — disabled pending developer implementation.
+ * Infrastructure exists, UI removed for v1 launch.
+ */
+
 import { NextRequest, NextResponse } from "next/server";
-import type { RawProductData } from "@/lib/scan/types";
 import type { ScanAnalysis } from "@/lib/scan/types";
+import type { BetterAlternativesPayload } from "@/lib/better-alternatives/types";
+
+export type { BetterAlternativeCard, BetterAlternativesPayload } from "@/lib/better-alternatives/types";
+
+export const maxDuration = 120;
+
+const LOG = "[api/better-alternatives]";
+
+/*
+import type { RawProductData } from "@/lib/scan/types";
 import { analyzeWithClaude } from "@/lib/scan/analyze";
 import { scrapeProductFromUrl } from "@/lib/scan/scrape";
 import { getGoogleShoppingResults } from "@/lib/scan/serpapi";
@@ -15,13 +29,7 @@ import {
   pickComparisonBadge,
   scoreAlternative
 } from "@/lib/better-alternatives/logic";
-import type { BetterAlternativeCard, BetterAlternativesPayload } from "@/lib/better-alternatives/types";
-
-export type { BetterAlternativeCard, BetterAlternativesPayload } from "@/lib/better-alternatives/types";
-
-export const maxDuration = 120;
-
-const LOG = "[api/better-alternatives]";
+import type { BetterAlternativeCard } from "@/lib/better-alternatives/types";
 
 async function analyzeProductUrl(productUrl: string): Promise<ScanAnalysis | null> {
   try {
@@ -56,21 +64,10 @@ function toCard(alt: ScanAnalysis, url: string, original: ScanAnalysis): BetterA
   };
 }
 
-/**
- * Single unified search across all brands.
- * Priority: (1) same garment type, (2) higher natural fiber %, (3) similar/lower price.
- *
- * Two qualification tiers:
- *   - Tier 1 (meetsCrossBrandImprovement): strictly better fiber, markup, or CPW
- *   - Tier 2 (isComparableAlternative): strong absolute natural content at comparable price
- *
- * Always returns a fallbackMessage when no cards are found.
- */
 async function findAlternatives(original: ScanAnalysis): Promise<BetterAlternativesPayload> {
   const { primary: q1, secondary: q2, simplified: q3 } = getAlternativeShoppingQueries(original);
   const origNorm = normalizeBrand(original.brand || "");
 
-  // Fetch candidates — try progressively looser queries until we have enough
   let results = await getGoogleShoppingResults(q1, 15);
   if (results.length < MIN_SERP_RESULTS_BEFORE_RETRY) {
     const more = await getGoogleShoppingResults(q2, 15);
@@ -86,7 +83,6 @@ async function findAlternatives(original: ScanAnalysis): Promise<BetterAlternati
     return { primary: null, secondary: null, fallbackMessage: fabricGuidanceMessage(original) };
   }
 
-  // Scrape and analyze all candidates in parallel
   const analyses = await Promise.all(top.map((p) => analyzeProductUrl(p.link)));
 
   type Candidate = { alt: ScanAnalysis; url: string; score: number };
@@ -96,7 +92,6 @@ async function findAlternatives(original: ScanAnalysis): Promise<BetterAlternati
   for (let i = 0; i < analyses.length; i++) {
     const alt = analyses[i];
     if (!alt) continue;
-    // Always exclude the same brand as the scanned item
     const b = normalizeBrand(alt.brand || "");
     if (origNorm && b === origNorm) continue;
 
@@ -108,7 +103,6 @@ async function findAlternatives(original: ScanAnalysis): Promise<BetterAlternati
     }
   }
 
-  // Prefer tier-1 candidates; fill from tier-2 if needed
   const pool = tier1.length > 0 ? tier1 : tier2;
   pool.sort((a, b) => b.score - a.score);
 
@@ -119,7 +113,6 @@ async function findAlternatives(original: ScanAnalysis): Promise<BetterAlternati
   const primaryCandidate = pool[0];
   const primary = toCard(primaryCandidate.alt, primaryCandidate.url, original);
 
-  // Secondary must come from a different brand than primary
   const primaryBrandNorm = normalizeBrand(primaryCandidate.alt.brand || "");
   const secondaryCandidate = pool.slice(1).find((c) => {
     const b = normalizeBrand(c.alt.brand || "");
@@ -131,6 +124,7 @@ async function findAlternatives(original: ScanAnalysis): Promise<BetterAlternati
 
   return { primary, secondary, fallbackMessage: null };
 }
+*/
 
 export async function POST(
   req: NextRequest
@@ -142,7 +136,11 @@ export async function POST(
       return NextResponse.json({ error: "Invalid scan payload" }, { status: 400 });
     }
 
-    const payload = await findAlternatives(scan);
+    const payload: BetterAlternativesPayload = {
+      primary: null,
+      secondary: null,
+      fallbackMessage: null
+    };
     return NextResponse.json(payload);
   } catch (e) {
     console.error(LOG, (e as Error).message);

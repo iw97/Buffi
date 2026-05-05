@@ -2398,6 +2398,21 @@ input[type="range"]::-webkit-slider-thumb:hover {
   font-style: italic;
 }
 
+/* Secondhand tip — Think Twice / Retail Trap only */
+.before-you-buy {
+  margin-top: 20px;
+}
+.before-you-buy .section-eyebrow {
+  margin-bottom: 10px;
+}
+.before-you-buy-text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-dim);
+  margin: 0;
+  font-weight: 400;
+}
+
 .info-wrap {
   display: flex;
   align-items: center;

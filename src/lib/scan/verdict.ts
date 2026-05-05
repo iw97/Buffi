@@ -150,6 +150,18 @@ function verdictSeverity(tier: VerdictTier): number {
   return VERDICT_ORDER[tier] ?? 0;
 }
 
+/** Lenient markup band widening (percentage points added to Worth It / Think Twice ceilings). Only brand + certification flags — not functionalSynthetic. */
+export function markupLeniencyPct(flags: {
+  isSmallBusiness: boolean;
+  isEthicalBrand: boolean;
+  hasCertifiedMaterials: boolean;
+}): number {
+  let n = 0;
+  if (flags.isEthicalBrand || flags.isSmallBusiness) n += 100;
+  if (flags.hasCertifiedMaterials) n += 50;
+  return n;
+}
+
 /** Compute verdict from markup range: use worst-case (markupMax). If min and max fall in different tiers, return the worse verdict and a span note. */
 export function computeVerdictFromRange(analysis: {
   markupMin: number;
@@ -157,7 +169,8 @@ export function computeVerdictFromRange(analysis: {
   materials: { fiber: string; percentage: number }[];
   isSmallBusiness?: boolean;
   isEthicalBrand?: boolean;
-  costPerWear?: number;
+  hasCertifiedMaterials?: boolean;
+  /** When true, omit fiber-quality pejoratives in reasons only; does not change tier thresholds. */
   functionalSynthetic?: boolean;
 }): { verdict: VerdictTier; verdictReason: string; verdictSpanNote: string | null } {
   const resMin = computeVerdict({
@@ -165,7 +178,7 @@ export function computeVerdictFromRange(analysis: {
     materials: analysis.materials,
     isSmallBusiness: analysis.isSmallBusiness,
     isEthicalBrand: analysis.isEthicalBrand,
-    costPerWear: analysis.costPerWear,
+    hasCertifiedMaterials: analysis.hasCertifiedMaterials,
     functionalSynthetic: analysis.functionalSynthetic
   });
   const resMax = computeVerdict({
@@ -173,7 +186,7 @@ export function computeVerdictFromRange(analysis: {
     materials: analysis.materials,
     isSmallBusiness: analysis.isSmallBusiness,
     isEthicalBrand: analysis.isEthicalBrand,
-    costPerWear: analysis.costPerWear,
+    hasCertifiedMaterials: analysis.hasCertifiedMaterials,
     functionalSynthetic: analysis.functionalSynthetic
   });
   const worse = verdictSeverity(resMax.verdict) >= verdictSeverity(resMin.verdict) ? resMax : resMin;
@@ -185,12 +198,18 @@ export function computeVerdictFromRange(analysis: {
   };
 }
 
+/**
+ * Verdict tier from markup bands only (Retail Trap = “Not worth it” in product copy).
+ * Baseline: Worth It &lt; 500%, Think Twice 500–1000%, Retail Trap &gt; 1000%.
+ * Leniency widens both ceilings together: +100 for indie/ethical, +50 for certified materials.
+ * functionalSynthetic affects reason wording only, never thresholds.
+ */
 export function computeVerdict(analysis: {
   markup: number;
   materials: { fiber: string; percentage: number }[];
   isSmallBusiness?: boolean;
   isEthicalBrand?: boolean;
-  costPerWear?: number;
+  hasCertifiedMaterials?: boolean;
   functionalSynthetic?: boolean;
 }): { verdict: VerdictTier; verdictReason: string } {
   const {
@@ -198,110 +217,71 @@ export function computeVerdict(analysis: {
     materials,
     isSmallBusiness = false,
     isEthicalBrand = false,
-    costPerWear = 0,
+    hasCertifiedMaterials = false,
     functionalSynthetic = false
   } = analysis;
-  const { premiumNaturalPct, naturalPct, syntheticPct } = getFiberBreakdown(materials);
-  const predominantlyPremium = premiumNaturalPct >= PREDOMINANT;
-  const predominantlyNaturalOrCellulosic = naturalPct >= PREDOMINANT;
+
+  const leniency = markupLeniencyPct({ isSmallBusiness, isEthicalBrand, hasCertifiedMaterials });
+  const worthItCeil = 500 + leniency;
+  const thinkTwiceCeil = 1000 + leniency;
+
+  const { naturalPct, syntheticPct } = getFiberBreakdown(materials);
+  const naturalForward = naturalPct >= PREDOMINANT;
   const syntheticHeavy = syntheticPct >= PREDOMINANT;
-  const penalizeSynthetic = syntheticHeavy && !functionalSynthetic;
-  const indieOrEthical = isSmallBusiness || isEthicalBrand;
 
   if (markup > 1500) {
     return {
       verdict: "Retail Trap",
-      verdictReason: "Markup over 1,500% — we can’t justify this premium regardless of materials or brand."
-    };
-  }
-
-  if (markup < 500) {
-    return {
-      verdict: "Worth It",
-      verdictReason: "Markup under 500% — strong value relative to estimated materials."
-    };
-  }
-
-  if (markup < 700 && predominantlyPremium) {
-    return {
-      verdict: "Worth It",
       verdictReason:
-        "Markup under 700% with predominantly premium natural or certified cellulosic fibers — materials support the price."
+        "Markup over 1,500% — an extreme multiple on estimated materials regardless of fiber mix or brand story."
     };
   }
 
-  if (markup < 600 && indieOrEthical) {
-    return {
-      verdict: "Worth It",
-      verdictReason:
-        "Markup under 600% for an independent or known ethical brand — sustainability and small-batch context partially justify the premium."
-    };
-  }
-
-  if (costPerWear > 0 && costPerWear < 2) {
-    return {
-      verdict: "Think Twice",
-      verdictReason: `Markup is high but cost per wear is under $2 — you’re paying more upfront for something you’ll wear often.`
-    };
-  }
-
-  if (penalizeSynthetic && markup > 1000 && !indieOrEthical) {
-    return {
-      verdict: "Retail Trap",
-      verdictReason:
-        "Markup over 1,000% on predominantly petroleum-based synthetics with no strong brand or fiber-quality justification."
-    };
-  }
-
-  if (indieOrEthical && predominantlyNaturalOrCellulosic && markup <= 1500) {
-    return {
-      verdict: "Think Twice",
-      verdictReason:
-        "Independent or ethical brand with natural or cellulosic-forward composition — markup is high but partially justified."
-    };
-  }
-
-  if (markup >= 500 && markup <= 1000) {
-    if (predominantlyNaturalOrCellulosic) {
+  if (markup < worthItCeil) {
+    if (leniency === 0) {
       return {
-        verdict: "Think Twice",
-        verdictReason:
-          "Markup between 500% and 1,000% with natural or cellulosic fibers — weigh fiber quality and use against the price."
+        verdict: "Worth It",
+        verdictReason: "Markup under 500% — strong value relative to estimated materials."
       };
     }
+    const bits: string[] = [];
+    if (isEthicalBrand || isSmallBusiness) bits.push("independent or known ethical brand");
+    if (hasCertifiedMaterials) bits.push("certified materials");
+    return {
+      verdict: "Worth It",
+      verdictReason: `Markup under ${worthItCeil}% — within the fair-value band given ${bits.join(" and ")}.`
+    };
+  }
+
+  if (markup <= thinkTwiceCeil) {
+    const fiberTail =
+      functionalSynthetic || !naturalForward
+        ? ""
+        : " Natural or cellulosic-forward fibers help, but the multiple is still high.";
+    const syntheticTail =
+      functionalSynthetic || !syntheticHeavy || naturalForward
+        ? ""
+        : " Mostly petroleum-based synthetics — the bill of materials still does not justify this multiple.";
+    const base =
+      leniency > 0
+        ? `Markup between ${worthItCeil}% and ${thinkTwiceCeil}% — a steep multiple; brand or certification context keeps this in “consider carefully” territory rather than an automatic trap.`
+        : "Markup between 500% and 1,000% — a steep multiple versus estimated materials; weigh brand, construction, and how much you’ll wear it.";
     return {
       verdict: "Think Twice",
-      verdictReason:
-        "Markup between 500% and 1,000% — consider whether construction, brand, and fibers justify the premium."
+      verdictReason: base + fiberTail + syntheticTail
     };
   }
 
-  if (markup > 1000 && markup <= 1500 && predominantlyPremium) {
-    return {
-      verdict: "Think Twice",
-      verdictReason:
-        "Markup over 1,000% but premium natural or cellulosic fibers offer partial justification — not an automatic trap."
-    };
-  }
-
-  if (markup > 1000 && predominantlyNaturalOrCellulosic && !syntheticHeavy) {
-    return {
-      verdict: "Think Twice",
-      verdictReason:
-        "High markup with mostly natural or cellulosic (non-petroleum) fibers — quality helps, but the multiple is still steep."
-    };
-  }
-
-  if (penalizeSynthetic && markup > 600) {
-    return {
-      verdict: "Retail Trap",
-      verdictReason:
-        "High markup on predominantly petroleum-based synthetics — you’re paying a premium without the fiber quality to back it up."
-    };
-  }
-
+  const syntheticTail =
+    functionalSynthetic || !syntheticHeavy
+      ? ""
+      : " Predominantly petroleum-based synthetics add little materials-side justification.";
+  const base =
+    leniency > 0
+      ? `Markup over ${thinkTwiceCeil}% — beyond the adjusted fair-value band for this scan.`
+      : "Markup over 1,000% versus estimated materials — the price is hard to justify on bill-of-materials value alone.";
   return {
     verdict: "Retail Trap",
-    verdictReason: "Markup is high relative to estimated material cost with limited mitigating factors."
+    verdictReason: base + syntheticTail
   };
 }

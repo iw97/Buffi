@@ -8,7 +8,9 @@ import { useScanResult, getStoredScanResult, isValidScanResult, normalizeScanRes
 import { addSavedItem, addScanHistoryEntry, removeSavedItem, setUserProfile } from "@/lib/firebase/firestore";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import type { ScanAnalysis } from "@/lib/scan/types";
+/* Better Alternatives UI — disabled for v1 launch (same rationale as /api/better-alternatives).
 import type { BetterAlternativeCard, BetterAlternativesPayload } from "@/lib/better-alternatives/types";
+*/
 
 type InfoId = "material" | "cpw" | "markup";
 
@@ -150,6 +152,7 @@ function getMarkupMidpoint(a: ScanAnalysis): number {
   return a.markup ?? 0;
 }
 
+/*
 function betterAltBadgeLabel(badge: BetterAlternativeCard["badge"]): string {
   switch (badge) {
     case "more_natural":
@@ -195,6 +198,7 @@ function BetterAltProductCard({ card }: { card: BetterAlternativeCard }) {
     </a>
   );
 }
+*/
 
 function analysisToSavedItem(a: ScanAnalysis) {
   const fibers = a.materials.map((m) => `${m.fiber} ${m.percentage}%`);
@@ -314,8 +318,8 @@ export function BreakdownScreen() {
   const [manualPriceInput, setManualPriceInput] = useState("");
   const [manualPriceApplied, setManualPriceApplied] = useState<number | null>(null);
   const [imageError, setImageError] = useState(false);
-  const [betterAlts, setBetterAlts] = useState<BetterAlternativesPayload | null>(null);
-  const [betterAltsLoading, setBetterAltsLoading] = useState(false);
+  /* const [betterAlts, setBetterAlts] = useState<BetterAlternativesPayload | null>(null);
+  const [betterAltsLoading, setBetterAltsLoading] = useState(false); */
 
   const score = 25; // TODO: derive from analysis
   const imageUrl = result?.imageUrl ?? null;
@@ -385,6 +389,7 @@ export function BreakdownScreen() {
     return () => window.clearTimeout(t);
   }, []);
 
+  /*
   useEffect(() => {
     if (!validResult) return;
     const v = validResult.verdict;
@@ -421,6 +426,7 @@ export function BreakdownScreen() {
       cancelled = true;
     };
   }, [validResult]);
+  */
 
   const ringDashOffset = useMemo(() => {
     const circumference = 188;
@@ -560,6 +566,8 @@ export function BreakdownScreen() {
         .filter((m) => fiberKind(m.fiber) === "synthetic")
         .reduce((sum, m) => sum + m.percentage, 0)
     : 0;
+  /** Petroleum % shown as “plastic” metric; functional synthetics are excluded from this number (composition unchanged). */
+  const plasticMetricSyntheticPct = result?.functionalSynthetic === true ? 0 : syntheticPct;
 
   // Baseline values from analysis
   const basePrice = result?.price ?? 0;
@@ -601,7 +609,7 @@ export function BreakdownScreen() {
     }
   }
 
-  const verdictForAlts = result?.verdict;
+  /* const verdictForAlts = result?.verdict;
   const showBetterAlternatives =
     verdictForAlts === "Think Twice" || verdictForAlts === "Retail Trap";
   const hasBetterAlternativesSection =
@@ -610,7 +618,7 @@ export function BreakdownScreen() {
       (betterAlts &&
         (betterAlts.primary != null ||
           betterAlts.secondary != null ||
-          (betterAlts.fallbackMessage != null && betterAlts.fallbackMessage.length > 0))));
+          (betterAlts.fallbackMessage != null && betterAlts.fallbackMessage.length > 0)))); */
   const certifications = Array.isArray(result?.certifications)
     ? result.certifications.filter((c): c is string => typeof c === "string" && c.trim().length > 0)
     : [];
@@ -619,6 +627,9 @@ export function BreakdownScreen() {
     (result?.brand || "").trim().toLowerCase() === "zara" && (result?.confidenceTier ?? 0) >= 2;
   const showMaterialsNotReadFromPage =
     result?.confidenceTier === 3 && result?.tags?.includes("Materials not detected");
+  /** Think Twice + Retail Trap (“not worth it” tier); omit for Worth It. */
+  const showBeforeYouBuy =
+    result!.verdict === "Think Twice" || result!.verdict === "Retail Trap";
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -683,6 +694,15 @@ export function BreakdownScreen() {
               )}
             </div>
           </div>
+          {showBeforeYouBuy && (
+            <div className="before-you-buy">
+              <div className="section-eyebrow">— Before you buy</div>
+              <p className="before-you-buy-text">
+                Consider searching secondhand first — you may find this item or something similar on Poshmark,
+                ThredUp, or Depop for less.
+              </p>
+            </div>
+          )}
           {result!.valuesMatch && result!.valuesMatch.length > 0 && (
             <div className="values-badges-row" role="list">
               {result!.valuesMatch.map((entry, idx) => (
@@ -769,7 +789,7 @@ export function BreakdownScreen() {
               <div
                 className={`receipt-val ${result!.functionalSynthetic ? "good" : syntheticPct > 50 ? "bad" : "good"}`}
               >
-                {showMaterialsNotReadFromPage ? "—" : `${Math.round(syntheticPct)}%`}
+                {showMaterialsNotReadFromPage ? "—" : `${Math.round(plasticMetricSyntheticPct)}%`}
               </div>
             </div>
 
@@ -911,6 +931,7 @@ export function BreakdownScreen() {
           </div>
         )}
 
+        {/* Better Alternatives section — disabled for v1 (restore with state/useEffect/helpers above).
         {hasBetterAlternativesSection && (
           <>
             <div className="section-divider" />
@@ -948,6 +969,7 @@ export function BreakdownScreen() {
             </div>
           </>
         )}
+        */}
 
         <div className="save-btn-row">
           {saveError && (
@@ -1090,7 +1112,7 @@ export function BreakdownScreen() {
                 <div className="share-stat-key">Real Cost</div>
               </div>
               <div className="share-stat">
-                <div className="share-stat-val">{Math.round(syntheticPct)}%</div>
+                <div className="share-stat-val">{Math.round(plasticMetricSyntheticPct)}%</div>
                 <div className="share-stat-key">Synthetic</div>
               </div>
             </div>

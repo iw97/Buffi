@@ -38,12 +38,12 @@ When description or fiber name indicates these, set **hasCertifiedMaterials: tru
 - Naia Renew → include "Naia Renew", "OEKO-TEX Class 1", "GRS Certified", "Biodegradable" when context supports.
 - REPREVE → "REPREVE", "GRS Certified"; OceanCycle → "OceanCycle"; Tencel/Lyocell → "Tencel"; EcoVero → "EcoVero", "Lenzing Certified"; GOTS → "GOTS Organic"; Fair Trade → "Fair Trade Certified"; B Corp brand → "B Corp"; Bluesign → "Bluesign".
 
-**PART 5 — VERDICT THRESHOLDS (inform your judgment; the app may recompute tier from markup + fibers)**
-- **Worth It:** markup under **500%** OR under **700%** with predominantly **premium natural** or **certified/premium cellulosic** fibers OR under **600%** for known **ethical / indie** brand (isEthicalBrand or isSmallBusiness).
-- **Think Twice:** markup **500–1000%**, OR up to **1500%** if (isSmallBusiness OR isEthicalBrand) AND composition is **natural or cellulosic**-forward (not commodity-synthetic-heavy).
-- **Retail Trap:** markup over **1000%** on **commodity petroleum synthetics** with no mitigating factors OR over **1500%** regardless — **cannot** be softened above 1500%.
+**PART 5 — VERDICT THRESHOLDS (the app recomputes tier from markup; do not rely on fiber class for tier)**
+- **Default bands:** **Worth It** = markup **under 500%**; **Think Twice** = **500–1000%**; **Retail Trap** = **over 1000%** (same bands for athletic synthetics — **functionalSynthetic** does not widen these in code).
+- **Leniency (only these widen the ceilings):** **isEthicalBrand** or **isSmallBusiness** → more forgiving; **hasCertifiedMaterials** → slightly more forgiving. Nothing else (not functional synthetic, not “premium fiber” alone) changes markup thresholds in the app.
+- **Over 1500%** markup stays **Retail Trap** in the app regardless of leniency.
 
 **PART 6 — ETHICAL / SUSTAINABLE BRANDS**
-Set **isEthicalBrand: true** when brand matches: ${ETHICAL_BRANDS_CLAUSE}. Acknowledge in **verdictReason**; apply more forgiving markup interpretation per Part 5.
+Set **isEthicalBrand: true** when brand matches: ${ETHICAL_BRANDS_CLAUSE}. Acknowledge in **verdictReason**; the app applies Part 5 leniency only when this flag is true (or small-business), never from functional synthetic alone.
 Known ethical brand note: Girlfriend Collective — RPET recycled polyester, SA8000 Fair Trade certified, transparent supply chain, recycled materials program (ReGirlfriend).
 `.trim();
