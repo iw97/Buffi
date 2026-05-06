@@ -5,10 +5,16 @@
 
 import type { VerdictTier } from "./types";
 
-export type { VerdictTier } from "./types";
+export type { VerdictTier } from “./types”;
+
+export const WORTH_IT_MARKUP_CEILING = 500;
+export const THINK_TWICE_MARKUP_CEILING = 1000;
+export const ABSOLUTE_TRAP_CEILING = 1500;
+// Fallback wear count when Claude does not return costPerWear (e.g. minimal scan).
+export const DEFAULT_WEAR_COUNT = 50;
 
 /** Longer / specific phrases first so “organic cotton” wins over “cotton”. */
-const PREMIUM_NATURAL = [
+export const PREMIUM_NATURAL = [
   "organic cotton",
   "pima cotton",
   "egyptian cotton",
@@ -25,9 +31,9 @@ const PREMIUM_NATURAL = [
   "linen"
 ];
 
-const STANDARD_NATURAL = ["cotton", "wool", "hemp", "ramie", "jute", "kapok", "flax"];
+export const STANDARD_NATURAL = ["cotton", "wool", "hemp", "ramie", "jute", "kapok", "flax"];
 
-const PREMIUM_CELLULOSIC = [
+export const PREMIUM_CELLULOSIC = [
   "naia renew",
   "naia",
   "bamboo lyocell",
@@ -39,7 +45,7 @@ const PREMIUM_CELLULOSIC = [
   "modal"
 ];
 
-const STANDARD_CELLULOSIC = [
+export const STANDARD_CELLULOSIC = [
   "bamboo viscose",
   "bamboo rayon",
   "cellulose acetate",
@@ -51,7 +57,7 @@ const STANDARD_CELLULOSIC = [
 ];
 
 /** Petroleum-based only — never viscose/rayon/modal here. */
-const PETROLEUM_SYNTHETIC = [
+export const PETROLEUM_SYNTHETIC = [
   "repreve",
   "oceancycle",
   "ocean cycle",
@@ -200,7 +206,7 @@ export function computeVerdictFromRange(analysis: {
 
 /**
  * Verdict tier from markup bands only (Retail Trap = “Not worth it” in product copy).
- * Baseline: Worth It &lt; 500%, Think Twice 500–1000%, Retail Trap &gt; 1000%.
+ * Baseline: Worth It &lt; WORTH_IT_MARKUP_CEILING, Think Twice up to THINK_TWICE_MARKUP_CEILING, Retail Trap above; see constants.
  * Leniency widens both ceilings together: +100 for indie/ethical, +50 for certified materials.
  * functionalSynthetic affects reason wording only, never thresholds.
  */
@@ -222,18 +228,18 @@ export function computeVerdict(analysis: {
   } = analysis;
 
   const leniency = markupLeniencyPct({ isSmallBusiness, isEthicalBrand, hasCertifiedMaterials });
-  const worthItCeil = 500 + leniency;
-  const thinkTwiceCeil = 1000 + leniency;
+  const worthItCeil = WORTH_IT_MARKUP_CEILING + leniency;
+  const thinkTwiceCeil = THINK_TWICE_MARKUP_CEILING + leniency;
 
   const { naturalPct, syntheticPct } = getFiberBreakdown(materials);
   const naturalForward = naturalPct >= PREDOMINANT;
   const syntheticHeavy = syntheticPct >= PREDOMINANT;
 
-  if (markup > 1500) {
+  if (markup > ABSOLUTE_TRAP_CEILING) {
     return {
       verdict: "Retail Trap",
       verdictReason:
-        "Markup over 1,500% — an extreme multiple on estimated materials regardless of fiber mix or brand story."
+        `Markup over ${ABSOLUTE_TRAP_CEILING.toLocaleString()}% — an extreme multiple on estimated materials regardless of fiber mix or brand story.`
     };
   }
 
@@ -241,7 +247,7 @@ export function computeVerdict(analysis: {
     if (leniency === 0) {
       return {
         verdict: "Worth It",
-        verdictReason: "Markup under 500% — strong value relative to estimated materials."
+        verdictReason: `Markup under ${WORTH_IT_MARKUP_CEILING}% — strong value relative to estimated materials.`
       };
     }
     const bits: string[] = [];
@@ -265,7 +271,7 @@ export function computeVerdict(analysis: {
     const base =
       leniency > 0
         ? `Markup between ${worthItCeil}% and ${thinkTwiceCeil}% — a steep multiple; brand or certification context keeps this in “consider carefully” territory rather than an automatic trap.`
-        : "Markup between 500% and 1,000% — a steep multiple versus estimated materials; weigh brand, construction, and how much you’ll wear it.";
+        : `Markup between ${WORTH_IT_MARKUP_CEILING}% and ${THINK_TWICE_MARKUP_CEILING.toLocaleString()}% — a steep multiple versus estimated materials; weigh brand, construction, and how much you’ll wear it.`;
     return {
       verdict: "Think Twice",
       verdictReason: base + fiberTail + syntheticTail

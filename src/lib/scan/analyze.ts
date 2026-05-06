@@ -1,13 +1,13 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { getAnthropicClient, parseClaudeJsonResponse } from "@/lib/anthropic";
 import type { RawProductData } from "./types";
-import type { ScanAnalysis, MinimalScanResponse, ValuesMatchEntry, ValuesMatchState } from "./types";
+import type { ScanAnalysis, MinimalScanResponse, ValuesMatchEntry, ValuesMatchState, VerdictTier, MarkupContext } from "./types";
 import { normalizeMarkupLeniencyFlags } from "./brands";
 import { ETHICAL_BRANDS_CLAUSE, MATERIAL_COST_AND_TAXONOMY_PROMPT } from "./materialCostPrompt";
 import { isZaraProductPageUrl } from "./zaraHints";
 import { computeVerdictFromRange, parseFibersToMaterials } from "./verdict";
 import { CLAUDE_PRIMARY_MODEL, CLAUDE_MINIMAL_MODEL } from "./models";
 
-const MATERIALS_NOT_DETECTED_TAG = "Materials not detected";
+export const MATERIALS_NOT_DETECTED_TAG = "Materials not detected";
 
 const CLAUDE_TIMEOUT_MS = 45000;
 const ZARA_TITLE_COMPOSITION_TIMEOUT_MS = 15000;
@@ -57,13 +57,55 @@ For each value in selectedValues, evaluate the product and return exactly one of
 - **Union-made**: pass = union-made indicated; fail = known non-union; unverified = most cases.
 `;
 
+type Finalizable = {
+  markupMin: number;
+  markupMax: number;
+  isSmallBusiness?: boolean;
+  isEthicalBrand?: boolean;
+  hasCertifiedMaterials?: boolean;
+  functionalSynthetic?: boolean;
+  certifications?: string[];
+  verdict: VerdictTier;
+  verdictReason: string;
+  verdictSpanNote?: string | null;
+  markupContext: MarkupContext;
+};
+
+function finalizeAnalysis<T extends Finalizable>(
+  parsed: T,
+  materials: { fiber: string; percentage: number }[]
+): T {
+  const { verdict, verdictReason, verdictSpanNote } = computeVerdictFromRange({
+    markupMin: parsed.markupMin,
+    markupMax: parsed.markupMax,
+    materials,
+    isSmallBusiness: parsed.isSmallBusiness,
+    isEthicalBrand: parsed.isEthicalBrand,
+    hasCertifiedMaterials: parsed.hasCertifiedMaterials,
+    functionalSynthetic: parsed.functionalSynthetic
+  });
+  parsed.verdict = verdict;
+  parsed.verdictReason =
+    parsed.functionalSynthetic && !verdictReason.includes("appropriate for this garment type")
+      ? `${verdictReason} Synthetic materials are appropriate for this garment type.`
+      : verdictReason;
+  if (parsed.hasCertifiedMaterials && (parsed.certifications?.length ?? 0) > 0) {
+    const certText = parsed.certifications!.slice(0, 3).join(", ");
+    if (!parsed.verdictReason.toLowerCase().includes("certif")) {
+      parsed.verdictReason = `${parsed.verdictReason} Certified materials (${certText}) are factored into this assessment.`;
+    }
+  }
+  parsed.verdictSpanNote = verdictSpanNote ?? undefined;
+  parsed.markupContext =
+    verdict === "Worth It" ? "justified" : verdict === "Think Twice" ? "partially justified" : "unjustified";
+  return parsed;
+}
+
 export async function analyzeWithClaude(raw: RawProductData, selectedValues: string[] = []): Promise<ScanAnalysis> {
   /** Retired onboarding label; ignore if still present on older profiles. */
   selectedValues = selectedValues.filter((v) => v !== "Secondhand first");
 
-  const client = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY
-  });
+  const client = getAnthropicClient();
 
   const isTagSource = raw.source === "tag";
   const hasPrice = typeof raw.price === "number" && raw.price > 0;
@@ -176,15 +218,7 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
 
     clearTimeout(timeout);
 
-    const text = (message.content as Array<{ type?: string; text?: string }>)
-      .filter((c) => c.type === "text" && c.text)
-      .map((c) => c.text!)
-      .join("") || "";
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON in Claude response");
-
-    const parsed = JSON.parse(jsonMatch[0]) as ScanAnalysis;
+    const parsed = parseClaudeJsonResponse<ScanAnalysis>(message);
     const pre = parsed as unknown as Record<string, unknown>;
 
     // Validate required fields (verdict/verdictReason are overwritten by computeVerdictFromRange)
@@ -262,29 +296,7 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
     parsed.isSmallBusiness = leniencyFlags.isSmallBusiness;
     parsed.isEthicalBrand = leniencyFlags.isEthicalBrand;
 
-    const { verdict, verdictReason, verdictSpanNote } = computeVerdictFromRange({
-      markupMin: parsed.markupMin,
-      markupMax: parsed.markupMax,
-      materials: parsed.materials,
-      isSmallBusiness: parsed.isSmallBusiness,
-      isEthicalBrand: parsed.isEthicalBrand,
-      hasCertifiedMaterials: parsed.hasCertifiedMaterials,
-      functionalSynthetic: parsed.functionalSynthetic
-    });
-    parsed.verdict = verdict;
-    parsed.verdictReason =
-      parsed.functionalSynthetic && !verdictReason.includes("appropriate for this garment type")
-        ? `${verdictReason} Synthetic materials are appropriate for this garment type.`
-        : verdictReason;
-    if (parsed.hasCertifiedMaterials && (parsed.certifications?.length ?? 0) > 0) {
-      const certText = parsed.certifications!.slice(0, 3).join(", ");
-      if (!parsed.verdictReason.toLowerCase().includes("certif")) {
-        parsed.verdictReason = `${parsed.verdictReason} Certified materials (${certText}) are factored into this assessment.`;
-      }
-    }
-    parsed.verdictSpanNote = verdictSpanNote ?? undefined;
-    parsed.markupContext =
-      verdict === "Worth It" ? "justified" : verdict === "Think Twice" ? "partially justified" : "unjustified";
+    finalizeAnalysis(parsed, parsed.materials);
 
     return parsed;
   } catch (err) {
@@ -305,9 +317,7 @@ export async function analyzeMinimalScan(input: {
   price: number;
   confidenceTier: number;
 }): Promise<MinimalScanResponse> {
-  const client = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY
-  });
+  const client = getAnthropicClient();
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), CLAUDE_TIMEOUT_MS);
@@ -335,16 +345,7 @@ export async function analyzeMinimalScan(input: {
 
     clearTimeout(timeout);
 
-    const text = (message.content as Array<{ type?: string; text?: string }>)
-      .filter((c) => c.type === "text" && c.text)
-      .map((c) => c.text!)
-      .join("")
-      .trim() || "";
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON in Claude response");
-
-    const parsed = JSON.parse(jsonMatch[0]) as MinimalScanResponse;
+    const parsed = parseClaudeJsonResponse<MinimalScanResponse>(message);
     const preM = parsed as unknown as Record<string, unknown>;
 
     const validMarkupContext = ["justified", "partially justified", "unjustified"] as const;
@@ -393,29 +394,7 @@ export async function analyzeMinimalScan(input: {
     parsed.isEthicalBrand = leniencyFlagsM.isEthicalBrand;
 
     const materials = parseFibersToMaterials(input.fibers);
-    const { verdict, verdictReason, verdictSpanNote } = computeVerdictFromRange({
-      markupMin: parsed.markupMin,
-      markupMax: parsed.markupMax,
-      materials,
-      isSmallBusiness: parsed.isSmallBusiness,
-      isEthicalBrand: parsed.isEthicalBrand,
-      hasCertifiedMaterials: parsed.hasCertifiedMaterials,
-      functionalSynthetic: parsed.functionalSynthetic
-    });
-    parsed.verdict = verdict;
-    parsed.verdictReason =
-      parsed.functionalSynthetic && !verdictReason.includes("appropriate for this garment type")
-        ? `${verdictReason} Synthetic materials are appropriate for this garment type.`
-        : verdictReason;
-    if (parsed.hasCertifiedMaterials && (parsed.certifications?.length ?? 0) > 0) {
-      const certText = parsed.certifications!.slice(0, 3).join(", ");
-      if (!parsed.verdictReason.toLowerCase().includes("certif")) {
-        parsed.verdictReason = `${parsed.verdictReason} Certified materials (${certText}) are factored into this assessment.`;
-      }
-    }
-    parsed.verdictSpanNote = verdictSpanNote ?? undefined;
-    parsed.markupContext =
-      verdict === "Worth It" ? "justified" : verdict === "Think Twice" ? "partially justified" : "unjustified";
+    finalizeAnalysis(parsed, materials);
 
     return parsed;
   } catch (err) {
@@ -439,12 +418,11 @@ export async function parseFiberCompositionFromZaraContext(input: {
   productName: string;
   searchDescription?: string;
 }): Promise<string | undefined> {
-  const key = process.env.ANTHROPIC_API_KEY;
   const productName = input.productName.trim();
   const searchDescription = input.searchDescription?.trim();
-  if (!key?.trim() || !productName) return undefined;
+  if (!process.env.ANTHROPIC_API_KEY?.trim() || !productName) return undefined;
 
-  const client = new Anthropic({ apiKey: key });
+  const client = getAnthropicClient();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), ZARA_TITLE_COMPOSITION_TIMEOUT_MS);
 
@@ -477,14 +455,7 @@ No markdown. No explanation.`
 
     clearTimeout(timeout);
 
-    const text = (message.content as Array<{ type?: string; text?: string }>)
-      .filter((c) => c.type === "text" && c.text)
-      .map((c) => c.text!)
-      .join("")
-      .trim();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return undefined;
-    const parsed = JSON.parse(jsonMatch[0]) as { composition?: string | null; confidenceTier?: number };
+    const parsed = parseClaudeJsonResponse<{ composition?: string | null; confidenceTier?: number }>(message);
     const c = parsed.composition;
     if (typeof c !== "string" || !c.trim()) return undefined;
     return c.trim().slice(0, 500);

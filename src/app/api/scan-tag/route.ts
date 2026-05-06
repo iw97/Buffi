@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { getAnthropicClient, parseClaudeJsonResponse } from "@/lib/anthropic";
 import { getAdminAuth } from "@/lib/firebase/admin";
 import { CLAUDE_PRIMARY_MODEL } from "@/lib/scan/models";
 
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanTagExtrac
       );
     }
 
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = getAnthropicClient();
     const prompt = `Extract fiber composition from this clothing label text. Return JSON only with this shape:
 {
   "fibers": [{ "fiber": string, "percentage": number }],
@@ -121,20 +121,7 @@ ${rawText.slice(0, 8000)}`;
       max_tokens: 1024,
       messages: [{ role: "user", content: prompt }]
     });
-    const text =
-      (message.content as Array<{ type?: string; text?: string }>)
-        ?.filter((c) => c.type === "text" && c.text)
-        ?.map((c) => c.text!)
-        ?.join("") ?? "";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return NextResponse.json(
-        { ok: false, confidence: "low", message: "Could not parse label" },
-        { status: 200 }
-      );
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]) as ScanTagExtraction;
+    const parsed = parseClaudeJsonResponse<ScanTagExtraction>(message);
     const fibers = Array.isArray(parsed.fibers) ? parsed.fibers : [];
     const confidence = parsed.confidence === "high" || parsed.confidence === "medium" ? parsed.confidence : "low";
     const result: ScanTagExtraction = {

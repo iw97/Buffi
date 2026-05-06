@@ -2,6 +2,8 @@
  * Single source for Claude material cost + fiber taxonomy (analyzeWithClaude + minimal scan).
  */
 
+import { WORTH_IT_MARKUP_CEILING, THINK_TWICE_MARKUP_CEILING, ABSOLUTE_TRAP_CEILING } from "./verdict";
+
 export const ETHICAL_BRANDS_CLAUSE =
   "Patagonia, Everlane, Reformation, Kotn, Eileen Fisher, Pact, Thought Clothing, Amour Vert, Girlfriend Collective, Mara Hoffman, Whimsy and Row, Colorful Standard, Organic Basics, tentree, prAna, Veja, Allbirds, Stella McCartney, People Tree, Nudie Jeans, Outerknown, Finisterre, Rapanui, Honest By (or the same company under another name)";
 
@@ -39,9 +41,9 @@ When description or fiber name indicates these, set **hasCertifiedMaterials: tru
 - REPREVE → "REPREVE", "GRS Certified"; OceanCycle → "OceanCycle"; Tencel/Lyocell → "Tencel"; EcoVero → "EcoVero", "Lenzing Certified"; GOTS → "GOTS Organic"; Fair Trade → "Fair Trade Certified"; B Corp brand → "B Corp"; Bluesign → "Bluesign".
 
 **PART 5 — VERDICT THRESHOLDS (the app recomputes tier from markup; do not rely on fiber class for tier)**
-- **Default bands:** **Worth It** = markup **under 500%**; **Think Twice** = **500–1000%**; **Retail Trap** = **over 1000%** (same bands for athletic synthetics — **functionalSynthetic** does not widen these in code).
+- **Default bands:** **Worth It** = markup **under ${WORTH_IT_MARKUP_CEILING}%**; **Think Twice** = **${WORTH_IT_MARKUP_CEILING}–${THINK_TWICE_MARKUP_CEILING}%**; **Retail Trap** = **over ${THINK_TWICE_MARKUP_CEILING}%** (same bands for athletic synthetics — **functionalSynthetic** does not widen these in code).
 - **Leniency (only these widen the ceilings):** **isEthicalBrand** or **isSmallBusiness** → more forgiving; **hasCertifiedMaterials** → slightly more forgiving. Nothing else (not functional synthetic, not “premium fiber” alone) changes markup thresholds in the app.
-- **Over 1500%** markup stays **Retail Trap** in the app regardless of leniency.
+- **Over ${ABSOLUTE_TRAP_CEILING}%** markup stays **Retail Trap** in the app regardless of leniency.
 
 **PART 6 — ETHICAL / SUSTAINABLE BRANDS**
 Set **isEthicalBrand: true** when brand matches: ${ETHICAL_BRANDS_CLAUSE}. Acknowledge in **verdictReason**; the app applies Part 5 leniency only when this flag is true (or small-business), never from functional synthetic alone.

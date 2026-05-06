@@ -10,78 +10,22 @@ import { useScanResult, getStoredScanResult, isValidScanResult, normalizeScanRes
 import { addSavedItem, addScanHistoryEntry, removeSavedItem, setUserProfile } from "@/lib/firebase/firestore";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import type { ScanAnalysis } from "@/lib/scan/types";
-/* Better Alternatives UI — disabled for v1 launch (same rationale as /api/better-alternatives).
-import type { BetterAlternativeCard, BetterAlternativesPayload } from "@/lib/better-alternatives/types";
-*/
-
+import { MATERIALS_NOT_DETECTED_TAG } from "@/lib/scan/analyze";
+import { PETROLEUM_SYNTHETIC, PREMIUM_NATURAL, STANDARD_NATURAL, PREMIUM_CELLULOSIC, STANDARD_CELLULOSIC, DEFAULT_WEAR_COUNT } from "@/lib/scan/verdict";
 type InfoId = "material" | "cpw" | "markup";
 
-/** Petroleum-based only (matches verdict taxonomy). */
-const PETROLEUM_SYNTHETIC_FIBERS = [
-  "repreve",
-  "oceancycle",
-  "ocean cycle",
-  "recycled polyester",
-  "recycled nylon",
-  "polyester",
-  "polyamide",
-  "nylon",
-  "microfiber",
-  "polyurethane",
-  "polypropylene",
-  "gore-tex",
-  "acrylic",
-  "elastane",
-  "spandex",
-  "lycra",
-  "pvc"
-];
-
-/** Natural + cellulosic — not counted as “synthetic” in UI. */
 const NATURAL_OR_CELLULOSIC = [
-  "naia renew",
-  "naia",
-  "organic cotton",
-  "pima cotton",
-  "egyptian cotton",
-  "merino wool",
-  "bamboo lyocell",
-  "bamboo viscose",
-  "bamboo rayon",
-  "cellulose acetate",
-  "triacetate",
-  "tencel",
-  "lyocell",
-  "lenzing",
-  "ecovero",
-  "modal",
-  "cupro",
-  "viscose",
-  "rayon",
-  "acetate",
-  "pima",
-  "egyptian",
-  "merino",
-  "cashmere",
-  "silk",
-  "linen",
-  "wool",
-  "cotton",
-  "hemp",
-  "alpaca",
-  "angora",
-  "ramie",
-  "jute",
-  "kapok",
-  "flax",
-  "bamboo"
+  ...PREMIUM_NATURAL,
+  ...STANDARD_NATURAL,
+  ...PREMIUM_CELLULOSIC,
+  ...STANDARD_CELLULOSIC,
 ];
 
-function fiberKind(fiber: string): "synthetic" | "natural" {
+function fiberKind(fiber: string): “synthetic” | “natural” {
   const lower = fiber.toLowerCase();
-  if (PETROLEUM_SYNTHETIC_FIBERS.some((s) => lower.includes(s))) return "synthetic";
-  if (NATURAL_OR_CELLULOSIC.some((c) => lower.includes(c))) return "natural";
-  return "natural";
+  if (PETROLEUM_SYNTHETIC.some((s) => lower.includes(s))) return “synthetic”;
+  if (NATURAL_OR_CELLULOSIC.some((c) => lower.includes(c))) return “natural”;
+  return “natural”;
 }
 
 function badgeForKind(kind: "synthetic" | "natural"): string {
@@ -153,54 +97,6 @@ function getMarkupMidpoint(a: ScanAnalysis): number {
   }
   return a.markup ?? 0;
 }
-
-/*
-function betterAltBadgeLabel(badge: BetterAlternativeCard["badge"]): string {
-  switch (badge) {
-    case "more_natural":
-      return "More natural fibers";
-    case "lower_markup":
-      return "Lower markup";
-    case "better_cpw":
-      return "Better cost per wear";
-    default:
-      return "";
-  }
-}
-
-function BetterAltProductCard({ card }: { card: BetterAlternativeCard }) {
-  const [imgErr, setImgErr] = useState(false);
-  const priceStr =
-    card.price > 0
-      ? `$${card.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-      : "—";
-  return (
-    <a
-      href={card.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="better-alt-card"
-    >
-      <div className="better-alt-card-img-wrap">
-        {card.imageUrl && !imgErr ? (
-          <img src={card.imageUrl} alt="" onError={() => setImgErr(true)} />
-        ) : (
-          <div className="better-alt-card-img-placeholder" aria-hidden />
-        )}
-      </div>
-      <div className="better-alt-card-body">
-        <div className="better-alt-card-title">{card.title}</div>
-        <div className="better-alt-card-brand">{card.brand}</div>
-        <div className="better-alt-card-price-row">
-          <span className="better-alt-card-price">{priceStr}</span>
-          <span className="better-alt-card-badge">{betterAltBadgeLabel(card.badge)}</span>
-        </div>
-        <div className="better-alt-card-fiber">{card.fiberSummary}</div>
-      </div>
-    </a>
-  );
-}
-*/
 
 function analysisToSavedItem(a: ScanAnalysis) {
   const fibers = a.materials.map((m) => `${m.fiber} ${m.percentage}%`);
@@ -319,10 +215,12 @@ export function BreakdownScreen() {
   const [manualPriceInput, setManualPriceInput] = useState("");
   const [manualPriceApplied, setManualPriceApplied] = useState<number | null>(null);
   const [imageError, setImageError] = useState(false);
-  /* const [betterAlts, setBetterAlts] = useState<BetterAlternativesPayload | null>(null);
-  const [betterAltsLoading, setBetterAltsLoading] = useState(false); */
-
-  const score = 25; // TODO: derive from analysis
+  const score = useMemo(() => {
+    const entries = result?.valuesMatch;
+    if (!entries || entries.length === 0) return 0;
+    const passCount = entries.filter(e => e.state === "pass").length;
+    return Math.round((passCount / entries.length) * 100);
+  }, [result?.valuesMatch]);
   const imageUrl = result?.imageUrl ?? null;
   const showProductImage = imageUrl && !imageError;
 
@@ -389,45 +287,6 @@ export function BreakdownScreen() {
     }, 300);
     return () => window.clearTimeout(t);
   }, []);
-
-  /*
-  useEffect(() => {
-    if (!validResult) return;
-    const v = validResult.verdict;
-    if (v !== "Think Twice" && v !== "Retail Trap") {
-      setBetterAlts(null);
-      setBetterAltsLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setBetterAltsLoading(true);
-    setBetterAlts(null);
-    fetch("/api/better-alternatives", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scan: validResult })
-    })
-      .then(async (res) => {
-        if (!res.ok) throw new Error("better-alternatives failed");
-        return res.json() as Promise<BetterAlternativesPayload>;
-      })
-      .then((data) => {
-        if (cancelled) return;
-        setBetterAlts(data);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setBetterAlts({ primary: null, secondary: null, fallbackMessage: null });
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setBetterAltsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [validResult]);
-  */
 
   const ringDashOffset = useMemo(() => {
     const circumference = 188;
@@ -605,21 +464,10 @@ export function BreakdownScreen() {
       const wearCount = basePrice / result.costPerWear;
       effectiveCostPerWear = wearCount > 0 ? effectivePrice / wearCount : result.costPerWear;
     } else {
-      const assumedWears = 50;
-      effectiveCostPerWear = effectivePrice / assumedWears;
+      effectiveCostPerWear = effectivePrice / DEFAULT_WEAR_COUNT;
     }
   }
 
-  /* const verdictForAlts = result?.verdict;
-  const showBetterAlternatives =
-    verdictForAlts === "Think Twice" || verdictForAlts === "Retail Trap";
-  const hasBetterAlternativesSection =
-    showBetterAlternatives &&
-    (betterAltsLoading ||
-      (betterAlts &&
-        (betterAlts.primary != null ||
-          betterAlts.secondary != null ||
-          (betterAlts.fallbackMessage != null && betterAlts.fallbackMessage.length > 0)))); */
   const certifications = Array.isArray(result?.certifications)
     ? result.certifications.filter((c): c is string => typeof c === "string" && c.trim().length > 0)
     : [];
@@ -627,7 +475,7 @@ export function BreakdownScreen() {
   const isZaraEstimatedComposition =
     (result?.brand || "").trim().toLowerCase() === "zara" && (result?.confidenceTier ?? 0) >= 2;
   const showMaterialsNotReadFromPage =
-    result?.confidenceTier === 3 && result?.tags?.includes("Materials not detected");
+    result?.confidenceTier === 3 && result?.tags?.includes(MATERIALS_NOT_DETECTED_TAG);
   /** Think Twice + Retail Trap (“not worth it” tier); omit for Worth It. */
   const showBeforeYouBuy =
     result!.verdict === "Think Twice" || result!.verdict === "Retail Trap";
@@ -932,45 +780,6 @@ export function BreakdownScreen() {
           </div>
         )}
 
-        {/* Better Alternatives section — disabled for v1 (restore with state/useEffect/helpers above).
-        {hasBetterAlternativesSection && (
-          <>
-            <div className="section-divider" />
-            <div className="pad">
-              <div className="section-eyebrow">— Found something better?</div>
-              <p className="better-alt-disclaimer">
-                Based on fiber quality and value.
-              </p>
-              {betterAltsLoading ? (
-                <div className="better-alt-skeletons" aria-hidden>
-                  <div className="better-alt-skeleton-card" />
-                  <div className="better-alt-skeleton-card" />
-                </div>
-              ) : (
-                betterAlts && (
-                  <>
-                    {betterAlts.primary && (
-                      <>
-                        <div className="better-alt-slot-label better-alt-slot-worth">BEST MATCH</div>
-                        <BetterAltProductCard card={betterAlts.primary} />
-                      </>
-                    )}
-                    {betterAlts.secondary && (
-                      <>
-                        <div className="better-alt-slot-label better-alt-slot-worth">ALSO WORTH CONSIDERING</div>
-                        <BetterAltProductCard card={betterAlts.secondary} />
-                      </>
-                    )}
-                    {!betterAlts.primary && !betterAlts.secondary && betterAlts.fallbackMessage && (
-                      <p className="better-alt-skip-msg">{betterAlts.fallbackMessage}</p>
-                    )}
-                  </>
-                )
-              )}
-            </div>
-          </>
-        )}
-        */}
 
         <div className="save-btn-row">
           {saveError && (

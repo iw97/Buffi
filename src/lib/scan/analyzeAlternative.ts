@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { getAnthropicClient, parseClaudeJsonResponse } from "@/lib/anthropic";
 import type { AlternativeAnalysisResult, AlternativeCandidateProduct, ScanAnalysis } from "./types";
 import { CLAUDE_MINIMAL_MODEL } from "./models";
 
@@ -38,13 +38,6 @@ function clampImprovementSummary(s: string, maxWords: number): string {
   return w.slice(0, maxWords).join(" ");
 }
 
-function extractJsonObject(text: string): string | null {
-  const trimmed = text.trim();
-  const fence = trimmed.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
-  if (fence) return fence[1] ?? null;
-  const brace = trimmed.match(/\{[\s\S]*\}/);
-  return brace ? brace[0] : null;
-}
 
 /**
  * Lightweight Claude call: compare a candidate product (name, brand, price, raw composition)
@@ -54,12 +47,11 @@ export async function analyzeAlternative(
   originalScan: ScanAnalysis,
   candidateProduct: AlternativeCandidateProduct
 ): Promise<AlternativeAnalysisResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey?.trim()) {
+  if (!process.env.ANTHROPIC_API_KEY?.trim()) {
     throw new Error("ANTHROPIC_API_KEY is not configured");
   }
 
-  const client = new Anthropic({ apiKey });
+  const client = getAnthropicClient();
 
   const userPayload = {
     originalScan,
@@ -92,18 +84,7 @@ export async function analyzeAlternative(
 
     clearTimeout(timeout);
 
-    const text = (message.content as Array<{ type?: string; text?: string }>)
-      .filter((c) => c.type === "text" && c.text)
-      .map((c) => c.text!)
-      .join("")
-      .trim();
-
-    const jsonRaw = extractJsonObject(text);
-    if (!jsonRaw) {
-      throw new Error("No JSON object in Claude alternative analysis response");
-    }
-
-    const parsed = JSON.parse(jsonRaw) as Record<string, unknown>;
+    const parsed = parseClaudeJsonResponse<Record<string, unknown>>(message);
 
     const fibersRaw = parsed.fibers;
     if (!Array.isArray(fibersRaw)) {
