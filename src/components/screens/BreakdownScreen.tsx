@@ -21,11 +21,11 @@ const NATURAL_OR_CELLULOSIC = [
   ...STANDARD_CELLULOSIC,
 ];
 
-function fiberKind(fiber: string): “synthetic” | “natural” {
+function fiberKind(fiber: string): "synthetic" | "natural" {
   const lower = fiber.toLowerCase();
-  if (PETROLEUM_SYNTHETIC.some((s) => lower.includes(s))) return “synthetic”;
-  if (NATURAL_OR_CELLULOSIC.some((c) => lower.includes(c))) return “natural”;
-  return “natural”;
+  if (PETROLEUM_SYNTHETIC.some((s) => lower.includes(s))) return "synthetic";
+  if (NATURAL_OR_CELLULOSIC.some((c) => lower.includes(c))) return "natural";
+  return "natural";
 }
 
 function badgeForKind(kind: "synthetic" | "natural"): string {

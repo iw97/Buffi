@@ -1,11 +1,11 @@
 /**
  * Three-tier verdict: Worth It (teal) | Think Twice (amber) | Retail Trap (red).
- * Fiber taxonomy: only petroleum-based fibers count as “synthetic %”; cellulosic ≠ synthetic.
+ * Fiber taxonomy: only petroleum-based fibers count as "synthetic %"; cellulosic ≠ synthetic.
  */
 
 import type { VerdictTier } from "./types";
 
-export type { VerdictTier } from “./types”;
+export type { VerdictTier } from "./types";
 
 export const WORTH_IT_MARKUP_CEILING = 500;
 export const THINK_TWICE_MARKUP_CEILING = 1000;
@@ -13,7 +13,7 @@ export const ABSOLUTE_TRAP_CEILING = 1500;
 // Fallback wear count when Claude does not return costPerWear (e.g. minimal scan).
 export const DEFAULT_WEAR_COUNT = 50;
 
-/** Longer / specific phrases first so “organic cotton” wins over “cotton”. */
+/** Longer / specific phrases first so "organic cotton" wins over "cotton". */
 export const PREMIUM_NATURAL = [
   "organic cotton",
   "pima cotton",
@@ -205,7 +205,7 @@ export function computeVerdictFromRange(analysis: {
 }
 
 /**
- * Verdict tier from markup bands only (Retail Trap = “Not worth it” in product copy).
+ * Verdict tier from markup bands only (Retail Trap = "Not worth it" in product copy).
  * Baseline: Worth It &lt; WORTH_IT_MARKUP_CEILING, Think Twice up to THINK_TWICE_MARKUP_CEILING, Retail Trap above; see constants.
  * Leniency widens both ceilings together: +100 for indie/ethical, +50 for certified materials.
  * functionalSynthetic affects reason wording only, never thresholds.
@@ -270,8 +270,8 @@ export function computeVerdict(analysis: {
         : " Mostly petroleum-based synthetics — the bill of materials still does not justify this multiple.";
     const base =
       leniency > 0
-        ? `Markup between ${worthItCeil}% and ${thinkTwiceCeil}% — a steep multiple; brand or certification context keeps this in “consider carefully” territory rather than an automatic trap.`
-        : `Markup between ${WORTH_IT_MARKUP_CEILING}% and ${THINK_TWICE_MARKUP_CEILING.toLocaleString()}% — a steep multiple versus estimated materials; weigh brand, construction, and how much you’ll wear it.`;
+        ? `Markup between ${worthItCeil}% and ${thinkTwiceCeil}% — a steep multiple; brand or certification context keeps this in "consider carefully" territory rather than an automatic trap.`
+        : `Markup between ${WORTH_IT_MARKUP_CEILING}% and ${THINK_TWICE_MARKUP_CEILING.toLocaleString()}% — a steep multiple versus estimated materials; weigh brand, construction, and how much you'll wear it.`;
     return {
       verdict: "Think Twice",
       verdictReason: base + fiberTail + syntheticTail
