@@ -56,6 +56,8 @@ export async function recordProductMappingFromUrlScan(params: {
  * After a successful URL scan: extract GTIN in the background and upsert productMappings.
  */
 export async function extractGtinAndUpsertMapping(productUrl: string, brand: string, productName: string): Promise<void> {
+  console.log("[GTIN] attempting extraction for", productUrl);
+
   let gtin: string | null;
   try {
     gtin = await extractGtinFromProductUrl(productUrl);
@@ -63,11 +65,11 @@ export async function extractGtinAndUpsertMapping(productUrl: string, brand: str
     gtin = null;
   }
 
+  console.log("[GTIN] found:", gtin || "none");
+  console.log("[GTIN] writing to productMappings:", gtin ? "yes" : "skipping");
+
   if (gtin) {
-    console.log(`[scrape] GTIN extracted: ${gtin}`);
     await recordProductMappingFromUrlScan({ gtin, productUrl, brand, productName });
-  } else {
-    console.log(`[scrape] no GTIN found for this URL — skip silently`);
   }
 }
 
