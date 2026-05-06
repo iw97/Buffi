@@ -94,7 +94,7 @@ export async function ensureUserDocument(
     if (userFieldMissing(data, "scanCount")) patch.scanCount = 0;
     if (userFieldMissing(data, "completedScans")) patch.completedScans = 0;
     if (userFieldMissing(data, "scanCountResetAt")) patch.scanCountResetAt = serverTimestamp();
-    if (userFieldMissing(data, "saveCount")) patch.saveCount = 0;
+    if (userFieldMissing(data, "savedCount")) patch.savedCount = 0;
 
     if (Object.keys(patch).length === 0) return;
 

@@ -8,6 +8,20 @@
  *   `auth/unauthorized-continue-uri`).
  * - **Server / metadata:** falls back to `VERCEL_URL` (via `NEXT_PUBLIC_VERCEL_URL` in next.config).
  */
+/** Server-side origin for Stripe redirects, webhooks, metadata (no `window`). */
+export function getServerPublicAppUrl(): string {
+  const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+
+  const vercel = process.env.NEXT_PUBLIC_VERCEL_URL?.trim() || process.env.VERCEL_URL?.trim();
+  if (vercel) {
+    const host = vercel.replace(/^https?:\/\//, "");
+    return `https://${host.replace(/\/$/, "")}`;
+  }
+
+  return "http://localhost:3000";
+}
+
 export function getPublicAppUrl(): string {
   const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim();
   if (explicit) return explicit.replace(/\/$/, "");

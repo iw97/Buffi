@@ -102,14 +102,20 @@ export interface UserProfile {
   trapsAvoidedDollars?: number;
   /** Pro subscription */
   isPro?: boolean;
+  /** Stripe Customer id (cus_…). */
+  stripeCustomerId?: string | null;
+  /** Active subscription id (sub_…); omitted for one-time lifetime purchase. */
+  stripeSubscriptionId?: string | null;
+  /** Stripe subscription status, or `lifetime` for one-time Buffi Pro. */
+  subscriptionStatus?: string | null;
+  /** End of current paid period (subscriptions); null for lifetime. Firestore `Timestamp` when read from DB. */
+  proExpiresAt?: Timestamp | null;
   /** Scan count (can be reset) */
   scanCount?: number;
   /** Count of completed breakdown views used for scan paywall. */
   completedScans?: number;
   /** Present after `ensureUserDocument`; stored as Firestore `Timestamp`. */
   scanCountResetAt?: Timestamp | string;
-  /** Saved items count */
-  saveCount?: number;
 }
 
 /** A saved scan result (savedItems collection) */

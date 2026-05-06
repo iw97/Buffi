@@ -5,6 +5,8 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { usePendingScan, useScanError, readZaraUrlTagScanHint, setZaraUrlTagScanHint } from "@/contexts/ScanResultContext";
+import { PaywallTierList } from "@/components/paywall/PaywallTierList";
+import { useStripeCheckout } from "@/hooks/useStripeCheckout";
 import { TagDetailsStep } from "@/components/scan/TagDetailsStep";
 import { TagConfirmStep, type TagExtraction } from "@/components/scan/TagConfirmStep";
 
@@ -20,13 +22,13 @@ export function ScanScreen() {
   const authLoading = auth?.loading ?? true;
   const user = auth?.user ?? null;
 
-  const scannedCount = auth?.profile?.scannedCount ?? 0;
+  const completedScans = auth?.profile?.completedScans ?? 0;
   const isPro = auth?.profile?.isPro ?? false;
 
   const { setPending } = usePendingScan();
   const { lastError, setLastError } = useScanError();
   const [paywallOpen, setPaywallOpen] = useState(false);
-  const [isProOverride, setIsProOverride] = useState(false);
+  const { startCheckout } = useStripeCheckout();
   const [urlOpen, setUrlOpen] = useState(false);
   const [urlValue, setUrlValue] = useState("");
   const [showZaraTagHint, setShowZaraTagHint] = useState(false);
@@ -64,8 +66,8 @@ export function ScanScreen() {
   }
 
   function isPaywallBlocking(): boolean {
-    if (isPro || isProOverride) return false;
-    return scannedCount >= 1;
+    if (isPro) return false;
+    return completedScans >= 2;
   }
 
   function handleUrlSubmit() {
@@ -102,9 +104,17 @@ export function ScanScreen() {
     setTagExtractResult(null);
     setOcrStatus("loading");
     try {
+      if (!user) {
+        setTagOcrFailure({
+          previewUrl,
+          hint: "Please log in to read label photos."
+        });
+        return;
+      }
+      const token = await user.getIdToken();
       const res = await fetch("/api/scan-tag", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ image: base64Image })
       });
 
@@ -123,9 +133,11 @@ export function ScanScreen() {
         setTagOcrFailure({
           previewUrl,
           hint:
-            res.status >= 500
-              ? "Our label reader had a problem. Please try again in a moment."
-              : "We could not process this photo. Try again or enter details manually."
+            res.status === 401
+              ? "Please log in again to read label photos."
+              : res.status >= 500
+                ? "Our label reader had a problem. Please try again in a moment."
+                : "We could not process this photo. Try again or enter details manually."
         });
         return;
       }
@@ -610,22 +622,21 @@ export function ScanScreen() {
           <div className="premium-sub-line">
             Join the people who decided they deserved honest information.
           </div>
-          <button
-            className="ob-next"
-            type="button"
-            style={{ width: "100%" }}
-            onClick={() => {
-              setIsProOverride(true);
+          <PaywallTierList
+            variant="modal"
+            onSelectPlan={(plan) => {
               setPaywallOpen(false);
+              void startCheckout(plan);
             }}
-          >
-            Start Pro — $30 / year
+          />
+          <button type="button" className="share-close" onClick={() => router.push("/upgrade")} style={{ marginTop: 8 }}>
+            View full upgrade page
           </button>
           <button
             className="share-close"
             type="button"
             onClick={() => setPaywallOpen(false)}
-            style={{ marginTop: 8 }}
+            style={{ marginTop: 4 }}
           >
             Maybe later
           </button>

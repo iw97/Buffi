@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { PaywallTierList } from "@/components/paywall/PaywallTierList";
+import { useStripeCheckout } from "@/hooks/useStripeCheckout";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { useScanResult, getStoredScanResult, isValidScanResult, normalizeScanResult } from "@/contexts/ScanResultContext";
@@ -231,6 +233,7 @@ function analysisToScanHistoryEntry(a: ScanAnalysis) {
 
 export function BreakdownScreen() {
   const router = useRouter();
+  const { startCheckout } = useStripeCheckout();
   const auth = useAuthOptional();
   const authLoading = auth?.loading ?? true;
   const isConfigured = auth?.isConfigured ?? false;
@@ -308,9 +311,7 @@ export function BreakdownScreen() {
   const isSaved = !!savedItemId;
   const [toast, setToast] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const isProFromProfile = auth?.profile?.isPro ?? false;
-  const [isProOverride, setIsProOverride] = useState(false);
-  const isPro = isProFromProfile || isProOverride;
+  const isPro = auth?.profile?.isPro ?? false;
   const completedScans = auth?.profile?.completedScans ?? 0;
 
   // When scraper (or Claude) cannot provide a price (e.g. JS-rendered + bot detection),
@@ -1072,19 +1073,17 @@ export function BreakdownScreen() {
             Join the people who decided they deserved honest information.
           </div>
 
-          <button
-            className="ob-next"
-            type="button"
-            style={{ width: "100%" }}
-            onClick={() => {
-              setIsProOverride(true);
+          <PaywallTierList
+            variant="modal"
+            onSelectPlan={(plan) => {
               setPremiumOpen(false);
-              showToast();
+              void startCheckout(plan);
             }}
-          >
-            Start Pro — $30 / year
+          />
+          <button type="button" className="share-close" onClick={() => router.push("/upgrade")} style={{ marginTop: 8 }}>
+            View full upgrade page
           </button>
-          <button className="share-close" type="button" onClick={() => setPremiumOpen(false)} style={{ marginTop: 8 }}>
+          <button className="share-close" type="button" onClick={() => setPremiumOpen(false)} style={{ marginTop: 4 }}>
             Maybe later
           </button>
         </div>

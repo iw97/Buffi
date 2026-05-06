@@ -96,10 +96,26 @@ export function AnalyzingScreen() {
 
     const run = async () => {
       try {
+        if (!user) {
+          console.log("[scan flow] missing user, cannot authorize /api/scan");
+          setLastError("unknown");
+          setPending(null);
+          setFlowError(
+            isConfigured
+              ? "Sign in to run an analysis."
+              : "Cannot verify your session. Ensure Firebase client env vars are set, then sign in."
+          );
+          return;
+        }
         console.log("[scan flow] fetch /api/scan starting");
+        const token = await user.getIdToken();
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        };
         const res = await fetch("/api/scan", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify(body),
           signal: controller.signal
         });
@@ -124,7 +140,11 @@ export function AnalyzingScreen() {
           console.log("[scan flow] res not ok", res.status, data);
           setLastError(toErrorCode(res.status, data as { code?: string }));
           setPending(null);
-          setFlowError((data.message as string) || `Request failed (${res.status})`);
+          const errMsg =
+            (typeof data.message === "string" && data.message) ||
+            (typeof (data as { error?: string }).error === "string" && (data as { error: string }).error) ||
+            `Request failed (${res.status})`;
+          setFlowError(errMsg);
           return;
         }
         if (data.ok && data.analysis) {

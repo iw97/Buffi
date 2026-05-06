@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAdminAuth } from "@/lib/firebase/admin";
 import { cleanProductUrl } from "@/lib/scan/cleanProductUrl";
 import { scrapeProductFromUrl } from "@/lib/scan/scrape";
 import { getPriceFromGoogleShopping } from "@/lib/scan/serpapi";
@@ -16,6 +17,13 @@ import {
 /** Allow Bright Data Web Unlocker (~3–8s) plus scrape + Claude without platform timeout. */
 export const maxDuration = 30;
 
+function readBearerToken(req: NextRequest): string | null {
+  const raw = req.headers.get("authorization") ?? "";
+  const [scheme, token] = raw.split(" ");
+  if (scheme?.toLowerCase() !== "bearer" || !token) return null;
+  return token.trim();
+}
+
 function isZaraUrl(url: string | undefined): boolean {
   return typeof url === "string" && /(^|\.)zara\.com$/i.test(new URL(url).hostname);
 }
@@ -26,6 +34,22 @@ function applyZaraConfidence(analysis: ScanAnalysis, sourceUrl: string): ScanAna
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | ScanError | unknown>> {
+  const adminAuth = getAdminAuth();
+  if (!adminAuth) {
+    return NextResponse.json({ error: "Server auth is not configured" }, { status: 500 });
+  }
+
+  const token = readBearerToken(req);
+  if (!token) {
+    return NextResponse.json({ error: "Missing bearer token" }, { status: 401 });
+  }
+
+  try {
+    await adminAuth.verifyIdToken(token);
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   console.log("[api/scan] POST received");
   try {
     const body = await req.json();

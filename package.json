@@ -6,7 +6,8 @@
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "stripe:seed": "node scripts/stripe-seed-products.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
@@ -18,7 +19,8 @@
     "next": "^16.1.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "resend": "^6.10.0"
+    "resend": "^6.10.0",
+    "stripe": "^17.7.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

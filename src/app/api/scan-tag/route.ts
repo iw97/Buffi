@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { getAdminAuth } from "@/lib/firebase/admin";
+import { CLAUDE_PRIMARY_MODEL } from "@/lib/scan/models";
 
 const VISION_URL = "https://vision.googleapis.com/v1/images:annotate";
+
+function readBearerToken(req: NextRequest): string | null {
+  const raw = req.headers.get("authorization") ?? "";
+  const [scheme, token] = raw.split(" ");
+  if (scheme?.toLowerCase() !== "bearer" || !token) return null;
+  return token.trim();
+}
 
 export interface ScanTagExtraction {
   fibers: { fiber: string; percentage: number }[];
@@ -10,7 +19,25 @@ export interface ScanTagExtraction {
   confidence: "high" | "medium" | "low";
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse<ScanTagExtraction | { ok: false; confidence: "low"; message: string }>> {
+type ScanTagErrorBody = { ok: false; confidence: "low"; message: string } | { error: string };
+
+export async function POST(req: NextRequest): Promise<NextResponse<ScanTagExtraction | ScanTagErrorBody>> {
+  const adminAuth = getAdminAuth();
+  if (!adminAuth) {
+    return NextResponse.json({ error: "Server auth is not configured" }, { status: 500 });
+  }
+
+  const token = readBearerToken(req);
+  if (!token) {
+    return NextResponse.json({ error: "Missing bearer token" }, { status: 401 });
+  }
+
+  try {
+    await adminAuth.verifyIdToken(token);
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     let base64 = typeof body?.image === "string" ? body.image.trim() : "";
@@ -90,7 +117,7 @@ Raw label text:
 ${rawText.slice(0, 8000)}`;
 
     const message = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: CLAUDE_PRIMARY_MODEL,
       max_tokens: 1024,
       messages: [{ role: "user", content: prompt }]
     });

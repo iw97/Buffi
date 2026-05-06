@@ -5,6 +5,7 @@ import { normalizeMarkupLeniencyFlags } from "./brands";
 import { ETHICAL_BRANDS_CLAUSE, MATERIAL_COST_AND_TAXONOMY_PROMPT } from "./materialCostPrompt";
 import { isZaraProductPageUrl } from "./zaraHints";
 import { computeVerdictFromRange, parseFibersToMaterials } from "./verdict";
+import { CLAUDE_PRIMARY_MODEL, CLAUDE_MINIMAL_MODEL } from "./models";
 
 const MATERIALS_NOT_DETECTED_TAG = "Materials not detected";
 
@@ -166,7 +167,7 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
   try {
     const message = await client.messages.create(
       {
-        model: "claude-sonnet-4-20250514",
+        model: CLAUDE_PRIMARY_MODEL,
         max_tokens: 1024,
         messages: [{ role: "user", content: prompt }]
       },
@@ -314,7 +315,7 @@ export async function analyzeMinimalScan(input: {
   try {
     const message = await client.messages.create(
       {
-        model: "claude-sonnet-4-5",
+        model: CLAUDE_MINIMAL_MODEL,
         max_tokens: 1024,
         system: MINIMAL_SCAN_SYSTEM_PROMPT,
         messages: [
@@ -450,7 +451,7 @@ export async function parseFiberCompositionFromZaraContext(input: {
   try {
     const message = await client.messages.create(
       {
-        model: "claude-sonnet-4-20250514",
+        model: CLAUDE_PRIMARY_MODEL,
         max_tokens: 256,
         messages: [
           {

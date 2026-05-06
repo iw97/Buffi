@@ -6,10 +6,10 @@ import { useAuthOptional } from "@/contexts/AuthContext";
 import { useStripeCheckout } from "@/hooks/useStripeCheckout";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 
-export function PaywallScreen() {
+export function UpgradeScreen() {
   const router = useRouter();
   const auth = useAuthOptional();
-  useRequireAuth("/paywall");
+  useRequireAuth("/upgrade");
   const { startCheckout } = useStripeCheckout();
 
   const loading = auth?.loading ?? true;
@@ -36,10 +36,10 @@ export function PaywallScreen() {
     <div className="min-h-screen flex flex-col p-6" style={{ gap: 16 }}>
       <div className="section-eyebrow">Buffi Pro</div>
       <h1 className="ob-title" style={{ marginBottom: 0 }}>
-        Free scans used up.
+        Upgrade to Buffi Pro
       </h1>
       <p className="ob-desc" style={{ marginTop: 8 }}>
-        Upgrade to keep scanning with unlimited breakdowns.
+        Honest breakdowns and unlimited saves — funded by you, not brands.
       </p>
 
       <PaywallTierList variant="page" onSelectPlan={(plan) => void startCheckout(plan)} />

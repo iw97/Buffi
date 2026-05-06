@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { AlternativeAnalysisResult, AlternativeCandidateProduct, ScanAnalysis } from "./types";
+import { CLAUDE_MINIMAL_MODEL } from "./models";
 
 const ALT_ANALYSIS_TIMEOUT_MS = 20_000;
 
@@ -76,7 +77,7 @@ export async function analyzeAlternative(
   try {
     const message = await client.messages.create(
       {
-        model: "claude-sonnet-4-5",
+        model: CLAUDE_MINIMAL_MODEL,
         max_tokens: 400,
         system: SYSTEM_PROMPT,
         messages: [
