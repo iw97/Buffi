@@ -996,7 +996,7 @@ export async function scrapeProductFromUrl(url: string): Promise<{
       console.log(LOG_PREFIX, "scrape path taken", "Zara-specific (scrapeZaraFromUrl)");
       console.log(
         LOG_PREFIX,
-        "note: JSON-LD / generic DOM probes for materials are inside zara.ts + this function’s generic fallback only if Zara returns empty and code falls through to HTML below."
+        "note: JSON-LD / generic DOM probes for materials are inside zara.ts + this function's generic fallback only if Zara returns empty and code falls through to HTML below."
       );
       console.log(LOG_PREFIX, "final materials before return", out.materials ?? "(undefined)");
       console.log(LOG_PREFIX, "price detail", {

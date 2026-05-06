@@ -16,7 +16,7 @@ const MINIMAL_SCAN_SYSTEM_PROMPT = `You are a material intelligence analyst for 
 
 Apply these rules:
 - Small/indie brand: if brandName suggests an independent or small brand (not a major retailer, global athletic label, or fast-fashion chain), set isSmallBusiness: true. Never set isSmallBusiness for megabrands such as Nike, Adidas, Under Armour, Lululemon, H&M, Zara, Uniqlo, Gap, or Shein — those are not indie economics.
-- Classify every fiber using **PART 1** taxonomy below. **Never** count cellulosic fibers (viscose, rayon, modal, Tencel, Naia, acetate, etc.) toward petroleum “synthetic %” / plastic framing — only Part 1 **SYNTHETIC / PETROLEUM-BASED** fibers count.
+- Classify every fiber using **PART 1** taxonomy below. **Never** count cellulosic fibers (viscose, rayon, modal, Tencel, Naia, acetate, etc.) toward petroleum "synthetic %" / plastic framing — only Part 1 **SYNTHETIC / PETROLEUM-BASED** fibers count.
 - verdictReason must include context (fiber class, markup, brand). Verdict label is advisory only (app uses three tiers: Worth It | Think Twice | Retail Trap).
 - markupContext: exactly one of "justified" | "partially justified" | "unjustified" based on fiber quality and small-business context.
 - functionalSynthetic: true when garment category makes synthetics appropriate (rainwear, activewear, swimwear, lingerie, hosiery, tights); false for formal/everyday/casual.
@@ -166,7 +166,7 @@ ${dataSourceInstructions}${criticalNonZaraNoComposition}
 Set isEthicalBrand: true when the brand matches: ${ETHICAL_BRANDS_CLAUSE}. Note sustainability reputation in verdictReason; apply Part 5 markup thresholds.
 
 **Fiber taxonomy, costs, certifications, verdict thresholds**
-Follow the block below exactly for classification, $/yard estimates, yardage, certified materials, and how markup interacts with fiber class. **Materials** in JSON must list fibers with **correct taxonomy**: cellulosic fibers are never “synthetic plastic” in tags or reasoning.
+Follow the block below exactly for classification, $/yard estimates, yardage, certified materials, and how markup interacts with fiber class. **Materials** in JSON must list fibers with **correct taxonomy**: cellulosic fibers are never "synthetic plastic" in tags or reasoning.
 
 ${MATERIAL_COST_AND_TAXONOMY_PROMPT}
 
@@ -176,7 +176,7 @@ Set functionalSynthetic: true when petroleum synthetics are **expected** for the
 - Activewear, swimwear, athletic wear: nylon, polyester, spandex/elastane are functional.
 - Lingerie, hosiery, tights: nylon is standard.
 - Formal wear, everyday clothing, casualwear: prefer natural/cellulosic when synthetics are not functionally required.
-When functionalSynthetic is true: the app **does not** count that item’s petroleum synthetic % toward the user-facing “plastic” metric, and may soften **fiber** language in verdictReason. It does **not** widen Worth It / Think Twice / Retail Trap markup bands — those come only from markup plus Part 5 leniency (ethical, small business, certified materials). In verdictReason you may note: "Synthetic materials are appropriate for this garment type."
+When functionalSynthetic is true: the app **does not** count that item's petroleum synthetic % toward the user-facing "plastic" metric, and may soften **fiber** language in verdictReason. It does **not** widen Worth It / Think Twice / Retail Trap markup bands — those come only from markup plus Part 5 leniency (ethical, small business, certified materials). In verdictReason you may note: "Synthetic materials are appropriate for this garment type."
 
 **Verdict nuancing (for verdictReason and tags; app recomputes tier)**
 - verdictReason MUST include fiber class (natural vs cellulosic vs petroleum synthetic), markup context, and brand where relevant.

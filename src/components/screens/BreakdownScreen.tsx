@@ -426,7 +426,7 @@ export function BreakdownScreen() {
         .filter((m) => fiberKind(m.fiber) === "synthetic")
         .reduce((sum, m) => sum + m.percentage, 0)
     : 0;
-  /** Petroleum % shown as “plastic” metric; functional synthetics are excluded from this number (composition unchanged). */
+  /** Petroleum % shown as "plastic" metric; functional synthetics are excluded from this number (composition unchanged). */
   const plasticMetricSyntheticPct = result?.functionalSynthetic === true ? 0 : syntheticPct;
 
   // Baseline values from analysis
@@ -476,7 +476,7 @@ export function BreakdownScreen() {
     (result?.brand || "").trim().toLowerCase() === "zara" && (result?.confidenceTier ?? 0) >= 2;
   const showMaterialsNotReadFromPage =
     result?.confidenceTier === 3 && result?.tags?.includes(MATERIALS_NOT_DETECTED_TAG);
-  /** Think Twice + Retail Trap (“not worth it” tier); omit for Worth It. */
+  /** Think Twice + Retail Trap ("not worth it" tier); omit for Worth It. */
   const showBeforeYouBuy =
     result!.verdict === "Think Twice" || result!.verdict === "Retail Trap";
 
