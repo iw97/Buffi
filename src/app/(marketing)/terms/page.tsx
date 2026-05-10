@@ -80,7 +80,7 @@ export default function TermsPage() {
             production expenses including labor, design, logistics, and overhead.
           </li>
           <li>
-            Verdicts (Worth It, Think Twice, Retail Trap) represent Buffi&apos;s independent assessment based on
+            Verdicts (Worth It, Think Twice, Not worth it) represent Buffi&apos;s independent assessment based on
             available data and should be used as one input among many in your purchasing decisions, not as
             definitive financial or consumer advice.
           </li>
