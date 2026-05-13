@@ -1,5 +1,0 @@
-# Next.js on Netlify (OpenNext). Per-route duration for App Router handlers is taken from
-# Next.js route segment config (`export const maxDuration` in the route file) where supported.
-# Netlify’s platform cap may still be lower than 30s on some plans; contact Netlify support if needed.
-[[plugins]]
-  package = "@netlify/plugin-nextjs"

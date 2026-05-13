@@ -46,7 +46,16 @@ function verdictToStampClass(verdict: string): "trap" | "win" | "think-twice" {
 }
 
 function verdictDisplayLabel(verdict: string): string {
-  return verdict === "Retail Trap" ? "Not worth it" : verdict;
+  switch (verdict) {
+    case "Retail Trap":
+      return "Not worth it.";
+    case "Worth It":
+      return "Worth It.";
+    case "Think Twice":
+      return "Think Twice.";
+    default:
+      return verdict.endsWith(".") ? verdict : `${verdict}.`;
+  }
 }
 
 /** Small copy shown under each verdict. */
@@ -540,7 +549,7 @@ export function BreakdownScreen() {
           <div className={`verdict-stamp ${verdictToStampClass(result!.verdict)}`}>
             <div>
               <div className="verdict-eyebrow">Our Verdict</div>
-              <div className="verdict-text">{verdictDisplayLabel(result!.verdict)}.</div>
+              <div className="verdict-text">{verdictDisplayLabel(result!.verdict)}</div>
               <div className="verdict-subtitle-wrap">{verdictSubtitle(result!.verdict)}</div>
               {result!.verdictSpanNote && (
                 <p className="verdict-span-note">{result!.verdictSpanNote}</p>
@@ -910,7 +919,7 @@ export function BreakdownScreen() {
           >
             <div className="share-card-eyebrow">buffi · receipt</div>
             <div className="share-card-headline">
-              {verdictDisplayLabel(result!.verdict)}.
+              {verdictDisplayLabel(result!.verdict)}
               <br />
               {Math.round(getMarkupMidpoint(result!)).toLocaleString()}% markup.
             </div>
