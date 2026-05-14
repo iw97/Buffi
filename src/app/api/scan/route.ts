@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminAuth } from "@/lib/firebase/admin";
+import { getAdminAuth, getAdminFirestore } from "@/lib/firebase/admin";
 import { cleanProductUrl } from "@/lib/scan/cleanProductUrl";
 import { scrapeProductFromUrl } from "@/lib/scan/scrape";
 import { getPriceFromGoogleShopping } from "@/lib/scan/serpapi";
@@ -44,10 +44,26 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
     return NextResponse.json({ error: "Missing bearer token" }, { status: 401 });
   }
 
+  let uid: string;
   try {
-    await adminAuth.verifyIdToken(token);
+    const decoded = await adminAuth.verifyIdToken(token);
+    uid = decoded.uid;
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const adminDb = getAdminFirestore();
+  if (adminDb) {
+    const userSnap = await adminDb.collection("users").doc(uid).get();
+    const userData = userSnap.data();
+    const isPro = userData?.isPro === true;
+    const completedScans = typeof userData?.completedScans === "number" ? userData.completedScans : 0;
+    if (!isPro && completedScans >= 2) {
+      return NextResponse.json(
+        { ok: false, code: "scan_limit_reached", message: "Scan limit reached. Upgrade to Buffi Pro to continue scanning." },
+        { status: 403 }
+      );
+    }
   }
 
   console.log("[api/scan] POST received");

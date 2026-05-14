@@ -99,26 +99,16 @@ export interface MinimalScanResponse {
   certifications?: string[];
 }
 
-/** Lightweight Claude comparison of a candidate product vs an original scan (better-alternatives flow). */
-export interface AlternativeAnalysisResult {
-  fibers: { fiber: string; percentage: number }[];
-  estimatedMaterialCostMin: number;
-  estimatedMaterialCostMax: number;
-  markupMin: number;
-  markupMax: number;
-  costPerWear: number;
-  isGenuinelyBetter: boolean;
-  primaryImprovement: "fiber" | "markup" | "costPerWear" | null;
-  /** At most six words (enforced in post-processing). */
-  improvementSummary: string;
-}
-
-/** Input for `analyzeAlternative`: minimal candidate fields + composition text. */
-export interface AlternativeCandidateProduct {
-  name: string;
+/** A Claude-suggested alternative product shown when verdict is Think Twice or Retail Trap. */
+export interface AlternativeSuggestion {
   brand: string;
-  price: number;
-  rawCompositionText: string;
+  productName: string;
+  estimatedPrice: string;
+  keyMaterial: string;
+  whyBetter: string;
+  searchQuery: string;
+  /** Thumbnail URL from Google Shopping — null when SerpAPI is unconfigured or returns nothing. */
+  imageUrl?: string | null;
 }
 
 /** Error codes for explicit handling */

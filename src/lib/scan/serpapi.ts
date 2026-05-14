@@ -149,7 +149,19 @@ export async function getPriceFromGoogleShopping(
 }
 
 /**
- * Google Shopping via SerpAPI — multiple results with product links (for better-alternatives).
+ * Fetch the first Google Shopping thumbnail for a query. Used for alternative product images.
+ * Returns null when SERPAPI_KEY is unset or no result is found.
+ */
+export async function getThumbnailForQuery(query: string): Promise<string | null> {
+  const payload = await fetchGoogleShoppingSerpPayload(query);
+  if (!payload || payload.error) return null;
+  const first = payload.shopping_results?.[0] as Record<string, unknown> | undefined;
+  const thumb = first?.thumbnail;
+  return typeof thumb === "string" && thumb.startsWith("http") ? thumb : null;
+}
+
+/**
+ * Google Shopping via SerpAPI — multiple results with product links.
  */
 export async function getGoogleShoppingResults(query: string, limit: number): Promise<GoogleShoppingItem[]> {
   const apiKey = process.env.SERPAPI_KEY;

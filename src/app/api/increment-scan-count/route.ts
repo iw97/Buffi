@@ -44,6 +44,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<IncrementResp
         userRef,
         {
           completedScans,
+          scannedCount: FieldValue.increment(1),
           updatedAt: FieldValue.serverTimestamp()
         },
         { merge: true }

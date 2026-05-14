@@ -7,9 +7,9 @@ import { useStripeCheckout } from "@/hooks/useStripeCheckout";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { useScanResult, getStoredScanResult, isValidScanResult, normalizeScanResult } from "@/contexts/ScanResultContext";
-import { addSavedItem, addScanHistoryEntry, removeSavedItem, setUserProfile } from "@/lib/firebase/firestore";
+import { addSavedItem, addScanHistoryEntry, incrementScannedCount, removeSavedItem, setUserProfile } from "@/lib/firebase/firestore";
 import { isFirebaseConfigured } from "@/lib/firebase";
-import type { ScanAnalysis } from "@/lib/scan/types";
+import type { ScanAnalysis, AlternativeSuggestion } from "@/lib/scan/types";
 import { MATERIALS_NOT_DETECTED_TAG } from "@/lib/scan/analyze";
 import { PETROLEUM_SYNTHETIC, PREMIUM_NATURAL, STANDARD_NATURAL, PREMIUM_CELLULOSIC, STANDARD_CELLULOSIC, DEFAULT_WEAR_COUNT } from "@/lib/scan/verdict";
 type InfoId = "material" | "cpw" | "markup";
@@ -142,7 +142,7 @@ function analysisToScanHistoryEntry(a: ScanAnalysis) {
 
 export function BreakdownScreen() {
   const router = useRouter();
-  const { startCheckout } = useStripeCheckout();
+  const { startCheckout, checkoutError } = useStripeCheckout();
   const auth = useAuthOptional();
   const authLoading = auth?.loading ?? true;
   const isConfigured = auth?.isConfigured ?? false;
@@ -228,6 +228,9 @@ export function BreakdownScreen() {
   const [manualPriceInput, setManualPriceInput] = useState("");
   const [manualPriceApplied, setManualPriceApplied] = useState<number | null>(null);
   const [imageError, setImageError] = useState(false);
+  const [alternatives, setAlternatives] = useState<AlternativeSuggestion[] | null>(null);
+  const [alternativesLoading, setAlternativesLoading] = useState(false);
+  const alternativesFetched = useRef(false);
   const score = useMemo(() => {
     const entries = result?.valuesMatch;
     if (!entries || entries.length === 0) return 0;
@@ -252,6 +255,7 @@ export function BreakdownScreen() {
     hasFinalizedCurrentScan.current = true;
     if (isPro) {
       void addScanHistoryEntry(user.uid, analysisToScanHistoryEntry(validResult));
+      void incrementScannedCount(user.uid);
       return;
     }
 
@@ -300,6 +304,40 @@ export function BreakdownScreen() {
     }, 300);
     return () => window.clearTimeout(t);
   }, []);
+
+  useEffect(() => {
+    if (alternativesFetched.current || !user || !validResult) return;
+    if (validResult.verdict !== "Think Twice" && validResult.verdict !== "Retail Trap") return;
+    alternativesFetched.current = true;
+    setAlternativesLoading(true);
+    void (async () => {
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/alternatives", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            brand: validResult.brand,
+            name: validResult.name,
+            price: validResult.price,
+            verdict: validResult.verdict,
+            materials: validResult.materials,
+            markupMin: validResult.markupMin,
+            markupMax: validResult.markupMax,
+            tags: validResult.tags
+          })
+        });
+        if (res.ok) {
+          const data = (await res.json()) as AlternativeSuggestion[];
+          if (Array.isArray(data) && data.length > 0) setAlternatives(data);
+        }
+      } catch {
+        // alternatives are an enhancement — fail silently
+      } finally {
+        setAlternativesLoading(false);
+      }
+    })();
+  }, [user, validResult]);
 
   const ringDashOffset = useMemo(() => {
     const circumference = 188;
@@ -489,10 +527,6 @@ export function BreakdownScreen() {
     (result?.brand || "").trim().toLowerCase() === "zara" && (result?.confidenceTier ?? 0) >= 2;
   const showMaterialsNotReadFromPage =
     result?.confidenceTier === 3 && result?.tags?.includes(MATERIALS_NOT_DETECTED_TAG);
-  /** Think Twice + Retail Trap ("not worth it" tier); omit for Worth It. */
-  const showBeforeYouBuy =
-    result!.verdict === "Think Twice" || result!.verdict === "Retail Trap";
-
   return (
     <div className="min-h-screen flex flex-col">
       <div className="breakdown-header">
@@ -556,15 +590,6 @@ export function BreakdownScreen() {
               )}
             </div>
           </div>
-          {showBeforeYouBuy && (
-            <div className="before-you-buy">
-              <div className="section-eyebrow">— Before you buy</div>
-              <p className="before-you-buy-text">
-                Consider searching secondhand first — you may find this item or something similar on Poshmark,
-                ThredUp, or Depop for less.
-              </p>
-            </div>
-          )}
           {result!.valuesMatch && result!.valuesMatch.length > 0 && (
             <div className="values-badges-row" role="list">
               {result!.valuesMatch.map((entry, idx) => (
@@ -794,6 +819,148 @@ export function BreakdownScreen() {
         )}
 
 
+        {(alternativesLoading || (alternatives && alternatives.length > 0)) && (
+          <>
+            <div className="section-divider" />
+            <div className="pad">
+              <div className="section-eyebrow">— Consider instead</div>
+              {alternativesLoading && !alternatives && (
+                <p className="auth-legal" style={{ color: "var(--text-dim)", marginTop: 8 }}>
+                  Finding better options…
+                </p>
+              )}
+              {alternatives && alternatives.length > 0 && (
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                  {alternatives.map((alt, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        border: "1px solid var(--border-light)",
+                        borderRadius: 6,
+                        overflow: "hidden"
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "100%",
+                          aspectRatio: "1 / 1",
+                          background: "rgba(255,255,255,0.04)",
+                          position: "relative",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          overflow: "hidden"
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontFamily: "var(--font-mono, monospace)",
+                            fontSize: 32,
+                            color: "var(--teal)",
+                            opacity: 0.35
+                          }}
+                        >
+                          {alt.brand.charAt(0).toUpperCase()}
+                        </span>
+                        {alt.imageUrl && (
+                          <img
+                            src={alt.imageUrl}
+                            alt={alt.productName}
+                            style={{
+                              position: "absolute",
+                              inset: 0,
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover"
+                            }}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = "none";
+                            }}
+                          />
+                        )}
+                      </div>
+                      <div style={{ padding: "10px 12px 14px" }}>
+                        <div
+                          style={{
+                            fontFamily: "var(--font-mono, monospace)",
+                            fontSize: 9,
+                            letterSpacing: "0.08em",
+                            color: "var(--teal)",
+                            marginBottom: 4,
+                            textTransform: "uppercase"
+                          }}
+                        >
+                          {alt.brand}
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: "var(--text)",
+                            lineHeight: 1.3,
+                            marginBottom: 6
+                          }}
+                        >
+                          {alt.productName}
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: 11,
+                            color: "var(--text-dim)",
+                            marginBottom: 1
+                          }}
+                        >
+                          {alt.estimatedPrice}
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: 11,
+                            color: "var(--text-dim)",
+                            marginBottom: 8
+                          }}
+                        >
+                          {alt.keyMaterial}
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: 11,
+                            color: "var(--text-dim)",
+                            fontStyle: "italic",
+                            lineHeight: 1.35,
+                            marginBottom: 12
+                          }}
+                        >
+                          {alt.whyBetter}
+                        </div>
+                        <a
+                          href={`https://www.google.com/search?tbm=shop&q=${encodeURIComponent(alt.searchQuery)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: 12,
+                            color: "var(--teal)",
+                            textDecoration: "underline",
+                            textUnderlineOffset: 3
+                          }}
+                        >
+                          Search →
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
         <div className="save-btn-row">
           {saveError && (
             <p className="auth-legal" style={{ color: "var(--red)", padding: "0 24px 8px" }}>
@@ -902,6 +1069,11 @@ export function BreakdownScreen() {
               void startCheckout(plan);
             }}
           />
+          {checkoutError && (
+            <p className="auth-legal" style={{ color: "var(--red)", textAlign: "center", marginTop: 4 }}>
+              {checkoutError}
+            </p>
+          )}
           <button type="button" className="share-close" onClick={() => router.push("/upgrade")} style={{ marginTop: 8 }}>
             View full upgrade page
           </button>

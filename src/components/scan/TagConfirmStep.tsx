@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { FASHION_BRANDS } from "@/lib/scan/brands";
+import { useAuthOptional } from "@/contexts/AuthContext";
 
 export interface TagExtraction {
   fibers: { fiber: string; percentage: number }[];
@@ -18,6 +19,7 @@ interface TagConfirmStepProps {
 
 export function TagConfirmStep({ extraction, onBack, onSubmit }: TagConfirmStepProps) {
   const { fibers, styleNumber } = extraction;
+  const auth = useAuthOptional();
   const [brandInput, setBrandInput] = useState("");
   const [priceInput, setPriceInput] = useState("");
   const [showBrandList, setShowBrandList] = useState(false);
@@ -51,12 +53,16 @@ export function TagConfirmStep({ extraction, onBack, onSubmit }: TagConfirmStepP
     const priceFromInput = priceInput.trim() ? parseFloat(priceInput.replace(/[^0-9.]/g, "")) : undefined;
     if (typeof priceFromInput === "number" && priceFromInput > 0) {
       price = priceFromInput;
-    } else if (styleNumber) {
+    } else if (styleNumber && auth?.user) {
       setLookingUpPrice(true);
       try {
+        const token = await auth.user.getIdToken();
         const res = await fetch("/api/price-lookup", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
           body: JSON.stringify({ query: `${brand} ${styleNumber}` })
         });
         const data = (await res.json()) as { price: number | null };

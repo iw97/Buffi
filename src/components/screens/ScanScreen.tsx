@@ -28,7 +28,7 @@ export function ScanScreen() {
   const { setPending } = usePendingScan();
   const { lastError, setLastError } = useScanError();
   const [paywallOpen, setPaywallOpen] = useState(false);
-  const { startCheckout } = useStripeCheckout();
+  const { startCheckout, checkoutError } = useStripeCheckout();
   const [urlOpen, setUrlOpen] = useState(false);
   const [urlValue, setUrlValue] = useState("");
   const [showZaraTagHint, setShowZaraTagHint] = useState(false);
@@ -130,6 +130,10 @@ export function ScanScreen() {
       }
 
       if (!res.ok) {
+        if (res.status === 403 && (data as { code?: string } | null)?.code === "scan_limit_reached") {
+          router.push("/paywall");
+          return;
+        }
         setTagOcrFailure({
           previewUrl,
           hint:
@@ -629,6 +633,11 @@ export function ScanScreen() {
               void startCheckout(plan);
             }}
           />
+          {checkoutError && (
+            <p className="auth-legal" style={{ color: "var(--red)", textAlign: "center", marginTop: 4 }}>
+              {checkoutError}
+            </p>
+          )}
           <button type="button" className="share-close" onClick={() => router.push("/upgrade")} style={{ marginTop: 8 }}>
             View full upgrade page
           </button>

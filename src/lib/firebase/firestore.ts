@@ -8,6 +8,8 @@ import {
   addDoc,
   deleteDoc,
   setDoc,
+  updateDoc,
+  increment,
   serverTimestamp,
   query,
   where,
@@ -95,6 +97,7 @@ export async function ensureUserDocument(
     if (userFieldMissing(data, "completedScans")) patch.completedScans = 0;
     if (userFieldMissing(data, "scanCountResetAt")) patch.scanCountResetAt = serverTimestamp();
     if (userFieldMissing(data, "savedCount")) patch.savedCount = 0;
+    if (userFieldMissing(data, "scannedCount")) patch.scannedCount = 0;
 
     if (Object.keys(patch).length === 0) return;
 
@@ -110,6 +113,13 @@ export async function setUserProfile(
   const db = getDb();
   const ref = doc(db, COLLECTIONS.USERS, uid);
   await setDoc(ref, { ...data, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+/** Atomically increment scannedCount on the user document. */
+export async function incrementScannedCount(uid: string): Promise<void> {
+  const db = getDb();
+  const ref = doc(db, COLLECTIONS.USERS, uid);
+  await updateDoc(ref, { scannedCount: increment(1), updatedAt: serverTimestamp() });
 }
 
 /** Normalize saved item from Firestore (timestamps → ISO string) */

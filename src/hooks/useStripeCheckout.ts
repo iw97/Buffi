@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import type { PaywallPlanId } from "@/lib/paywall/planIds";
@@ -8,9 +8,11 @@ import type { PaywallPlanId } from "@/lib/paywall/planIds";
 export function useStripeCheckout() {
   const auth = useAuthOptional();
   const router = useRouter();
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   const startCheckout = useCallback(
     async (plan: PaywallPlanId) => {
+      setCheckoutError(null);
       const user = auth?.user;
       const isConfigured = auth?.isConfigured ?? false;
       if (!isConfigured || !user) {
@@ -36,11 +38,11 @@ export function useStripeCheckout() {
         }
       } catch (e) {
         console.error("[useStripeCheckout]", e);
-        window.alert(e instanceof Error ? e.message : "Could not start checkout");
+        setCheckoutError(e instanceof Error ? e.message : "Could not start checkout. Please try again.");
       }
     },
     [auth?.user, auth?.isConfigured, router]
   );
 
-  return { startCheckout };
+  return { startCheckout, checkoutError };
 }

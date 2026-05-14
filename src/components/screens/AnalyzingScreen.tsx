@@ -138,6 +138,12 @@ export function AnalyzingScreen() {
 
         if (!res.ok) {
           console.log("[scan flow] res not ok", res.status, data);
+          if (res.status === 403 && (data as { code?: string }).code === "scan_limit_reached") {
+            setPending(null);
+            hasNavigated.current = true;
+            router.replace("/paywall");
+            return;
+          }
           setLastError(toErrorCode(res.status, data as { code?: string }));
           setPending(null);
           const errMsg =

@@ -10,7 +10,7 @@ export function UpgradeScreen() {
   const router = useRouter();
   const auth = useAuthOptional();
   useRequireAuth("/upgrade");
-  const { startCheckout } = useStripeCheckout();
+  const { startCheckout, checkoutError } = useStripeCheckout();
 
   const loading = auth?.loading ?? true;
   const isConfigured = auth?.isConfigured ?? false;
@@ -43,6 +43,11 @@ export function UpgradeScreen() {
       </p>
 
       <PaywallTierList variant="page" onSelectPlan={(plan) => void startCheckout(plan)} />
+      {checkoutError && (
+        <p className="auth-legal" style={{ color: "var(--red)", textAlign: "center", marginTop: 4 }}>
+          {checkoutError}
+        </p>
+      )}
 
       <button className="btn-secondary" type="button" onClick={() => router.push("/scan")}>
         Back to scan

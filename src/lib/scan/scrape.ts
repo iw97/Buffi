@@ -310,10 +310,14 @@ async function fetchWithBrowserRetry(
 
 /** Bright Data Web Unlocker REST fallback when direct fetch is blocked or composition is missing. */
 async function fetchWithBrightData(url: string): Promise<string | null> {
-  console.log("[BD] token present:", !!process.env.BRIGHT_DATA_TOKEN);
-  console.log("[BD] zone:", process.env.BRIGHT_DATA_ZONE);
   const token = process.env.BRIGHT_DATA_TOKEN;
   const zone = process.env.BRIGHT_DATA_ZONE || "buffi_unlocker";
+
+  console.log("[BD] token length:", token?.length);
+  console.log("[BD] token first 8 chars:", token?.slice(0, 8));
+  console.log("[BD] token last 4 chars:", token?.slice(-4));
+  console.log("[BD] zone:", zone);
+  console.log("[BD] auth header being sent:", "Bearer " + token?.slice(0, 8) + "...");
 
   if (!token) {
     console.log(LOG_PREFIX, "Bright Data token not set, skipping fallback");
