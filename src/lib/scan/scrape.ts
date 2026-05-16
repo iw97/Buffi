@@ -9,6 +9,11 @@ const LOG_PREFIX = "[scrape]";
 /** Max chars logged per JSON-LD script body (full text may be larger on disk). */
 const JSON_LD_LOG_MAX_CHARS = 150_000;
 
+function debugScrapeMaterials(step: string, data: Record<string, unknown>): void {
+  if (process.env.DEBUG_SCRAPE_MATERIALS !== "1") return;
+  console.log("[debug-scrape/materials]", step, data);
+}
+
 function logJsonLdScriptBodies($: cheerio.CheerioAPI, jsonLdScripts: unknown[], contextLabel: string): void {
   console.log(LOG_PREFIX, `[${contextLabel}] JSON-LD scripts: count=${jsonLdScripts.length}`);
   for (let i = 0; i < jsonLdScripts.length; i++) {
@@ -103,7 +108,7 @@ function looksLikeCompositionText(text: string): boolean {
 // Reference case: SKIMS Fits Everybody
 // bodysuit — gusset is cotton but main
 // fabric is 76% polyamide / 24% elastane
-function isGussetFalsePositive(text: string): boolean {
+export function isGussetFalsePositive(text: string): boolean {
   if (!text) return false;
 
   const subcomponentWords = [
@@ -127,17 +132,57 @@ function isGussetFalsePositive(text: string): boolean {
 
   // Short text with a subcomponent word is almost certainly a component detail, not the main composition
   if (hasSubcomponentWord && text.length < 80) {
+    debugScrapeMaterials("isGussetFalsePositive", {
+      input: text,
+      inputLength: text.length,
+      hasSubcomponentWord,
+      returned: true,
+      reason: "short-text-with-subcomponent"
+    });
     return true;
   }
 
+  // Context window (e.g. broad-text scan ±40 chars): %fiber adjacent to gusset/lining/etc.
+  if (hasSubcomponentWord) {
+    for (const w of subcomponentWords) {
+      const idx = textLower.indexOf(w);
+      if (idx < 0) continue;
+      const localStart = Math.max(0, idx - 50);
+      const localEnd = Math.min(text.length, idx + w.length + 50);
+      const local = textLower.slice(localStart, localEnd);
+      if (/\d{1,3}\s*%\s*[a-z]+/i.test(local)) {
+        debugScrapeMaterials("isGussetFalsePositive", {
+          input: text,
+          inputLength: text.length,
+          hasSubcomponentWord,
+          returned: true,
+          reason: `subcomponent-near-percent-fiber:${w}`
+        });
+        return true;
+      }
+    }
+  }
+
+  debugScrapeMaterials("isGussetFalsePositive", {
+    input: text,
+    inputLength: text.length,
+    hasSubcomponentWord,
+    returned: false
+  });
   return false;
 }
 
 /** Reject subcomponent false positives; log and return undefined so callers can try the next source. */
-function acceptMaterialsCandidate(candidate: string | undefined): string | undefined {
+function acceptMaterialsCandidate(candidate: string | undefined, step = "acceptMaterialsCandidate"): string | undefined {
   if (!candidate?.trim()) return undefined;
   const text = candidate.trim();
-  if (isGussetFalsePositive(text)) {
+  const falsePositive = isGussetFalsePositive(text);
+  debugScrapeMaterials(step, {
+    raw: text,
+    isGussetFalsePositive: falsePositive,
+    accepted: !falsePositive
+  });
+  if (falsePositive) {
     console.log("[scrape] rejected subcomponent false positive:", text);
     return undefined;
   }
@@ -165,6 +210,10 @@ function clipJsonLdMaterial(s: string): string {
   return s.trim().slice(0, 500);
 }
 
+const BROAD_TEXT_CONTEXT_RADIUS = 40;
+const BROAD_TEXT_FIBERS =
+  "cotton|polyester|linen|silk|wool|nylon|viscose|lyocell|modal|cashmere|elastane|spandex|leather|acetate|ramie|hemp|polyamide|acrylic";
+
 function extractCompositionFromBroadText($: cheerio.CheerioAPI): string | undefined {
   const scriptText = $('script[type="application/json"], script:not([src])')
     .toArray()
@@ -174,15 +223,39 @@ function extractCompositionFromBroadText($: cheerio.CheerioAPI): string | undefi
   const combined = `${bodyText}\n${scriptText}`.replace(/\s+/g, " ");
   if (!combined.trim()) return undefined;
 
-  // Matches common care-label style strings: "90% Cotton, 10% Elastane" etc.
-  const pairRe =
-    /(\d{1,3}\s*%\s*(?:cotton|polyester|linen|silk|wool|nylon|viscose|lyocell|modal|cashmere|elastane|spandex|leather|acetate|ramie|hemp|polyamide|acrylic))(?:\s*[,/]\s*\d{1,3}\s*%\s*(?:cotton|polyester|linen|silk|wool|nylon|viscose|lyocell|modal|cashmere|elastane|spandex|leather|acetate|ramie|hemp|polyamide|acrylic)){0,5}/i;
+  const patterns = [
+    // Multi-fiber care labels: "76% Polyamide, 24% Elastane"
+    new RegExp(
+      `(\\d{1,3}\\s*%\\s*(?:${BROAD_TEXT_FIBERS}))(?:\\s*[,/]\\s*\\d{1,3}\\s*%\\s*(?:${BROAD_TEXT_FIBERS})){0,5}`,
+      "gi"
+    ),
+    // Single fiber fragment: "100% Cotton"
+    new RegExp(`\\d{1,3}\\s*%\\s*(?:${BROAD_TEXT_FIBERS})`, "gi")
+  ];
 
-  const m = combined.match(pairRe);
-  if (!m?.[0]) return undefined;
-  const candidate = m[0].replace(/\s+/g, " ").trim();
-  if (!looksLikeCompositionText(candidate)) return undefined;
-  return candidate.slice(0, 400);
+  for (const re of patterns) {
+    for (const m of combined.matchAll(re)) {
+      const matchText = m[0];
+      if (!matchText || m.index == null) continue;
+
+      const start = Math.max(0, m.index - BROAD_TEXT_CONTEXT_RADIUS);
+      const end = Math.min(combined.length, m.index + matchText.length + BROAD_TEXT_CONTEXT_RADIUS);
+      const context = combined.slice(start, end);
+
+      debugScrapeMaterials("broad-text-scan-context", {
+        match: matchText,
+        context
+      });
+
+      if (isGussetFalsePositive(context)) continue;
+
+      const candidate = matchText.replace(/\s+/g, " ").trim();
+      if (!looksLikeCompositionText(candidate)) continue;
+      return candidate.slice(0, 400);
+    }
+  }
+
+  return undefined;
 }
 
 /** First numeric price from schema.org Product offers (array or single Offer). */
@@ -841,7 +914,7 @@ async function extractGenericProductFromLoadedCheerio(
           wouldSelectAsMaterials: wouldTake
         });
         if (text && text.length > 5 && text.length < 500 && looksLikeCompositionText(text)) {
-          const accepted = acceptMaterialsCandidate(text);
+          const accepted = acceptMaterialsCandidate(text, `generic-selector:${selector}`);
           if (accepted) {
             materials = accepted;
             console.log(LOG_PREFIX, "generic materials found via", selector);
@@ -867,7 +940,7 @@ async function extractGenericProductFromLoadedCheerio(
           usedForMaterials: !!found
         });
         if (found) {
-          const accepted = acceptMaterialsCandidate(found);
+          const accepted = acceptMaterialsCandidate(found, `json-ld-script:${si}`);
           if (accepted) {
             materials = accepted;
             console.log(LOG_PREFIX, "generic materials found via JSON-LD");
@@ -879,7 +952,7 @@ async function extractGenericProductFromLoadedCheerio(
 
     if (!materials) {
       const broad = extractCompositionFromBroadText($);
-      const acceptedBroad = acceptMaterialsCandidate(broad);
+      const acceptedBroad = acceptMaterialsCandidate(broad, "broad-text-scan");
       if (acceptedBroad) {
         materials = acceptedBroad;
         console.log(LOG_PREFIX, "materials found via broad text composition scan");
@@ -915,6 +988,9 @@ async function extractGenericProductFromLoadedCheerio(
       return null;
     }
 
+    debugScrapeMaterials(`extractGeneric-done:${pipelineLabel}`, {
+      rawMaterials: materials ?? null
+    });
     console.log(LOG_PREFIX, "extraction result", {
       hasMaterials: !!materials,
       materialsPreview: materials?.slice(0, 80),
@@ -964,7 +1040,10 @@ export async function scrapeProductFromUrl(url: string): Promise<{
   // Shopify: try .json endpoint first (returns price when store allows it; image from images[0].src)
   const shopifyResult = await fetchShopifyProductJson(cleaned);
   console.log("SHOPIFY RESULT:", shopifyResult);
-  const shopifyMaterials = acceptMaterialsCandidate(shopifyResult?.materials);
+  debugScrapeMaterials("step1-shopify-json", {
+    raw: shopifyResult?.materials ?? null
+  });
+  const shopifyMaterials = acceptMaterialsCandidate(shopifyResult?.materials, "step1-shopify-json-filtered");
   const step1ShopifyFoundMaterials = !!shopifyMaterials;
   console.log(
     "[scrape] step 1 Shopify .json:",
@@ -1095,6 +1174,10 @@ export async function scrapeProductFromUrl(url: string): Promise<{
 
   const zaraHost = host.includes("zara.com");
   const step2CheerioFoundMaterials = !!cheerioExtraction?.materials?.trim();
+  debugScrapeMaterials("step2-cheerio-html", {
+    raw: cheerioExtraction?.materials ?? null,
+    hasMaterials: step2CheerioFoundMaterials
+  });
   console.log("[scrape] step 2 Cheerio:", step2CheerioFoundMaterials ? "found" : "not found");
   console.log("[scrape] pre-BrightData condition check", {
     zaraHost,
@@ -1102,6 +1185,11 @@ export async function scrapeProductFromUrl(url: string): Promise<{
     hasMaterialsFromGeneric: !!cheerioExtraction?.materials?.trim()
   });
   const shouldTryBrightData = !zaraHost && !step2CheerioFoundMaterials;
+  debugScrapeMaterials("bright-data-decision", {
+    triggered: shouldTryBrightData,
+    zaraHost,
+    step2CheerioFoundMaterials
+  });
 
   let bdExtraction: GenericHtmlExtraction | null = null;
   if (shouldTryBrightData) {
@@ -1126,6 +1214,10 @@ export async function scrapeProductFromUrl(url: string): Promise<{
         materialsPreview: bdExtraction?.materials?.slice(0, 80)
       });
     }
+    debugScrapeMaterials("step3-bright-data", {
+      htmlReceived: !!brightDataHtml,
+      rawMaterials: bdExtraction?.materials ?? null
+    });
     console.log("[scrape] step 3 Bright Data:", bdExtraction?.materials?.trim() ? "found" : "not found");
   } else if (zaraHost && !step2CheerioFoundMaterials) {
     console.log("[scrape] step 2 failed; Bright Data step 3 skipped for Zara");
@@ -1156,7 +1248,16 @@ export async function scrapeProductFromUrl(url: string): Promise<{
     return null;
   }
 
-  const finalMaterials = acceptMaterialsCandidate(merged.materials);
+  debugScrapeMaterials("pre-merge", {
+    shopify: shopifySeed?.materials ?? null,
+    cheerio: cheerioExtraction?.materials ?? null,
+    brightData: bdExtraction?.materials ?? null,
+    merged: merged?.materials ?? null
+  });
+  const finalMaterials = acceptMaterialsCandidate(merged.materials, "final-before-claude");
+  debugScrapeMaterials("final-before-claude", {
+    value: finalMaterials ?? null
+  });
   if (!finalMaterials?.trim()) {
     console.log("[scrape] all methods exhausted after subcomponent filter, returning null");
     return null;
