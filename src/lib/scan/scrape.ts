@@ -96,42 +96,57 @@ function looksLikeCompositionText(text: string): boolean {
   );
 }
 
-const SUB_COMPONENT_COMPOSITION_KEYWORDS = [
-  "gusset",
-  "lining",
-  "liner",
-  "trim",
-  "waistband",
-  "elastic",
-  "label",
-  "embroidery",
-  "interlining",
-  "pocket"
-];
+// Prevents subcomponent details like
+// '100% Cotton gusset' or 'polyester lining'
+// from being mistaken for the garment's
+// main fiber composition.
+// Reference case: SKIMS Fits Everybody
+// bodysuit — gusset is cotton but main
+// fabric is 76% polyamide / 24% elastane
+function isGussetFalsePositive(text: string): boolean {
+  if (!text) return false;
 
-function hasSubComponentKeyword(text: string): boolean {
-  const t = text.toLowerCase();
-  return SUB_COMPONENT_COMPOSITION_KEYWORDS.some((k) => t.includes(k));
+  const subcomponentWords = [
+    "gusset",
+    "lining",
+    "liner",
+    "trim",
+    "waistband",
+    "label",
+    "embroidery",
+    "interlining",
+    "pocket",
+    "crotch",
+    "panel",
+    "insert",
+    "facing"
+  ];
+
+  const textLower = text.toLowerCase();
+  const hasSubcomponentWord = subcomponentWords.some((w) => textLower.includes(w));
+
+  // Short text with a subcomponent word is almost certainly a component detail, not the main composition
+  if (hasSubcomponentWord && text.length < 80) {
+    return true;
+  }
+
+  return false;
 }
 
-function isPrimaryGussetOrLiningComposition(text: string): boolean {
-  const t = text.toLowerCase().trim();
-  if (!t) return false;
-  const firstChunk = t.split(/[,;|]/)[0]?.trim() || t;
-  return (
-    /\bgusset\b/.test(firstChunk) ||
-    /\blining\b/.test(firstChunk) ||
-    /\b(gusset|lining)\b/.test(t.slice(0, 50))
-  );
-}
-
-function filterSubComponentFalsePositiveMaterials(materials: string | undefined): string | undefined {
-  if (!materials?.trim()) return materials;
-  const text = materials.trim();
-  const hasKeyword = hasSubComponentKeyword(text);
-  if (hasKeyword && text.length < 60) return undefined;
-  if (isPrimaryGussetOrLiningComposition(text)) return undefined;
+/** Reject subcomponent false positives; log and return undefined so callers can try the next source. */
+function acceptMaterialsCandidate(candidate: string | undefined): string | undefined {
+  if (!candidate?.trim()) return undefined;
+  const text = candidate.trim();
+  if (isGussetFalsePositive(text)) {
+    console.log("[scrape] rejected subcomponent false positive:", text);
+    return undefined;
+  }
   return text;
+}
+
+function pickMaterials(current: string | undefined, candidate: string | undefined): string | undefined {
+  if (current?.trim()) return current;
+  return acceptMaterialsCandidate(candidate);
 }
 
 /**
@@ -223,10 +238,12 @@ function tryExtractMaterialFromJsonLdScript(contentStr: string): string | undefi
     for (const node of nodes) {
       if (!node || typeof node !== "object") continue;
       const m = extractMaterialFromJsonLdNode(node);
-      if (m) return m;
+      const accepted = acceptMaterialsCandidate(m);
+      if (accepted) return accepted;
     }
     const top = extractMaterialFromJsonLdNode(data);
-    if (top) return top;
+    const acceptedTop = acceptMaterialsCandidate(top);
+    if (acceptedTop) return acceptedTop;
   } catch {
     /* ignore */
   }
@@ -619,7 +636,8 @@ function mergeGenericHtmlExtractions(
   return {
     brand: a.brand?.trim() || b.brand?.trim(),
     name: a.name?.trim() || b.name?.trim(),
-    materials: a.materials?.trim() || b.materials?.trim(),
+    materials:
+      acceptMaterialsCandidate(a.materials) || acceptMaterialsCandidate(b.materials),
     description: a.description?.trim() || b.description?.trim(),
     imageUrl: a.imageUrl ?? b.imageUrl,
     priceFromJsonLd: a.priceFromJsonLd ?? b.priceFromJsonLd,
@@ -726,54 +744,70 @@ async function extractGenericProductFromLoadedCheerio(
     if (host.includes("zara.com")) {
       brand = brand ?? "Zara";
       name = name ?? $(".product-detail-info__header-name").first().text().trim();
-      materials = materials ?? ($('[data-qa="product-detail-composition"]').text().trim() || $(".product-detail-composition").text().trim());
+      materials = pickMaterials(
+        materials,
+        $('[data-qa="product-detail-composition"]').text().trim() || $(".product-detail-composition").text().trim()
+      );
     } else if (host.includes("hm.com")) {
       brand = brand ?? "H&M";
       name = name ?? ($("h1.primary-product-title").first().text().trim() || $(".ProductTitle-module").first().text().trim());
-      materials = materials ?? ($(".ProductDetails-module__composition").text().trim() || $('[data-testid="product-composition"]').text().trim());
+      materials = pickMaterials(
+        materials,
+        $(".ProductDetails-module__composition").text().trim() || $('[data-testid="product-composition"]').text().trim()
+      );
     } else if (host.includes("asos.com")) {
       brand = brand ?? $('[data-auto-id="product-brand"]').first().text().trim();
       name = name ?? ($('[data-auto-id="product-title"]').first().text().trim() || $("h1").first().text().trim());
-      materials = materials ?? ($(".product-description__materials").text().trim() || $('[data-id="product-details"]').find("li").text());
+      materials = pickMaterials(
+        materials,
+        $(".product-description__materials").text().trim() || $('[data-id="product-details"]').find("li").text()
+      );
     } else if (host.includes("nike.com")) {
       brand = brand ?? "Nike";
       name = name ?? $("h1").first().text().trim();
     } else if (host.includes("everlane.com")) {
       brand = brand ?? "Everlane";
       name = name ?? ($("h1.product-title").first().text().trim() || $(".product__title").first().text().trim());
-      materials = materials ?? ($(".product-details__materials").text().trim() || $('[data-id="materials"]').text().trim());
+      materials = pickMaterials(
+        materials,
+        $(".product-details__materials").text().trim() || $('[data-id="materials"]').text().trim()
+      );
     } else if (host.includes("girlfriend.com")) {
       brand = brand ?? "Girlfriend Collective";
       name = name ?? $("h1").first().text().trim();
-      materials =
-        materials ??
-        ($('[class*="material"]').text().trim() ||
+      materials = pickMaterials(
+        materials,
+        $('[class*="material"]').text().trim() ||
           $('[class*="composition"]').text().trim() ||
-          $('[class*="fabric"]').text().trim());
+          $('[class*="fabric"]').text().trim()
+      );
     } else if (host.includes("shein.com") || host.includes("shein.")) {
       brand = brand ?? "Shein";
       name = name ?? ($(".product-intro__head-name").first().text().trim() || $("h1").first().text().trim());
-      materials =
-        materials ??
-        ($(".product-intro__detail-description").text().trim() ||
+      materials = pickMaterials(
+        materials,
+        $(".product-intro__detail-description").text().trim() ||
           findSheinCompositionPanelText($) ||
-          $('[data-id="product-detail"]').text().trim());
+          $('[data-id="product-detail"]').text().trim()
+      );
     } else if (host.includes("thereformation.com")) {
       name = name ?? $("h1").first().text().trim();
       brand = brand ?? "Reformation";
       const refDom = scrapeReformationCompositionFromDom($).trim();
-      materials =
-        materials ??
-        (refDom ||
+      materials = pickMaterials(
+        materials,
+        refDom ||
           $('[class*="composition"]').text().trim() ||
           $('[class*="material"]').text().trim() ||
-          $(".product-composition").text().trim());
+          $(".product-composition").text().trim()
+      );
     } else if (host.includes("miumiu.com") || host.includes("prada.com")) {
       brand = brand ?? (host.includes("miumiu.com") ? "Miu Miu" : "Prada");
       name = name ?? $("h1").first().text().trim();
-      materials =
-        materials ??
-        ($('[class*="material"]').text().trim() || $('[class*="composition"]').text().trim());
+      materials = pickMaterials(
+        materials,
+        $('[class*="material"]').text().trim() || $('[class*="composition"]').text().trim()
+      );
     }
 
     // Generic materials extraction for all other retailers (validated so we don't grab unrelated UI copy).
@@ -807,9 +841,12 @@ async function extractGenericProductFromLoadedCheerio(
           wouldSelectAsMaterials: wouldTake
         });
         if (text && text.length > 5 && text.length < 500 && looksLikeCompositionText(text)) {
-          materials = text;
-          console.log(LOG_PREFIX, "generic materials found via", selector);
-          break;
+          const accepted = acceptMaterialsCandidate(text);
+          if (accepted) {
+            materials = accepted;
+            console.log(LOG_PREFIX, "generic materials found via", selector);
+            break;
+          }
         }
       }
     }
@@ -830,44 +867,41 @@ async function extractGenericProductFromLoadedCheerio(
           usedForMaterials: !!found
         });
         if (found) {
-          materials = found;
-          console.log(LOG_PREFIX, "generic materials found via JSON-LD");
-          break;
+          const accepted = acceptMaterialsCandidate(found);
+          if (accepted) {
+            materials = accepted;
+            console.log(LOG_PREFIX, "generic materials found via JSON-LD");
+            break;
+          }
         }
       }
     }
 
     if (!materials) {
       const broad = extractCompositionFromBroadText($);
-      if (broad) {
-        materials = broad;
+      const acceptedBroad = acceptMaterialsCandidate(broad);
+      if (acceptedBroad) {
+        materials = acceptedBroad;
         console.log(LOG_PREFIX, "materials found via broad text composition scan");
       }
     }
 
-    const materialsBeforeFilter = materials;
-    materials = filterSubComponentFalsePositiveMaterials(materials);
-    if (pipelineLabel.includes("Bright Data")) {
-      console.log("[BD] materials before gusset/lining filter:", materialsBeforeFilter ?? null);
-      console.log("[BD] materials after gusset/lining filter:", materials ?? null);
-    }
-    if (materialsBeforeFilter && !materials) {
-      console.log(
-        "[scrape] rejected gusset/lining false positive, triggering Bright Data for real composition"
-      );
-    }
+    materials = acceptMaterialsCandidate(materials);
 
     if (!name) name = $("h1").first().text().trim() || ogTitle;
     // Zara-only broad DOM fallback when the dedicated Zara scraper already fell through to generic HTML.
     if (!materials && host.includes("zara.com")) {
-      materials =
-        $('[class*="material"]').first().text().trim() || $('[class*="composition"]').first().text().trim() || undefined;
+      materials = pickMaterials(
+        materials,
+        $('[class*="material"]').first().text().trim() || $('[class*="composition"]').first().text().trim()
+      );
     }
 
     if (!materials?.trim() && isLuxuryBrandForSerpComposition(brand) && name?.trim()) {
       const serpMat = await getCompositionFromGoogleSearch({ brand: brand!, productName: name! });
-      if (serpMat?.trim()) {
-        materials = serpMat.trim();
+      const acceptedSerp = acceptMaterialsCandidate(serpMat?.trim());
+      if (acceptedSerp) {
+        materials = acceptedSerp;
         materialsFromSerpSearch = true;
         console.log(LOG_PREFIX, "luxury composition from SerpAPI Google organic", {
           brand,
@@ -930,7 +964,8 @@ export async function scrapeProductFromUrl(url: string): Promise<{
   // Shopify: try .json endpoint first (returns price when store allows it; image from images[0].src)
   const shopifyResult = await fetchShopifyProductJson(cleaned);
   console.log("SHOPIFY RESULT:", shopifyResult);
-  const step1ShopifyFoundMaterials = !!shopifyResult?.materials?.trim();
+  const shopifyMaterials = acceptMaterialsCandidate(shopifyResult?.materials);
+  const step1ShopifyFoundMaterials = !!shopifyMaterials;
   console.log(
     "[scrape] step 1 Shopify .json:",
     step1ShopifyFoundMaterials ? "success" : "failed"
@@ -940,7 +975,7 @@ export async function scrapeProductFromUrl(url: string): Promise<{
       brand: shopifyResult.brand,
       name: shopifyResult.name,
       price: shopifyResult.price,
-      materials: shopifyResult.materials,
+      materials: shopifyMaterials,
       description: shopifyResult.description,
       imageUrl: shopifyResult.imageUrl ?? null
     };
@@ -971,7 +1006,7 @@ export async function scrapeProductFromUrl(url: string): Promise<{
     ? {
         brand: shopifyResult.brand,
         name: shopifyResult.name,
-        materials: shopifyResult.materials,
+        materials: acceptMaterialsCandidate(shopifyResult.materials),
         description: shopifyResult.description,
         imageUrl: shopifyResult.imageUrl ?? null,
         priceFromJsonLd: shopifyResult.price,
@@ -982,11 +1017,12 @@ export async function scrapeProductFromUrl(url: string): Promise<{
   if (host.includes("zara.com")) {
     const zara = await scrapeZaraFromUrl(cleaned);
     if (zara && (zara.name || zara.brand)) {
+      const zaraMaterials = acceptMaterialsCandidate(zara.materials);
       const out = {
         brand: zara.brand,
         name: zara.name,
         price: zara.price,
-        materials: zara.materials,
+        materials: zaraMaterials,
         description: zara.description,
         imageUrl: zara.imageUrl ?? null
       };
@@ -1120,10 +1156,16 @@ export async function scrapeProductFromUrl(url: string): Promise<{
     return null;
   }
 
+  const finalMaterials = acceptMaterialsCandidate(merged.materials);
+  if (!finalMaterials?.trim()) {
+    console.log("[scrape] all methods exhausted after subcomponent filter, returning null");
+    return null;
+  }
+
   const out = {
     brand: merged.brand,
     name: merged.name,
-    materials: merged.materials,
+    materials: finalMaterials,
     description: merged.description,
     imageUrl: merged.imageUrl,
     gtin: merged.gtin,
