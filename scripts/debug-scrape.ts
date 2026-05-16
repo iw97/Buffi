@@ -24,9 +24,15 @@ async function main(): Promise<void> {
 
   // Reference: SKIMS gusset false positive
   const gussetSample = "100% Cotton gusset";
+  const gussetContextSample =
+    "eves, High cut leg opening, Brief back, 100% Cotton gusset, Snap closure";
   console.log("--- isGussetFalsePositive sanity check ---");
   console.log("sample:", gussetSample);
   console.log("returned:", isGussetFalsePositive(gussetSample));
+  console.log("");
+  console.log("--- isGussetFalsePositive context sample ---");
+  console.log("sample:", gussetContextSample);
+  console.log("returned:", isGussetFalsePositive(gussetContextSample));
   console.log("");
 
   console.log("========== step 1: Shopify .json ==========\n");

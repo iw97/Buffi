@@ -108,30 +108,51 @@ function looksLikeCompositionText(text: string): boolean {
 // Reference case: SKIMS Fits Everybody
 // bodysuit — gusset is cotton but main
 // fabric is 76% polyamide / 24% elastane
-export function isGussetFalsePositive(text: string): boolean {
-  if (!text) return false;
+const SUBCOMPONENT_WORDS = [
+  "gusset",
+  "lining",
+  "liner",
+  "trim",
+  "waistband",
+  "label",
+  "embroidery",
+  "interlining",
+  "pocket",
+  "crotch",
+  "panel",
+  "insert",
+  "facing"
+] as const;
 
-  const subcomponentWords = [
-    "gusset",
-    "lining",
-    "liner",
-    "trim",
-    "waistband",
-    "label",
-    "embroidery",
-    "interlining",
-    "pocket",
-    "crotch",
-    "panel",
-    "insert",
-    "facing"
-  ];
+/** Chars of surrounding page text to inspect around each %fiber match (broad scan + page re-check). */
+const BROAD_TEXT_CONTEXT_RADIUS = 80;
+
+const BROAD_TEXT_FIBERS =
+  "cotton|polyester|linen|silk|wool|nylon|viscose|lyocell|modal|cashmere|elastane|spandex|leather|acetate|ramie|hemp|polyamide|acrylic";
+
+function normalizeCompositionSearchText(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+export function isGussetFalsePositive(text: string): boolean {
+  if (!text) {
+    console.log("[GFP] empty input, returning false");
+    return false;
+  }
+
+  const subcomponentWords = SUBCOMPONENT_WORDS;
+
+  console.log("[GFP] input length:", text.length);
+  console.log("[GFP] input:", text.slice(0, 120));
 
   const textLower = text.toLowerCase();
   const hasSubcomponentWord = subcomponentWords.some((w) => textLower.includes(w));
+  console.log("[GFP] hasSubcomponentWord:", hasSubcomponentWord);
 
-  // Short text with a subcomponent word is almost certainly a component detail, not the main composition
+  // Check 1 — short text with subcomponent word
+  console.log("[GFP] check1 — length < 80:", text.length < 80);
   if (hasSubcomponentWord && text.length < 80) {
+    console.log("[GFP] returning true via check1");
     debugScrapeMaterials("isGussetFalsePositive", {
       input: text,
       inputLength: text.length,
@@ -142,15 +163,20 @@ export function isGussetFalsePositive(text: string): boolean {
     return true;
   }
 
-  // Context window (e.g. broad-text scan ±40 chars): %fiber adjacent to gusset/lining/etc.
+  // Check 2 — proximity check
   if (hasSubcomponentWord) {
     for (const w of subcomponentWords) {
       const idx = textLower.indexOf(w);
       if (idx < 0) continue;
-      const localStart = Math.max(0, idx - 50);
-      const localEnd = Math.min(text.length, idx + w.length + 50);
+      console.log("[GFP] found subcomponent word:", w, "at index:", idx);
+      const localStart = Math.max(0, idx - BROAD_TEXT_CONTEXT_RADIUS);
+      const localEnd = Math.min(text.length, idx + w.length + BROAD_TEXT_CONTEXT_RADIUS);
       const local = textLower.slice(localStart, localEnd);
-      if (/\d{1,3}\s*%\s*[a-z]+/i.test(local)) {
+      console.log("[GFP] local window:", local);
+      const hasPercent = /\d{1,3}\s*%\s*[a-z]+/i.test(local);
+      console.log("[GFP] local has percent+fiber:", hasPercent);
+      if (hasPercent) {
+        console.log("[GFP] returning true via check2");
         debugScrapeMaterials("isGussetFalsePositive", {
           input: text,
           inputLength: text.length,
@@ -163,6 +189,7 @@ export function isGussetFalsePositive(text: string): boolean {
     }
   }
 
+  console.log("[GFP] returning false");
   debugScrapeMaterials("isGussetFalsePositive", {
     input: text,
     inputLength: text.length,
@@ -172,14 +199,54 @@ export function isGussetFalsePositive(text: string): boolean {
   return false;
 }
 
+/** If candidate is bare %fiber text, reject when any page occurrence sits near gusset/lining/etc. */
+function isGussetFalsePositiveInPageAtCandidate(candidate: string, pageText: string): boolean {
+  const pageNorm = normalizeCompositionSearchText(pageText);
+  if (!pageNorm) return false;
+
+  const candNorm = normalizeCompositionSearchText(candidate);
+  const searchTargets: string[] = [];
+  if (candNorm.length >= 3 && pageNorm.includes(candNorm)) {
+    searchTargets.push(candNorm);
+  } else {
+    const fiberHit = candidate.match(
+      new RegExp(`\\d{1,3}\\s*%\\s*(?:${BROAD_TEXT_FIBERS})`, "i")
+    );
+    if (fiberHit?.[0]) searchTargets.push(normalizeCompositionSearchText(fiberHit[0]));
+  }
+  if (searchTargets.length === 0) return false;
+
+  for (const target of searchTargets) {
+    let idx = 0;
+    while ((idx = pageNorm.indexOf(target, idx)) >= 0) {
+      const start = Math.max(0, idx - BROAD_TEXT_CONTEXT_RADIUS);
+      const end = Math.min(pageNorm.length, idx + target.length + BROAD_TEXT_CONTEXT_RADIUS);
+      if (isGussetFalsePositive(pageNorm.slice(start, end))) return true;
+      idx += target.length || 1;
+    }
+  }
+  return false;
+}
+
+function materialsCandidateIsFalsePositive(candidate: string, pageText?: string): boolean {
+  if (isGussetFalsePositive(candidate)) return true;
+  if (pageText?.trim()) return isGussetFalsePositiveInPageAtCandidate(candidate, pageText);
+  return false;
+}
+
 /** Reject subcomponent false positives; log and return undefined so callers can try the next source. */
-function acceptMaterialsCandidate(candidate: string | undefined, step = "acceptMaterialsCandidate"): string | undefined {
+function acceptMaterialsCandidate(
+  candidate: string | undefined,
+  step = "acceptMaterialsCandidate",
+  options?: { pageText?: string }
+): string | undefined {
   if (!candidate?.trim()) return undefined;
   const text = candidate.trim();
-  const falsePositive = isGussetFalsePositive(text);
+  const falsePositive = materialsCandidateIsFalsePositive(text, options?.pageText);
   debugScrapeMaterials(step, {
     raw: text,
     isGussetFalsePositive: falsePositive,
+    checkedPageText: !!options?.pageText?.trim(),
     accepted: !falsePositive
   });
   if (falsePositive) {
@@ -189,9 +256,13 @@ function acceptMaterialsCandidate(candidate: string | undefined, step = "acceptM
   return text;
 }
 
-function pickMaterials(current: string | undefined, candidate: string | undefined): string | undefined {
+function pickMaterials(
+  current: string | undefined,
+  candidate: string | undefined,
+  pageText?: string
+): string | undefined {
   if (current?.trim()) return current;
-  return acceptMaterialsCandidate(candidate);
+  return acceptMaterialsCandidate(candidate, "pickMaterials", { pageText });
 }
 
 /**
@@ -210,18 +281,18 @@ function clipJsonLdMaterial(s: string): string {
   return s.trim().slice(0, 500);
 }
 
-const BROAD_TEXT_CONTEXT_RADIUS = 40;
-const BROAD_TEXT_FIBERS =
-  "cotton|polyester|linen|silk|wool|nylon|viscose|lyocell|modal|cashmere|elastane|spandex|leather|acetate|ramie|hemp|polyamide|acrylic";
-
-function extractCompositionFromBroadText($: cheerio.CheerioAPI): string | undefined {
+function getCombinedPageTextForComposition($: cheerio.CheerioAPI): string {
   const scriptText = $('script[type="application/json"], script:not([src])')
     .toArray()
     .map((el) => $(el).html() || "")
     .join("\n");
   const bodyText = $("body").text();
-  const combined = `${bodyText}\n${scriptText}`.replace(/\s+/g, " ");
-  if (!combined.trim()) return undefined;
+  return `${bodyText}\n${scriptText}`.replace(/\s+/g, " ");
+}
+
+function extractCompositionFromBroadText($: cheerio.CheerioAPI, combined?: string): string | undefined {
+  const pageText = combined ?? getCombinedPageTextForComposition($);
+  if (!pageText.trim()) return undefined;
 
   const patterns = [
     // Multi-fiber care labels: "76% Polyamide, 24% Elastane"
@@ -234,13 +305,13 @@ function extractCompositionFromBroadText($: cheerio.CheerioAPI): string | undefi
   ];
 
   for (const re of patterns) {
-    for (const m of combined.matchAll(re)) {
+    for (const m of pageText.matchAll(re)) {
       const matchText = m[0];
       if (!matchText || m.index == null) continue;
 
       const start = Math.max(0, m.index - BROAD_TEXT_CONTEXT_RADIUS);
-      const end = Math.min(combined.length, m.index + matchText.length + BROAD_TEXT_CONTEXT_RADIUS);
-      const context = combined.slice(start, end);
+      const end = Math.min(pageText.length, m.index + matchText.length + BROAD_TEXT_CONTEXT_RADIUS);
+      const context = pageText.slice(start, end);
 
       debugScrapeMaterials("broad-text-scan-context", {
         match: matchText,
@@ -301,7 +372,7 @@ function extractMaterialFromJsonLdNode(node: Record<string, unknown>): string | 
   return undefined;
 }
 
-function tryExtractMaterialFromJsonLdScript(contentStr: string): string | undefined {
+function tryExtractMaterialFromJsonLdScript(contentStr: string, pageText?: string): string | undefined {
   try {
     const data = JSON.parse(contentStr) as Record<string, unknown>;
     const graph = data["@graph"];
@@ -311,11 +382,11 @@ function tryExtractMaterialFromJsonLdScript(contentStr: string): string | undefi
     for (const node of nodes) {
       if (!node || typeof node !== "object") continue;
       const m = extractMaterialFromJsonLdNode(node);
-      const accepted = acceptMaterialsCandidate(m);
+      const accepted = acceptMaterialsCandidate(m, "json-ld-node", { pageText });
       if (accepted) return accepted;
     }
     const top = extractMaterialFromJsonLdNode(data);
-    const acceptedTop = acceptMaterialsCandidate(top);
+    const acceptedTop = acceptMaterialsCandidate(top, "json-ld-top", { pageText });
     if (acceptedTop) return acceptedTop;
   } catch {
     /* ignore */
@@ -813,27 +884,32 @@ async function extractGenericProductFromLoadedCheerio(
       }
     }
 
+    const pageTextForComposition = getCombinedPageTextForComposition($);
+
     // Retailer-specific DOM: name, brand, materials only
     if (host.includes("zara.com")) {
       brand = brand ?? "Zara";
       name = name ?? $(".product-detail-info__header-name").first().text().trim();
       materials = pickMaterials(
         materials,
-        $('[data-qa="product-detail-composition"]').text().trim() || $(".product-detail-composition").text().trim()
+        $('[data-qa="product-detail-composition"]').text().trim() || $(".product-detail-composition").text().trim(),
+        pageTextForComposition
       );
     } else if (host.includes("hm.com")) {
       brand = brand ?? "H&M";
       name = name ?? ($("h1.primary-product-title").first().text().trim() || $(".ProductTitle-module").first().text().trim());
       materials = pickMaterials(
         materials,
-        $(".ProductDetails-module__composition").text().trim() || $('[data-testid="product-composition"]').text().trim()
+        $(".ProductDetails-module__composition").text().trim() || $('[data-testid="product-composition"]').text().trim(),
+        pageTextForComposition
       );
     } else if (host.includes("asos.com")) {
       brand = brand ?? $('[data-auto-id="product-brand"]').first().text().trim();
       name = name ?? ($('[data-auto-id="product-title"]').first().text().trim() || $("h1").first().text().trim());
       materials = pickMaterials(
         materials,
-        $(".product-description__materials").text().trim() || $('[data-id="product-details"]').find("li").text()
+        $(".product-description__materials").text().trim() || $('[data-id="product-details"]').find("li").text(),
+        pageTextForComposition
       );
     } else if (host.includes("nike.com")) {
       brand = brand ?? "Nike";
@@ -843,7 +919,8 @@ async function extractGenericProductFromLoadedCheerio(
       name = name ?? ($("h1.product-title").first().text().trim() || $(".product__title").first().text().trim());
       materials = pickMaterials(
         materials,
-        $(".product-details__materials").text().trim() || $('[data-id="materials"]').text().trim()
+        $(".product-details__materials").text().trim() || $('[data-id="materials"]').text().trim(),
+        pageTextForComposition
       );
     } else if (host.includes("girlfriend.com")) {
       brand = brand ?? "Girlfriend Collective";
@@ -852,7 +929,8 @@ async function extractGenericProductFromLoadedCheerio(
         materials,
         $('[class*="material"]').text().trim() ||
           $('[class*="composition"]').text().trim() ||
-          $('[class*="fabric"]').text().trim()
+          $('[class*="fabric"]').text().trim(),
+        pageTextForComposition
       );
     } else if (host.includes("shein.com") || host.includes("shein.")) {
       brand = brand ?? "Shein";
@@ -861,7 +939,8 @@ async function extractGenericProductFromLoadedCheerio(
         materials,
         $(".product-intro__detail-description").text().trim() ||
           findSheinCompositionPanelText($) ||
-          $('[data-id="product-detail"]').text().trim()
+          $('[data-id="product-detail"]').text().trim(),
+        pageTextForComposition
       );
     } else if (host.includes("thereformation.com")) {
       name = name ?? $("h1").first().text().trim();
@@ -872,14 +951,16 @@ async function extractGenericProductFromLoadedCheerio(
         refDom ||
           $('[class*="composition"]').text().trim() ||
           $('[class*="material"]').text().trim() ||
-          $(".product-composition").text().trim()
+          $(".product-composition").text().trim(),
+        pageTextForComposition
       );
     } else if (host.includes("miumiu.com") || host.includes("prada.com")) {
       brand = brand ?? (host.includes("miumiu.com") ? "Miu Miu" : "Prada");
       name = name ?? $("h1").first().text().trim();
       materials = pickMaterials(
         materials,
-        $('[class*="material"]').text().trim() || $('[class*="composition"]').text().trim()
+        $('[class*="material"]').text().trim() || $('[class*="composition"]').text().trim(),
+        pageTextForComposition
       );
     }
 
@@ -914,7 +995,9 @@ async function extractGenericProductFromLoadedCheerio(
           wouldSelectAsMaterials: wouldTake
         });
         if (text && text.length > 5 && text.length < 500 && looksLikeCompositionText(text)) {
-          const accepted = acceptMaterialsCandidate(text, `generic-selector:${selector}`);
+          const accepted = acceptMaterialsCandidate(text, `generic-selector:${selector}`, {
+            pageText: pageTextForComposition
+          });
           if (accepted) {
             materials = accepted;
             console.log(LOG_PREFIX, "generic materials found via", selector);
@@ -934,13 +1017,15 @@ async function extractGenericProductFromLoadedCheerio(
           console.log(LOG_PREFIX, `JSON-LD material pass script[${si}]`, "(empty body, skip)");
           continue;
         }
-        const found = tryExtractMaterialFromJsonLdScript(contentStr);
+        const found = tryExtractMaterialFromJsonLdScript(contentStr, pageTextForComposition);
         console.log(LOG_PREFIX, `JSON-LD material pass script[${si}]`, {
           extracted: found ?? "(none)",
           usedForMaterials: !!found
         });
         if (found) {
-          const accepted = acceptMaterialsCandidate(found, `json-ld-script:${si}`);
+          const accepted = acceptMaterialsCandidate(found, `json-ld-script:${si}`, {
+            pageText: pageTextForComposition
+          });
           if (accepted) {
             materials = accepted;
             console.log(LOG_PREFIX, "generic materials found via JSON-LD");
@@ -951,22 +1036,27 @@ async function extractGenericProductFromLoadedCheerio(
     }
 
     if (!materials) {
-      const broad = extractCompositionFromBroadText($);
-      const acceptedBroad = acceptMaterialsCandidate(broad, "broad-text-scan");
+      const broad = extractCompositionFromBroadText($, pageTextForComposition);
+      const acceptedBroad = acceptMaterialsCandidate(broad, "broad-text-scan", {
+        pageText: pageTextForComposition
+      });
       if (acceptedBroad) {
         materials = acceptedBroad;
         console.log(LOG_PREFIX, "materials found via broad text composition scan");
       }
     }
 
-    materials = acceptMaterialsCandidate(materials);
+    materials = acceptMaterialsCandidate(materials, "extractGeneric-final", {
+      pageText: pageTextForComposition
+    });
 
     if (!name) name = $("h1").first().text().trim() || ogTitle;
     // Zara-only broad DOM fallback when the dedicated Zara scraper already fell through to generic HTML.
     if (!materials && host.includes("zara.com")) {
       materials = pickMaterials(
         materials,
-        $('[class*="material"]').first().text().trim() || $('[class*="composition"]').first().text().trim()
+        $('[class*="material"]').first().text().trim() || $('[class*="composition"]').first().text().trim(),
+        pageTextForComposition
       );
     }
 
