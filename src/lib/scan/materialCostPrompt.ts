@@ -5,7 +5,7 @@
 import { WORTH_IT_MARKUP_CEILING, THINK_TWICE_MARKUP_CEILING, ABSOLUTE_TRAP_CEILING } from "./verdict";
 
 export const ETHICAL_BRANDS_CLAUSE =
-  "Patagonia, Everlane, Reformation, Kotn, Eileen Fisher, Pact, Thought Clothing, Amour Vert, Girlfriend Collective, Mara Hoffman, Whimsy and Row, Colorful Standard, Organic Basics, tentree, prAna, Veja, Allbirds, Stella McCartney, People Tree, Nudie Jeans, Outerknown, Finisterre, Rapanui, Honest By (or the same company under another name)";
+  "Patagonia, Reformation, Kotn, Eileen Fisher, Pact, Thought Clothing, Amour Vert, Girlfriend Collective, Mara Hoffman, Whimsy and Row, Colorful Standard, Organic Basics, tentree, prAna, Veja, Allbirds, Stella McCartney, People Tree, Nudie Jeans, Outerknown, Finisterre, Rapanui, Honest By (or the same company under another name)";
 
 export const MATERIAL_COST_AND_TAXONOMY_PROMPT = `
 **PART 1 — FIBER TAXONOMY (classify every fiber before cost or verdict logic)**

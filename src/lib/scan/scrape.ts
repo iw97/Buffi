@@ -768,6 +768,7 @@ type GenericHtmlExtraction = {
   imageUrl: string | null;
   priceFromJsonLd?: number;
   gtin?: string;
+  styleNumber?: string;
   materialsFromSerpSearch: boolean;
 };
 
@@ -786,6 +787,7 @@ function mergeGenericHtmlExtractions(
     imageUrl: a.imageUrl ?? b.imageUrl,
     priceFromJsonLd: a.priceFromJsonLd ?? b.priceFromJsonLd,
     gtin: a.gtin?.trim() || b.gtin?.trim(),
+    styleNumber: a.styleNumber?.trim() || b.styleNumber?.trim(),
     materialsFromSerpSearch: a.materialsFromSerpSearch || b.materialsFromSerpSearch
   };
 }
@@ -809,6 +811,7 @@ async function extractGenericProductFromLoadedCheerio(
     let materialsFromSerpSearch = false;
     let priceFromJsonLd: number | undefined;
     let gtin: string | undefined;
+    let styleNumber: string | undefined;
 
     // Schema.org Product JSON-LD: name, brand, description, optional Offer price (e.g. Reformation when .json is 404)
     for (let i = 0; i < jsonLdScripts.length; i++) {
@@ -841,6 +844,10 @@ async function extractGenericProductFromLoadedCheerio(
             if (imageFromLd && !imageUrl) imageUrl = imageFromLd;
             const offerPrice = parseSchemaOrgOfferPrice(item);
             if (offerPrice != null && priceFromJsonLd == null) priceFromJsonLd = offerPrice;
+            const sku = item.sku as string | undefined;
+            if (typeof sku === "string" && sku.trim() && !styleNumber) styleNumber = sku.trim().slice(0, 50);
+            const productId = item.productID as string | undefined;
+            if (typeof productId === "string" && productId.trim() && !styleNumber) styleNumber = productId.trim().slice(0, 50);
           }
 
           // Shopify commonly uses ProductGroup + hasVariant[].offers.price when .json is blocked.
@@ -867,6 +874,14 @@ async function extractGenericProductFromLoadedCheerio(
       } catch {
         /* ignore */
       }
+    }
+
+    if (!styleNumber) {
+      const metaSku =
+        $('meta[name="sku"]').attr("content") ||
+        $('meta[property="product:sku"]').attr("content") ||
+        $('meta[name="product:item_group_id"]').attr("content");
+      if (metaSku?.trim()) styleNumber = metaSku.trim().slice(0, 50);
     }
 
     if (ogTitle && !name) name = ogTitle;
@@ -1096,6 +1111,7 @@ async function extractGenericProductFromLoadedCheerio(
       imageUrl,
       priceFromJsonLd,
       gtin,
+      styleNumber,
       materialsFromSerpSearch
     };
 }
@@ -1109,6 +1125,7 @@ export async function scrapeProductFromUrl(url: string): Promise<{
   description?: string;
   imageUrl?: string | null;
   gtin?: string;
+  styleNumber?: string;
   /** SerpAPI organic snippet used for composition (luxury JS-only sites). */
   materialsFromSerpSearch?: boolean;
 } | null> {
@@ -1360,6 +1377,7 @@ export async function scrapeProductFromUrl(url: string): Promise<{
     description: merged.description,
     imageUrl: merged.imageUrl,
     gtin: merged.gtin,
+    ...(merged.styleNumber ? { styleNumber: merged.styleNumber } : {}),
     ...(merged.priceFromJsonLd != null ? { price: merged.priceFromJsonLd } : {}),
     ...(merged.materialsFromSerpSearch ? { materialsFromSerpSearch: true as const } : {})
   };

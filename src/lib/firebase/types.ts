@@ -62,6 +62,10 @@ export interface ProductScanDocument {
   lastScannedAt: unknown;
   /** Present on new writes; legacy docs may omit. */
   latestScan?: ProductScanLatestSnapshot;
+  /** Style/SKU number from product page JSON-LD or meta tags. */
+  styleNumber?: string;
+  /** GTIN from product page JSON-LD. */
+  gtin?: string;
 }
 
 /** productMappings/{gtin} — written only from server. */

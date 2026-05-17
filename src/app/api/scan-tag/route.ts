@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAnthropicClient, parseClaudeJsonResponse } from "@/lib/anthropic";
 import { getAdminAuth, getAdminFirestore } from "@/lib/firebase/admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { CLAUDE_PRIMARY_MODEL } from "@/lib/scan/models";
 
 const VISION_URL = "https://vision.googleapis.com/v1/images:annotate";
@@ -149,6 +150,24 @@ ${rawText.slice(0, 8000)}`;
       styleNumber: typeof parsed.styleNumber === "string" ? parsed.styleNumber : null,
       confidence
     };
+
+    // Fire-and-forget: log tag scan for manual product matching
+    if (result.fibers.length > 0 || result.styleNumber) {
+      const pendingDb = getAdminFirestore();
+      if (pendingDb) {
+        void pendingDb.collection("pendingMatches").add({
+          uid,
+          styleNumber: result.styleNumber ?? null,
+          fibers: result.fibers,
+          countryOfManufacture: result.countryOfManufacture ?? null,
+          rawOcrPreview: rawText.slice(0, 300),
+          confidence: result.confidence,
+          status: "pending",
+          createdAt: FieldValue.serverTimestamp()
+        }).catch((e: Error) => console.warn("[api/scan-tag] pendingMatches write failed:", e.message));
+      }
+    }
+
     return NextResponse.json(result);
   } catch (e) {
     console.error("[api/scan-tag]", e);

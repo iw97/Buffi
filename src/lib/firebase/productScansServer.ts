@@ -180,7 +180,11 @@ export function productScanToScanAnalysis(doc: ProductScanDocument): ScanAnalysi
 /**
  * After a successful URL-based scan, upsert productScans/{hash}.
  */
-export async function recordProductScan(productUrl: string, analysis: ScanAnalysis): Promise<void> {
+export async function recordProductScan(
+  productUrl: string,
+  analysis: ScanAnalysis,
+  options?: { styleNumber?: string; gtin?: string }
+): Promise<void> {
   const db = getAdminFirestore();
   if (!db) {
     console.log(LOG, "skip: FIREBASE_SERVICE_ACCOUNT_JSON not set");
@@ -211,7 +215,7 @@ export async function recordProductScan(productUrl: string, analysis: ScanAnalys
       if (!snap.exists) {
         const vd = emptyVerdictDistribution();
         vd[vKey] = 1;
-        tx.set(ref, {
+        const newDoc: Record<string, unknown> = {
           productUrl: normalized,
           brand: analysis.brand,
           productName: analysis.name,
@@ -224,7 +228,10 @@ export async function recordProductScan(productUrl: string, analysis: ScanAnalys
           firstScannedAt: now,
           lastScannedAt: now,
           latestScan
-        });
+        };
+        if (options?.styleNumber) newDoc.styleNumber = options.styleNumber;
+        if (options?.gtin) newDoc.gtin = options.gtin;
+        tx.set(ref, newDoc);
         return;
       }
 
@@ -248,7 +255,7 @@ export async function recordProductScan(productUrl: string, analysis: ScanAnalys
       };
       verdictDistribution[vKey] = (verdictDistribution[vKey] ?? 0) + 1;
 
-      tx.update(ref, {
+      const updateDoc: Record<string, unknown> = {
         productUrl: normalized,
         brand: analysis.brand,
         productName: analysis.name,
@@ -260,7 +267,10 @@ export async function recordProductScan(productUrl: string, analysis: ScanAnalys
         verdictDistribution,
         lastScannedAt: now,
         latestScan
-      });
+      };
+      if (options?.styleNumber) updateDoc.styleNumber = options.styleNumber;
+      if (options?.gtin) updateDoc.gtin = options.gtin;
+      tx.update(ref, updateDoc);
     });
   } catch (e) {
     console.error(LOG, "transaction failed:", (e as Error).message);

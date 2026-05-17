@@ -9,6 +9,10 @@ export interface RawProductData {
   url?: string;
   barcode?: string;
   source: "url" | "barcode" | "tag";
+  /** GTIN extracted from JSON-LD on the product page. */
+  gtin?: string | null;
+  /** Style/SKU number extracted from JSON-LD or meta tags on the product page. */
+  styleNumber?: string | null;
   /** When true, `materials` came from SerpAPI organic search (luxury JS-only PDP), not static HTML. */
   materialsFromSerpSearch?: boolean;
 }

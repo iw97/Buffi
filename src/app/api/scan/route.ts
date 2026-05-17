@@ -190,7 +190,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
           }
         }
       }
-      raw = { ...scrapedWithPrice, url: productUrl, source: "url" };
+      raw = { ...scrapedWithPrice, url: productUrl, source: "url", gtin: scraped.gtin ?? null, styleNumber: scraped.styleNumber ?? null };
       console.log("[api/scan] raw built from URL", raw.price != null ? `price=${raw.price}` : "no price (manual fallback)");
     } else if (barcode) {
       console.log("[api/scan] barcode flow, looking up", barcode.slice(0, 16));
@@ -233,7 +233,13 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
     if (raw.imageUrl != null) analysis.imageUrl = raw.imageUrl;
     if (raw.source === "url" && typeof raw.url === "string" && raw.url.trim()) {
       const u = raw.url.trim();
-      void Promise.all([recordProductScan(u, analysis), extractGtinAndUpsertMapping(u, analysis.brand, analysis.name)]).catch(
+      void Promise.all([
+        recordProductScan(u, analysis, {
+          styleNumber: raw.styleNumber ?? undefined,
+          gtin: raw.gtin ?? undefined
+        }),
+        extractGtinAndUpsertMapping(u, analysis.brand, analysis.name)
+      ]).catch(
         (e) => console.warn("[api/scan] background productScans/productMappings failed:", (e as Error).message)
       );
     }
