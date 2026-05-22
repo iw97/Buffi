@@ -2,17 +2,19 @@
  * Generates placeholder PWA icons (dark square + teal B).
  * Run: node scripts/generate-pwa-icons.mjs
  */
-import { createRequire } from "module";
 import { mkdir } from "fs/promises";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
-const require = createRequire(import.meta.url);
-const playwrightRoot = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "../marketing/app-store-screenshots/node_modules/playwright"
-);
-const { chromium } = require(playwrightRoot);
+let chromium;
+try {
+  ({ chromium } = await import("playwright"));
+} catch {
+  console.error(
+    "Playwright is required to regenerate icons. Run:\n  npm install -D playwright\n  npx playwright install chromium"
+  );
+  process.exit(1);
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT = join(__dirname, "../public/icons");
