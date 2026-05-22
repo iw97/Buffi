@@ -1,5 +1,5 @@
 /**
- * Creates Stripe products/prices for Buffi Pro (Weekly, Annual, Lifetime).
+ * Creates Stripe products/prices for Buffi Pro (Weekly, Monthly, Annual, Lifetime).
  * Run: node scripts/stripe-seed-products.cjs
  * Requires STRIPE_SECRET_KEY in .env.local or environment.
  */
@@ -29,6 +29,17 @@ async function main() {
     recurring: { interval: "week" }
   });
 
+  const monthlyProduct = await stripe.products.create({
+    name: "Buffi Monthly",
+    description: "Buffi Pro — billed monthly"
+  });
+  const monthlyPrice = await stripe.prices.create({
+    product: monthlyProduct.id,
+    unit_amount: 799,
+    currency: "usd",
+    recurring: { interval: "month" }
+  });
+
   const annualProduct = await stripe.products.create({
     name: "Buffi Annual",
     description: "Buffi Pro — billed annually"
@@ -52,6 +63,7 @@ async function main() {
 
   console.log("\nAdd these to .env.local (and Vercel):\n");
   console.log(`STRIPE_PRICE_WEEKLY=${weeklyPrice.id}`);
+  console.log(`STRIPE_PRICE_MONTHLY=${monthlyPrice.id}`);
   console.log(`STRIPE_PRICE_ANNUAL=${annualPrice.id}`);
   console.log(`STRIPE_PRICE_LIFETIME=${lifePrice.id}`);
   console.log("");

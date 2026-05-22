@@ -131,8 +131,10 @@ export async function analyzeWithClaude(raw: RawProductData, selectedValues: str
   } else if (isTagSource) {
     dataSourceInstructions = `This is a TAG/CARE-LABEL input with composition and optional brand/price. If brand or price was not provided, still produce a full analysis using what you have, and add to tags any missing data (e.g. "Brand unknown" or "Price estimated") so the user knows the confidence level. Apply the small-brand, fiber-quality, and markup-context rules below.`;
   } else if (raw.source === "url") {
-    if (zaraUrl) {
-      dataSourceInstructions = `This is a Zara product URL. If raw data is sparse, you may use naming context — Zara often states fiber content in product titles. Apply the rules below.`;
+    if (zaraUrl && raw.materials?.trim()) {
+      dataSourceInstructions = `This is a Zara product URL. raw.materials is the OUTER SHELL (main fabric) only — lining, sleeves, and interior sections are already excluded. Parse those fiber types and percentages exactly. Do not add fibers from product description or URL. Apply the rules below.`;
+    } else if (zaraUrl) {
+      dataSourceInstructions = `This is a Zara product URL without reliable composition from the page. Do NOT invent specific fiber percentages from product title (e.g. "wool blend" does not justify 70/30). Return materials as exactly one entry: { "fiber": "Unknown", "percentage": 100 }. Include tag "${MATERIALS_NOT_DETECTED_TAG}". Apply the rules below.`;
     } else if (raw.materialsFromSerpSearch && raw.materials?.trim()) {
       dataSourceInstructions = `This is a non-Zara luxury retailer URL. Fiber composition was retrieved from web search snippets (SerpAPI Google organic), not the product page, because composition is often rendered only in client-side JavaScript. Treat raw.materials as a best-effort excerpt; parse percentages conservatively and reflect uncertainty in tags where appropriate. Apply the rules below.`;
     } else if (raw.materials?.trim()) {
@@ -434,7 +436,7 @@ export async function parseFiberCompositionFromZaraContext(input: {
         messages: [
           {
             role: "user",
-            content: `Extract fiber composition from this Zara product name and description. Zara often includes fiber content in the product name itself (e.g. 100% LINEN, WOOL BLEND, FAUX LEATHER). Return your best estimate with confidence tier 2 if inferred from name only.
+            content: `Extract fiber composition ONLY when explicit percentages appear in the product name or description (e.g. "100% LINEN", "80% COTTON 20% POLYESTER"). Do NOT guess percentages for vague names like "WOOL BLEND" or "LINEN BLEND" — return composition null instead.
 
 Product name:
 "${productName}"
@@ -443,8 +445,8 @@ Search/description context:
 "${searchDescription || "(none)"}"
 
 Respond ONLY as valid JSON:
-{"composition":"<single string suitable for a care label>","confidenceTier":2}
-If no fiber/material clue is inferable, return:
+{"composition":"<care-label string with explicit percentages only>","confidenceTier":2}
+If no explicit percentages are present, return:
 {"composition":null,"confidenceTier":2}
 No markdown. No explanation.`
           }

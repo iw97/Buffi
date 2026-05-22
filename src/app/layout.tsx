@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, DM_Mono, DM_Sans } from "next/font/google";
 
 import "./globals.css";
@@ -28,11 +28,17 @@ const dmMono = DM_Mono({
 
 export const metadata: Metadata = {
   title: "Buffi",
-  description: "Material intelligence",
+  description: "Material intelligence for the conscious shopper.",
   metadataBase: new URL(appUrl),
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Buffi"
+  },
   icons: {
-    icon: "/og-image.png",
-    apple: "/og-image.png"
+    icon: "/icons/icon-192.png",
+    apple: "/icons/icon-192.png"
   },
   openGraph: {
     title: "Buffi",
@@ -50,6 +56,10 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     images: ["/og-image.png"]
   }
+};
+
+export const viewport: Viewport = {
+  themeColor: "#080807"
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

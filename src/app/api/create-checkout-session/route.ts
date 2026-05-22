@@ -14,7 +14,7 @@ function readBearerToken(req: NextRequest): string | null {
 }
 
 function isPaywallPlanId(v: unknown): v is PaywallPlanId {
-  return v === "weekly" || v === "yearly" || v === "lifetime";
+  return v === "weekly" || v === "monthly" || v === "yearly" || v === "lifetime";
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse<{ url?: string; error?: string }>> {

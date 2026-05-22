@@ -4,6 +4,8 @@ import { cleanProductUrl } from "./cleanProductUrl";
 import { isLuxuryBrandForSerpComposition } from "./luxuryBrands";
 import { getCompositionFromGoogleSearch } from "./serpapi";
 import { scrapeZaraFromUrl } from "./zara";
+import { parseZaraOuterShellComposition } from "./zaraComposition";
+import { fetchWithBrightData } from "./unlockerFetch";
 
 const LOG_PREFIX = "[scrape]";
 /** Max chars logged per JSON-LD script body (full text may be larger on disk). */
@@ -469,55 +471,6 @@ async function fetchWithBrowserRetry(
   return last as Response;
 }
 
-/** Bright Data Web Unlocker REST fallback when direct fetch is blocked or composition is missing. */
-async function fetchWithBrightData(url: string): Promise<string | null> {
-  const token = process.env.BRIGHT_DATA_TOKEN;
-  const zone = process.env.BRIGHT_DATA_ZONE || "buffi_unlocker";
-
-  console.log("[BD] token length:", token?.length);
-  console.log("[BD] token first 8 chars:", token?.slice(0, 8));
-  console.log("[BD] token last 4 chars:", token?.slice(-4));
-  console.log("[BD] zone:", zone);
-  console.log("[BD] auth header being sent:", "Bearer " + token?.slice(0, 8) + "...");
-
-  if (!token) {
-    console.log(LOG_PREFIX, "Bright Data token not set, skipping fallback");
-    return null;
-  }
-
-  try {
-    const response = await fetch("https://api.brightdata.com/request", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        zone,
-        url,
-        format: "raw"
-      }),
-      signal: AbortSignal.timeout(30000)
-    });
-    console.log("[BD] response status:", response.status);
-
-    if (!response.ok) {
-      console.log(LOG_PREFIX, "Bright Data returned non-OK", response.status);
-      return null;
-    }
-
-    const html = await response.text();
-    console.log("[BD] html length:", html.length);
-    console.log("[BD] html preview:", html.slice(0, 500));
-    console.log(LOG_PREFIX, "Bright Data success, html length:", html.length);
-    return html;
-  } catch (err) {
-    console.log("[BD] fetch error:", err);
-    console.log(LOG_PREFIX, "Bright Data error:", (err as Error).message);
-    return null;
-  }
-}
-
 /**
  * Shopify product.json paths to try. Reformation-style URLs use `/products/handle/SKU.html`;
  * JSON lives at `/products/handle.json`, not `...SKU.html.json`.
@@ -905,9 +858,14 @@ async function extractGenericProductFromLoadedCheerio(
     if (host.includes("zara.com")) {
       brand = brand ?? "Zara";
       name = name ?? $(".product-detail-info__header-name").first().text().trim();
+      const zaraDomComp =
+        $('[data-qa="product-detail-composition"]').text().trim() ||
+        $(".product-detail-composition").text().trim();
       materials = pickMaterials(
         materials,
-        $('[data-qa="product-detail-composition"]').text().trim() || $(".product-detail-composition").text().trim(),
+        parseZaraOuterShellComposition(zaraDomComp) ||
+          parseZaraOuterShellComposition(pageTextForComposition) ||
+          zaraDomComp,
         pageTextForComposition
       );
     } else if (host.includes("hm.com")) {
@@ -1200,39 +1158,55 @@ export async function scrapeProductFromUrl(url: string): Promise<{
       }
     : null;
 
+  let zaraPartial: {
+    brand: string;
+    name?: string;
+    price?: number;
+    description?: string;
+    imageUrl?: string | null;
+  } | null = null;
+
   if (host.includes("zara.com")) {
     const zara = await scrapeZaraFromUrl(cleaned);
     if (zara && (zara.name || zara.brand)) {
-      const zaraMaterials = acceptMaterialsCandidate(zara.materials);
-      const out = {
+      const zaraMaterials = acceptMaterialsCandidate(
+        zara.materials ? parseZaraOuterShellComposition(zara.materials) : undefined
+      );
+      if (zaraMaterials) {
+        const out = {
+          brand: zara.brand,
+          name: zara.name,
+          price: zara.price,
+          materials: zaraMaterials,
+          description: zara.description,
+          imageUrl: zara.imageUrl ?? null
+        };
+        console.log(LOG_PREFIX, "extracted (Zara)", cleaned.slice(0, 80), "scrapeMethod=", zara.method, "->", {
+          brand: out.brand ?? "(missing)",
+          name: out.name?.slice(0, 50) ?? "(missing)",
+          price: out.price ?? "(missing)",
+          hasMaterials: !!out.materials,
+          hasImage: !!out.imageUrl
+        });
+        console.log(LOG_PREFIX, "scrape path taken", "Zara-specific (scrapeZaraFromUrl)");
+        console.log(LOG_PREFIX, "final materials before return", out.materials ?? "(undefined)");
+        return out;
+      }
+      zaraPartial = {
         brand: zara.brand,
         name: zara.name,
         price: zara.price,
-        materials: zaraMaterials,
         description: zara.description,
         imageUrl: zara.imageUrl ?? null
       };
-      console.log(LOG_PREFIX, "extracted (Zara)", cleaned.slice(0, 80), "scrapeMethod=", zara.method, "->", {
-        brand: out.brand ?? "(missing)",
-        name: out.name?.slice(0, 50) ?? "(missing)",
-        price: out.price ?? "(missing)",
-        hasMaterials: !!out.materials,
-        hasImage: !!out.imageUrl
-      });
-      console.log(LOG_PREFIX, "scrape path taken", "Zara-specific (scrapeZaraFromUrl)");
       console.log(
         LOG_PREFIX,
-        "note: JSON-LD / generic DOM probes for materials are inside zara.ts + this function's generic fallback only if Zara returns empty and code falls through to HTML below."
+        "Zara metadata without composition; continuing pipeline for Bright Data / HTML",
+        cleaned.slice(0, 80)
       );
-      console.log(LOG_PREFIX, "final materials before return", out.materials ?? "(undefined)");
-      console.log(LOG_PREFIX, "price detail", {
-        scrapedPrice: out.price ?? null,
-        scrapedPriceSource: out.price != null ? "Zara APIs / Serp slug flow inside scrapeZaraFromUrl" : "none",
-        serpApiNote: "Additional Zara SerpAPI price may run in /api/scan after scrapeProductFromUrl"
-      });
-      return out;
+    } else {
+      console.log(LOG_PREFIX, "Zara-specific scrape empty; falling back to generic HTML", cleaned.slice(0, 80));
     }
-    console.log(LOG_PREFIX, "Zara-specific scrape empty; falling back to generic HTML", cleaned.slice(0, 80));
   }
 
   const fetchUrls = host.includes("shein.") ? sheinFetchUrlCandidates(cleaned) : [cleaned];
@@ -1291,7 +1265,8 @@ export async function scrapeProductFromUrl(url: string): Promise<{
     standardFetchFailed,
     hasMaterialsFromGeneric: !!cheerioExtraction?.materials?.trim()
   });
-  const shouldTryBrightData = !zaraHost && !step2CheerioFoundMaterials;
+  const shouldTryBrightData =
+    !step2CheerioFoundMaterials && (!zaraHost || zaraPartial != null);
   debugScrapeMaterials("bright-data-decision", {
     triggered: shouldTryBrightData,
     zaraHost,
@@ -1308,6 +1283,27 @@ export async function scrapeProductFromUrl(url: string): Promise<{
       console.log("[scrape] retrying parse with Bright Data HTML");
       const $bd = cheerio.load(brightDataHtml);
       bdExtraction = await extractGenericProductFromLoadedCheerio($bd, host, "Bright Data HTML (Cheerio)");
+      if (zaraHost) {
+        const zaraComp = parseZaraOuterShellComposition(brightDataHtml);
+        if (zaraComp) {
+          const accepted = acceptMaterialsCandidate(zaraComp) ?? zaraComp;
+          if (bdExtraction) {
+            bdExtraction.materials = accepted;
+            bdExtraction.brand = bdExtraction.brand ?? "Zara";
+            bdExtraction.name = bdExtraction.name ?? zaraPartial?.name;
+            bdExtraction.priceFromJsonLd = bdExtraction.priceFromJsonLd ?? zaraPartial?.price;
+          } else {
+            bdExtraction = {
+              brand: "Zara",
+              name: zaraPartial?.name,
+              materials: accepted,
+              imageUrl: zaraPartial?.imageUrl ?? null,
+              priceFromJsonLd: zaraPartial?.price,
+              materialsFromSerpSearch: false
+            };
+          }
+        }
+      }
       console.log("[BD] extraction result:", {
         hasMaterials: !!bdExtraction?.materials,
         hasName: !!bdExtraction?.name,
@@ -1326,14 +1322,26 @@ export async function scrapeProductFromUrl(url: string): Promise<{
       rawMaterials: bdExtraction?.materials ?? null
     });
     console.log("[scrape] step 3 Bright Data:", bdExtraction?.materials?.trim() ? "found" : "not found");
-  } else if (zaraHost && !step2CheerioFoundMaterials) {
-    console.log("[scrape] step 2 failed; Bright Data step 3 skipped for Zara");
+  } else if (zaraHost && !step2CheerioFoundMaterials && !zaraPartial) {
+    console.log("[scrape] step 2 failed; Bright Data step 3 skipped for Zara (no partial metadata)");
   }
 
   let merged: GenericHtmlExtraction | null = null;
   merged = mergeGenericHtmlExtractions(merged, shopifySeed);
   merged = mergeGenericHtmlExtractions(merged, cheerioExtraction);
   merged = mergeGenericHtmlExtractions(merged, bdExtraction);
+
+  if (zaraPartial) {
+    merged = mergeGenericHtmlExtractions(merged, {
+      brand: zaraPartial.brand,
+      name: zaraPartial.name,
+      materials: undefined,
+      description: zaraPartial.description,
+      imageUrl: zaraPartial.imageUrl ?? null,
+      priceFromJsonLd: zaraPartial.price,
+      materialsFromSerpSearch: false
+    });
+  }
 
   if (!merged?.materials?.trim()) {
     console.log("[scrape] all methods exhausted, returning null");

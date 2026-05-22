@@ -4,6 +4,8 @@
 
 import { parseFiberCompositionFromZaraContext } from "./analyze";
 import { getGoogleShoppingResults } from "./serpapi";
+import { fetchWithBrightData } from "./unlockerFetch";
+import { parseZaraOuterShellComposition, pickCompositionFromStrings } from "./zaraComposition";
 
 const LOG = "[zara]";
 
@@ -92,26 +94,6 @@ function walkCollectStrings(val: unknown, out: string[], depth = 0): void {
   if (val && typeof val === "object") {
     for (const v of Object.values(val)) walkCollectStrings(v, out, depth + 1);
   }
-}
-
-/** Prefer strings that look like fiber composition. */
-function pickCompositionFromStrings(strings: string[]): string | undefined {
-  const scored = strings
-    .map((s) => {
-      const lower = s.toLowerCase();
-      const pct = (s.match(/\d+\s*%/g) || []).length;
-      const fiber =
-        /(linen|cotton|wool|silk|polyester|nylon|viscose|elastane|spandex|modal|acetate|cashmere|leather|ramie|hemp|lyocell|tencel|polyamide|acrylic)/i.test(
-          s
-        );
-      const score = pct * 3 + (fiber ? 5 : 0) - Math.min(s.length / 80, 3);
-      return { s, score };
-    })
-    .filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score);
-  const best = scored[0]?.s;
-  if (best && best.length < 2000) return best;
-  return undefined;
 }
 
 function findPricesInObject(obj: unknown): number[] {
@@ -268,10 +250,14 @@ async function scrapeZaraHtml(url: string): Promise<{
       $(".product-detail-info__header-name").first().text().trim() ||
       $('h1[data-qa="product-name"]').first().text().trim() ||
       $('meta[property="og:title"]').attr("content")?.trim();
-    const materials =
+    const rawMaterials =
       $('[data-qa="product-detail-composition"]').text().trim() ||
       $(".product-detail-composition").text().trim() ||
       $('[class*="composition"]').first().text().trim();
+    const materials =
+      parseZaraOuterShellComposition(rawMaterials) ||
+      parseZaraOuterShellComposition(html) ||
+      undefined;
     const description =
       $(".product-detail-description").first().text().trim() ||
       $('[data-qa="product-description"]').text().trim();
@@ -431,16 +417,29 @@ export async function scrapeZaraFromUrl(productPageUrl: string): Promise<ZaraScr
     });
   }
 
-  let compositionFrom: "extra_detail" | "itxrest" | "html" | "claude_title" | "none" = "none";
+  let compositionFrom: "extra_detail" | "itxrest" | "html" | "bright_data" | "claude_title" | "none" =
+    "none";
   if (extraDetailComposition) compositionFrom = "extra_detail";
   else if (itxrestComposition) compositionFrom = "itxrest";
   else if (htmlComposition) compositionFrom = "html";
 
+  if (!materials?.trim()) {
+    const bdHtml = await fetchWithBrightData(productPageUrl);
+    if (bdHtml) {
+      const fromBd = parseZaraOuterShellComposition(bdHtml);
+      if (fromBd) {
+        materials = fromBd;
+        htmlComposition = true;
+        compositionFrom = "bright_data";
+        console.log(LOG, "composition from Bright Data outer shell", { preview: fromBd.slice(0, 80) });
+      }
+    }
+  }
+
   let method = resolveZaraMethod(extraOk, itxOk, htmlWasOnlySource);
   let usedClaudeForComposition = false;
 
-  // Name inference is Zara-only because Zara consistently includes fiber content in product titles.
-  // For other brands this causes incorrect readings.
+  // Only when page/API/Bright Data did not yield composition: Claude may read explicit % from title (e.g. 100% LINEN).
   if (
     productPageUrl.toLowerCase().includes("zara.com") &&
     !materials?.trim() &&

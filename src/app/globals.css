@@ -3746,6 +3746,122 @@ input[type="range"]::-webkit-slider-thumb:hover {
   background: rgba(232, 96, 74, 0.05);
 }
 
+.btn-delete-account {
+  width: 100%;
+  margin-top: 12px;
+  padding: 14px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.btn-delete-account:hover:not(:disabled) {
+  color: var(--red);
+}
+
+.btn-delete-account:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.delete-account-confirm-input {
+  width: 100%;
+  margin-top: 12px;
+  padding: 14px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.delete-account-confirm-input:focus {
+  outline: none;
+  border-color: var(--red);
+}
+
+.delete-account-error {
+  margin-top: 12px;
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.delete-account-modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.delete-account-modal-actions .btn-secondary,
+.delete-account-modal-actions .btn-delete-account-confirm {
+  flex: 1;
+}
+
+.delete-account-modal-actions--stack {
+  flex-direction: column;
+  margin-top: 20px;
+}
+
+.delete-account-modal-actions--stack .btn-primary,
+.delete-account-modal-actions--stack .btn-secondary {
+  width: 100%;
+  flex: none;
+}
+
+.btn-delete-account-link {
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.btn-delete-account-link:hover:not(:disabled) {
+  color: var(--text-secondary);
+}
+
+.btn-delete-account-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-delete-account-confirm {
+  padding: 14px 16px;
+  background: var(--red);
+  border: none;
+  color: #fff;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-delete-account-confirm:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btn-delete-account-confirm:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* ===== FAQ ===== */
 .faq-header {
   padding: 56px 28px 24px;

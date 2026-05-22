@@ -1,0 +1,230 @@
+{
+  "appName": "Buffi",
+  "themeId": "buffi-terminal",
+  "locales": [
+    "en"
+  ],
+  "locale": "en",
+  "device": "iphone",
+  "orientation": "portrait",
+  "appIcon": "/app-icon.png",
+  "slidesByDevice": {
+    "iphone": [
+      {
+        "id": "buffi_hero",
+        "layout": "hero",
+        "label": {
+          "en": "Material Intelligence"
+        },
+        "headline": {
+          "en": "That $420\ncashmere isn't\ncashmere."
+        },
+        "screenshot": "/screenshots/apple/iphone/en/01-hero.png",
+        "transforms": {
+          "device": {
+            "x": 169.27980881422639,
+            "y": 806.9303414634119,
+            "width": 1013.6355043227666,
+            "height": 2064.96,
+            "rotation": 0,
+            "zIndex": 2
+          }
+        }
+      },
+      {
+        "id": "buffi_scan",
+        "layout": "device-bottom",
+        "label": {
+          "en": "Scan anything"
+        },
+        "headline": {
+          "en": "Tag in hand.\nURL in cart.\nTruth in seconds."
+        },
+        "screenshot": "/screenshots/apple/iphone/en/02-scan.png"
+      },
+      {
+        "id": "buffi_materials",
+        "layout": "device-top",
+        "label": {
+          "en": "Fiber breakdown"
+        },
+        "headline": {
+          "en": "78% wool.\n22% nylon.\nSourced from X."
+        },
+        "screenshot": "/screenshots/apple/iphone/en/03-materials.png",
+        "inverted": true
+      },
+      {
+        "id": "buffi_markup",
+        "layout": "device-bottom",
+        "label": {
+          "en": "The receipt"
+        },
+        "headline": {
+          "en": "$18 to make.\n$340 at retail."
+        },
+        "screenshot": "/screenshots/apple/iphone/en/04-markup.png"
+      },
+      {
+        "id": "buffi_alts",
+        "layout": "device-top",
+        "label": {
+          "en": "Retail Trap"
+        },
+        "headline": {
+          "en": "You deserved\nto know."
+        },
+        "screenshot": "/screenshots/uploaded/6cdfe19a5bfbf4a0.png",
+        "transforms": {
+          "caption": {
+            "x": 110.96585365853653,
+            "y": 2064.96,
+            "width": 1108.8,
+            "height": 803.0400000000001,
+            "rotation": 0,
+            "zIndex": 4
+          },
+          "device": {
+            "x": 153.18224783861672,
+            "y": -233.14146341463405,
+            "width": 1013.6355043227666,
+            "height": 2064.96,
+            "rotation": 0,
+            "zIndex": 3
+          }
+        }
+      }
+    ],
+    "android": [
+      {
+        "id": "buffi_hero_a",
+        "layout": "hero",
+        "label": {
+          "en": "Material Intelligence"
+        },
+        "headline": {
+          "en": "That $420\ncashmere isn't\ncashmere."
+        },
+        "screenshot": "/screenshots/android/phone/en/01-hero.png"
+      },
+      {
+        "id": "buffi_scan_a",
+        "layout": "device-bottom",
+        "label": {
+          "en": "Scan anything"
+        },
+        "headline": {
+          "en": "Tag in hand.\nURL in cart.\nTruth in seconds."
+        },
+        "screenshot": "/screenshots/android/phone/en/02-scan.png"
+      },
+      {
+        "id": "buffi_materials_a",
+        "layout": "device-top",
+        "label": {
+          "en": "Fiber breakdown"
+        },
+        "headline": {
+          "en": "78% wool.\n22% nylon.\nSourced from X."
+        },
+        "screenshot": "/screenshots/android/phone/en/03-materials.png",
+        "inverted": true
+      },
+      {
+        "id": "buffi_markup_a",
+        "layout": "device-bottom",
+        "label": {
+          "en": "The receipt"
+        },
+        "headline": {
+          "en": "$18 to make.\n$340 at retail."
+        },
+        "screenshot": "/screenshots/android/phone/en/04-markup.png"
+      },
+      {
+        "id": "buffi_alts_a",
+        "layout": "hero",
+        "label": {
+          "en": "Retail Trap"
+        },
+        "headline": {
+          "en": "You deserved\nto know."
+        },
+        "screenshot": "/screenshots/android/phone/en/05-alternatives.png"
+      }
+    ],
+    "ipad": [
+      {
+        "id": "buffi_hero_ipad",
+        "layout": "hero",
+        "label": {
+          "en": "Material Intelligence"
+        },
+        "headline": {
+          "en": "That $420\ncashmere isn't\ncashmere."
+        },
+        "screenshot": "/screenshots/apple/iphone/en/01-hero.png"
+      },
+      {
+        "id": "buffi_scan_ipad",
+        "layout": "device-bottom",
+        "label": {
+          "en": "Scan anything"
+        },
+        "headline": {
+          "en": "Tag in hand.\nURL in cart.\nTruth in seconds."
+        },
+        "screenshot": "/screenshots/apple/iphone/en/02-scan.png"
+      },
+      {
+        "id": "buffi_materials_ipad",
+        "layout": "device-top",
+        "label": {
+          "en": "Fiber breakdown"
+        },
+        "headline": {
+          "en": "78% wool.\n22% nylon.\nSourced from X."
+        },
+        "screenshot": "/screenshots/apple/iphone/en/03-materials.png",
+        "inverted": true
+      }
+    ],
+    "android-7": [
+      {
+        "id": "buffi_hero_t7",
+        "layout": "hero",
+        "label": {
+          "en": "Material Intelligence"
+        },
+        "headline": {
+          "en": "Truth for\nyour wardrobe."
+        },
+        "screenshot": "/screenshots/android/phone/en/01-hero.png"
+      }
+    ],
+    "android-10": [
+      {
+        "id": "buffi_hero_t10",
+        "layout": "hero",
+        "label": {
+          "en": "Material Intelligence"
+        },
+        "headline": {
+          "en": "Truth for\nyour wardrobe."
+        },
+        "screenshot": "/screenshots/android/phone/en/01-hero.png"
+      }
+    ],
+    "feature-graphic": [
+      {
+        "id": "buffi_fg",
+        "layout": "feature-graphic",
+        "label": {},
+        "headline": {
+          "en": "Material Intelligence\nfor your wardrobe."
+        },
+        "screenshot": ""
+      }
+    ]
+  }
+}

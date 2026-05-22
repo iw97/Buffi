@@ -139,10 +139,12 @@ export function parseFibersToMaterials(fibers: string[]): { fiber: string; perce
   for (const s of fibers) {
     const parts = s.split(",").map((p) => p.trim());
     for (const p of parts) {
-      const match = p.match(/^(.+?)\s+(\d+(?:\.\d+)?)\s*%?$/);
+      const trailingPct = p.match(/^(.+?)\s+(\d+(?:\.\d+)?)\s*%?$/);
+      const leadingPct = p.match(/^(\d+(?:\.\d+)?)\s*%\s*(.+)$/);
+      const match = trailingPct ?? leadingPct;
       if (match) {
-        const fiber = match[1].trim();
-        const percentage = parseFloat(match[2]) || 0;
+        const fiber = (trailingPct ? match[1] : match[2]).trim();
+        const percentage = parseFloat(trailingPct ? match[2] : match[1]) || 0;
         if (fiber && percentage >= 0) out.push({ fiber, percentage });
       }
     }

@@ -1,1 +1,1 @@
-export type PaywallPlanId = "lifetime" | "yearly" | "weekly";
+export type PaywallPlanId = "lifetime" | "yearly" | "monthly" | "weekly";
