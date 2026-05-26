@@ -4,6 +4,7 @@ import type { ScanAnalysis, MinimalScanResponse, ValuesMatchEntry, ValuesMatchSt
 import { normalizeMarkupLeniencyFlags } from "./brands";
 import { ETHICAL_BRANDS_CLAUSE, MATERIAL_COST_AND_TAXONOMY_PROMPT } from "./materialCostPrompt";
 import { isZaraProductPageUrl } from "./zaraHints";
+import { getGarmentCategoryLabel } from "./garmentCategories";
 import { computeVerdictFromRange, parseFibersToMaterials } from "./verdict";
 import { CLAUDE_PRIMARY_MODEL, CLAUDE_MINIMAL_MODEL } from "./models";
 
@@ -129,7 +130,10 @@ export async function analyzeWithClaude(raw: RawProductData, selectedValues: str
 - Include in tags: "Partial analysis", "Markup requires price". If brand was not provided, also add "Brand unknown".
 - Set isSmallBusiness and markupContext using the rules below where applicable.`;
   } else if (isTagSource) {
-    dataSourceInstructions = `This is a TAG/CARE-LABEL input with composition and optional brand/price. If brand or price was not provided, still produce a full analysis using what you have, and add to tags any missing data (e.g. "Brand unknown" or "Price estimated") so the user knows the confidence level. Apply the small-brand, fiber-quality, and markup-context rules below.`;
+    const garmentNote = raw.garmentCategory
+      ? ` The shopper confirmed garment type: "${getGarmentCategoryLabel(raw.garmentCategory)}". Use this for functionalSynthetic and product naming — do NOT infer garment type from fiber composition alone (e.g. do not call a nylon shell a "nylon jacket" when the user said jacket).`
+      : "";
+    dataSourceInstructions = `This is a TAG/CARE-LABEL input with composition and optional brand/price.${garmentNote} If brand or price was not provided, still produce a full analysis using what you have, and add to tags any missing data (e.g. "Brand unknown" or "Price estimated") so the user knows the confidence level. Apply the small-brand, fiber-quality, and markup-context rules below.`;
   } else if (raw.source === "url") {
     if (zaraUrl && raw.materials?.trim()) {
       dataSourceInstructions = `This is a Zara product URL. raw.materials is the OUTER SHELL (main fabric) only — lining, sleeves, and interior sections are already excluded. Parse those fiber types and percentages exactly. Do not add fibers from product description or URL. Apply the rules below.`;

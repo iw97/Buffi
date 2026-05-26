@@ -2038,6 +2038,54 @@ input[type="range"]::-webkit-slider-thumb:hover {
   margin-top: 4px;
 }
 
+.tag-garment-type-label {
+  display: block;
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.tag-garment-type-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin: 0 0 12px;
+  line-height: 1.4;
+}
+
+.tag-garment-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-garment-pill {
+  padding: 8px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text-secondary);
+  font-family: var(--font-sans, sans-serif);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.tag-garment-pill:hover {
+  border-color: var(--teal-dim);
+  color: var(--ivory);
+}
+
+.tag-garment-pill--selected {
+  border-color: var(--teal);
+  background: rgba(82, 217, 208, 0.12);
+  color: var(--teal);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

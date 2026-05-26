@@ -1,3 +1,5 @@
+import type { GarmentCategoryId } from "./garmentCategories";
+
 /** Raw product data from URL scrape, barcode lookup, or tag (OCR) flow, before Claude analysis */
 export interface RawProductData {
   brand?: string;
@@ -15,6 +17,8 @@ export interface RawProductData {
   styleNumber?: string | null;
   /** When true, `materials` came from SerpAPI organic search (luxury JS-only PDP), not static HTML. */
   materialsFromSerpSearch?: boolean;
+  /** User-confirmed garment type from tag scan (IRL); primary signal for alternatives search. */
+  garmentCategory?: GarmentCategoryId;
 }
 
 /** Context for whether markup is justified; used to nuance verdict presentation. */
@@ -73,6 +77,8 @@ export interface ScanAnalysis {
   confidenceTier?: number;
   /** True when composition or cost signals are from search/snippet rather than PDP scrape. */
   isEstimated?: boolean;
+  /** User-confirmed garment type from tag scan; overrides inferred category in alternatives search. */
+  garmentCategory?: GarmentCategoryId | null;
 }
 
 /** Full scan result returned by /api/scan */

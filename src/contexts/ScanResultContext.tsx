@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import type { GarmentCategoryId } from "@/lib/scan/garmentCategories";
 import type { ScanAnalysis } from "@/lib/scan/types";
 
 export const SCAN_RESULT_STORAGE_KEY = "buffi_scan_result";
@@ -111,6 +112,7 @@ export interface PendingScan {
     composition: string;
     brand?: string;
     price?: number;
+    garmentCategory?: GarmentCategoryId;
   };
 }
 

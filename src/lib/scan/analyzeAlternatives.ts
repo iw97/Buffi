@@ -1,5 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicClient } from "@/lib/anthropic";
+import { buildAlternativeShoppingQuery } from "./alternativeSearchQuery";
+import { getGarmentCategoryLabel } from "./garmentCategories";
 import type { ScanAnalysis, AlternativeSuggestion } from "./types";
 import { CLAUDE_MINIMAL_MODEL } from "./models";
 
@@ -156,6 +158,8 @@ export async function analyzeAlternatives(analysis: ScanAnalysis): Promise<Alter
     analysis.tags ?? []
   );
 
+  const userGarmentCategory = analysis.garmentCategory ?? null;
+
   try {
     const message = await client.messages.create(
       {
@@ -174,7 +178,12 @@ export async function analyzeAlternatives(analysis: ScanAnalysis): Promise<Alter
               markupMin: analysis.markupMin,
               markupMax: analysis.markupMax,
               tags: analysis.tags,
-              inferredContext
+              inferredContext,
+              ...(userGarmentCategory && {
+                userGarmentCategory,
+                userGarmentCategoryLabel: getGarmentCategoryLabel(userGarmentCategory),
+                note: "Shopper confirmed garment type — match alternatives to this category, not fiber-inferred type."
+              })
             })
           }
         ]
@@ -198,13 +207,19 @@ export async function analyzeAlternatives(analysis: ScanAnalysis): Promise<Alter
         typeof r.whyBetter === "string" && r.whyBetter.trim() &&
         typeof r.searchQuery === "string" && r.searchQuery.trim()
       ) {
+        const claudeSearchQuery = r.searchQuery.trim();
         results.push({
           brand: r.brand.trim(),
           productName: r.productName.trim(),
           estimatedPrice: r.estimatedPrice.trim(),
           keyMaterial: r.keyMaterial.trim(),
           whyBetter: r.whyBetter.trim(),
-          searchQuery: r.searchQuery.trim()
+          searchQuery: buildAlternativeShoppingQuery({
+            brand: r.brand.trim(),
+            garmentCategory: userGarmentCategory,
+            price: analysis.price,
+            claudeSearchQuery
+          })
         });
       }
       if (results.length >= 2) break;

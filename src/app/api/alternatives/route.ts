@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth } from "@/lib/firebase/admin";
 import { analyzeAlternatives } from "@/lib/scan/analyzeAlternatives";
+import { isGarmentCategoryId } from "@/lib/scan/garmentCategories";
 import { getThumbnailForQuery } from "@/lib/scan/serpapi";
 import type { ScanAnalysis, AlternativeSuggestion } from "@/lib/scan/types";
 
@@ -31,11 +32,10 @@ export async function POST(req: NextRequest): Promise<NextResponse<AlternativeSu
   try {
     const body = (await req.json()) as Partial<ScanAnalysis>;
 
-    // Tag scans produce no product name, so garment type is unknown — alternatives
-    // would match on fiber only and return wrong garment types. Skip until a
-    // product database exists to resolve tag scans to named products.
     const productName = (body.name ?? "").trim();
-    if (productName.length < 4) {
+    const hasUserGarmentCategory = isGarmentCategoryId(body.garmentCategory);
+    // Tag scans without a product name need a user-confirmed garment type for alternatives.
+    if (productName.length < 4 && !hasUserGarmentCategory) {
       return NextResponse.json([]);
     }
 

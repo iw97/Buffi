@@ -5,6 +5,7 @@ import { scrapeProductFromUrl } from "@/lib/scan/scrape";
 import { getPriceFromGoogleShopping } from "@/lib/scan/serpapi";
 import { lookupBarcode } from "@/lib/scan/barcode";
 import { analyzeWithClaude, analyzeMinimalScan } from "@/lib/scan/analyze";
+import { getGarmentCategoryLabel, isGarmentCategoryId } from "@/lib/scan/garmentCategories";
 import type { RawProductData, ScanResult, ScanError, ScanAnalysis } from "@/lib/scan/types";
 import { extractGtinAndUpsertMapping } from "@/lib/firebase/productMappingsServer";
 import {
@@ -26,6 +27,15 @@ function readBearerToken(req: NextRequest): string | null {
 
 function isZaraUrl(url: string | undefined): boolean {
   return typeof url === "string" && /(^|\.)zara\.com$/i.test(new URL(url).hostname);
+}
+
+function applyUserGarmentCategory(analysis: ScanAnalysis, raw: RawProductData): ScanAnalysis {
+  if (!raw.garmentCategory) return analysis;
+  return {
+    ...analysis,
+    garmentCategory: raw.garmentCategory,
+    name: getGarmentCategoryLabel(raw.garmentCategory)
+  };
 }
 
 function applyZaraConfidence(analysis: ScanAnalysis, sourceUrl: string): ScanAnalysis {
@@ -76,6 +86,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
     const composition = typeof body?.composition === "string" ? body.composition.trim() : undefined;
     const brand = typeof body?.brand === "string" ? body.brand.trim() || undefined : undefined;
     const price = typeof body?.price === "number" && body.price > 0 ? body.price : undefined;
+    const garmentCategory = isGarmentCategoryId(body?.garmentCategory) ? body.garmentCategory : undefined;
     const selectedValues = Array.isArray(body?.selectedValues)
       ? (body.selectedValues as string[]).filter((s): s is string => typeof s === "string")
       : [];
@@ -211,7 +222,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
         materials: composition,
         brand,
         price,
-        source: "tag"
+        source: "tag",
+        ...(garmentCategory && { garmentCategory })
       };
       console.log("[api/scan] raw built from tag, calling Claude");
     } else {
@@ -224,6 +236,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
 
     console.log("[api/scan] calling analyzeWithClaude", selectedValues.length ? { selectedValuesCount: selectedValues.length } : "");
     let analysis = await analyzeWithClaude(raw, selectedValues);
+    analysis = applyUserGarmentCategory(analysis, raw);
     if (raw.source === "url" && typeof raw.url === "string") {
       analysis = applyZaraConfidence(analysis, raw.url);
     }

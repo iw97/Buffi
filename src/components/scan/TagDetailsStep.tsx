@@ -1,12 +1,19 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
+import { GarmentCategoryPicker } from "@/components/scan/GarmentCategoryPicker";
 import { FASHION_BRANDS } from "@/lib/scan/brands";
+import type { GarmentCategoryId } from "@/lib/scan/garmentCategories";
 
 interface TagDetailsStepProps {
   initialComposition: string;
   onBack: () => void;
-  onSubmit: (payload: { composition: string; brand?: string; price?: number }) => void;
+  onSubmit: (payload: {
+    composition: string;
+    brand?: string;
+    price?: number;
+    garmentCategory?: GarmentCategoryId;
+  }) => void;
 }
 
 export function TagDetailsStep({ initialComposition, onBack, onSubmit }: TagDetailsStepProps) {
@@ -14,6 +21,7 @@ export function TagDetailsStep({ initialComposition, onBack, onSubmit }: TagDeta
   const [brandInput, setBrandInput] = useState("");
   const [priceInput, setPriceInput] = useState("");
   const [showBrandList, setShowBrandList] = useState(false);
+  const [garmentCategory, setGarmentCategory] = useState<GarmentCategoryId | null>(null);
   const brandListRef = useRef<HTMLDivElement>(null);
 
   const filteredBrands = useMemo(() => {
@@ -41,7 +49,8 @@ export function TagDetailsStep({ initialComposition, onBack, onSubmit }: TagDeta
     onSubmit({
       composition: comp,
       brand: brand || undefined,
-      price: typeof price === "number" && price > 0 ? price : undefined
+      price: typeof price === "number" && price > 0 ? price : undefined,
+      ...(garmentCategory && { garmentCategory })
     });
   }
 
@@ -112,6 +121,8 @@ export function TagDetailsStep({ initialComposition, onBack, onSubmit }: TagDeta
             placeholder="e.g. 49.99"
           />
         </label>
+
+        <GarmentCategoryPicker value={garmentCategory} onChange={setGarmentCategory} />
 
         <div className="tag-details-actions">
           <button type="button" className="btn-secondary" onClick={onBack}>

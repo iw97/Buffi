@@ -9,6 +9,7 @@ import { PaywallTierList } from "@/components/paywall/PaywallTierList";
 import { useStripeCheckout } from "@/hooks/useStripeCheckout";
 import { TagDetailsStep } from "@/components/scan/TagDetailsStep";
 import { TagConfirmStep, type TagExtraction } from "@/components/scan/TagConfirmStep";
+import type { GarmentCategoryId } from "@/lib/scan/garmentCategories";
 
 const TagCameraScanner = dynamic(
   () => import("@/components/scan/TagCameraScanner").then((m) => ({ default: m.TagCameraScanner })),
@@ -244,13 +245,19 @@ export function ScanScreen() {
     setTagOcrFailure(null);
   }
 
-  function handleTagConfirmSubmit(payload: { composition: string; brand: string; price?: number }) {
+  function handleTagConfirmSubmit(payload: {
+    composition: string;
+    brand: string;
+    price?: number;
+    garmentCategory?: GarmentCategoryId;
+  }) {
     clearError();
     setPending({
       tag: {
         composition: payload.composition,
         brand: payload.brand,
-        price: payload.price
+        price: payload.price,
+        ...(payload.garmentCategory && { garmentCategory: payload.garmentCategory })
       }
     });
     setTagExtractResult(null);
@@ -265,7 +272,12 @@ export function ScanScreen() {
     setOcrStatus("idle");
   }
 
-  function handleTagDetailsSubmit(payload: { composition: string; brand?: string; price?: number }) {
+  function handleTagDetailsSubmit(payload: {
+    composition: string;
+    brand?: string;
+    price?: number;
+    garmentCategory?: GarmentCategoryId;
+  }) {
     clearError();
     setPending({ tag: payload });
     setTagStepComposition(null);

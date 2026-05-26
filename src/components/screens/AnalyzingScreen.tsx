@@ -84,6 +84,7 @@ export function AnalyzingScreen() {
             composition: pending.tag.composition,
             ...(pending.tag.brand && { brand: pending.tag.brand }),
             ...(pending.tag.price != null && pending.tag.price > 0 && { price: pending.tag.price }),
+            ...(pending.tag.garmentCategory && { garmentCategory: pending.tag.garmentCategory }),
             ...(selectedValues.length > 0 && { selectedValues })
           }
         : { barcode: pending.barcode, ...(selectedValues.length > 0 && { selectedValues }) };

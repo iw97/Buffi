@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
-import { FASHION_BRANDS } from "@/lib/scan/brands";
+import { GarmentCategoryPicker } from "@/components/scan/GarmentCategoryPicker";
 import { useAuthOptional } from "@/contexts/AuthContext";
+import { FASHION_BRANDS } from "@/lib/scan/brands";
+import type { GarmentCategoryId } from "@/lib/scan/garmentCategories";
 
 export interface TagExtraction {
   fibers: { fiber: string; percentage: number }[];
@@ -14,7 +16,12 @@ export interface TagExtraction {
 interface TagConfirmStepProps {
   extraction: TagExtraction;
   onBack: () => void;
-  onSubmit: (payload: { composition: string; brand: string; price?: number }) => void;
+  onSubmit: (payload: {
+    composition: string;
+    brand: string;
+    price?: number;
+    garmentCategory?: GarmentCategoryId;
+  }) => void;
 }
 
 export function TagConfirmStep({ extraction, onBack, onSubmit }: TagConfirmStepProps) {
@@ -24,6 +31,7 @@ export function TagConfirmStep({ extraction, onBack, onSubmit }: TagConfirmStepP
   const [priceInput, setPriceInput] = useState("");
   const [showBrandList, setShowBrandList] = useState(false);
   const [lookingUpPrice, setLookingUpPrice] = useState(false);
+  const [garmentCategory, setGarmentCategory] = useState<GarmentCategoryId | null>(null);
   const brandListRef = useRef<HTMLDivElement>(null);
 
   const composition = fibers.map((f) => `${f.fiber} ${f.percentage}%`).join(", ");
@@ -72,7 +80,12 @@ export function TagConfirmStep({ extraction, onBack, onSubmit }: TagConfirmStepP
       }
     }
 
-    onSubmit({ composition, brand, price });
+    onSubmit({
+      composition,
+      brand,
+      price,
+      ...(garmentCategory && { garmentCategory })
+    });
   }
 
   return (
@@ -150,6 +163,8 @@ export function TagConfirmStep({ extraction, onBack, onSubmit }: TagConfirmStepP
             placeholder="e.g. 49.99"
           />
         </label>
+
+        <GarmentCategoryPicker value={garmentCategory} onChange={setGarmentCategory} />
 
         <div className="tag-details-actions">
           <button type="button" className="btn-secondary" onClick={onBack}>

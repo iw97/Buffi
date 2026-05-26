@@ -324,7 +324,8 @@ export function BreakdownScreen() {
             materials: validResult.materials,
             markupMin: validResult.markupMin,
             markupMax: validResult.markupMax,
-            tags: validResult.tags
+            tags: validResult.tags,
+            ...(validResult.garmentCategory && { garmentCategory: validResult.garmentCategory })
           })
         });
         if (res.ok) {
