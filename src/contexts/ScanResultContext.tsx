@@ -106,6 +106,12 @@ export function useScanResult() {
 /** Pending scan input — set before navigating to /analyzing, consumed there */
 export interface PendingScan {
   url?: string;
+  /** After url scrape 422 — retry /api/scan with brand + name instead of scraping. */
+  urlManual?: {
+    brand: string;
+    name: string;
+    price?: number;
+  };
   barcode?: string;
   /** Tag photo flow: composition from OCR + optional brand/price before analysis */
   tag?: {

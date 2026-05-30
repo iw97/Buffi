@@ -231,6 +231,13 @@ export function BreakdownScreen() {
   const [alternatives, setAlternatives] = useState<AlternativeSuggestion[] | null>(null);
   const [alternativesLoading, setAlternativesLoading] = useState(false);
   const alternativesFetched = useRef(false);
+  const trapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const trapRecordedForScanRef = useRef<string | null>(null);
+  const savedWithinTrapWindowRef = useRef(false);
+  const trapViewStartedAtRef = useRef<number | null>(null);
+  const trapTimerScanKeyRef = useRef<string | null>(null);
+  const refreshProfileRef = useRef(auth?.refreshProfile);
+  refreshProfileRef.current = auth?.refreshProfile;
   const score = useMemo(() => {
     const entries = result?.valuesMatch;
     if (!entries || entries.length === 0) return 0;
@@ -339,6 +346,111 @@ export function BreakdownScreen() {
       }
     })();
   }, [user, validResult]);
+
+  useEffect(() => {
+    if (isSaved) savedWithinTrapWindowRef.current = true;
+  }, [isSaved]);
+
+  useEffect(() => {
+    const TRAP_WINDOW_MS = 14_000;
+
+    const tryRecordTrapAvoided = async (scanKey: string, price: number) => {
+      if (!user || savedWithinTrapWindowRef.current) return;
+      if (trapRecordedForScanRef.current === scanKey) return;
+
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/record-trap-avoided", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ price })
+        });
+        if (res.ok) {
+          trapRecordedForScanRef.current = scanKey;
+          console.log("[breakdown] trap avoided recorded", { price });
+          await refreshProfileRef.current?.();
+          return;
+        }
+        const errBody = (await res.json().catch(() => ({}))) as { error?: string };
+        console.warn("[breakdown] trap avoided not recorded", res.status, errBody.error ?? res.statusText);
+      } catch (err) {
+        console.warn("[breakdown] trap avoided request failed", err);
+      }
+    };
+
+    if (authLoading || !user || !isPro || !validResult || validResult.verdict !== "Retail Trap") {
+      if (trapTimerRef.current) {
+        clearTimeout(trapTimerRef.current);
+        trapTimerRef.current = null;
+      }
+      trapTimerScanKeyRef.current = null;
+      trapViewStartedAtRef.current = null;
+      return;
+    }
+
+    const scanKey = `${validResult.brand}|${validResult.name}|${validResult.price}|${manualPriceApplied ?? ""}`;
+    const price =
+      manualPriceApplied != null && manualPriceApplied > 0
+        ? manualPriceApplied
+        : validResult.price > 0
+          ? validResult.price
+          : null;
+
+    if (price == null) {
+      console.log("[breakdown] trap avoided skipped — no price on scan");
+      return;
+    }
+
+    const scheduleTrapRecord = (delayMs: number) => {
+      if (trapTimerRef.current) {
+        clearTimeout(trapTimerRef.current);
+      }
+      trapTimerRef.current = window.setTimeout(() => {
+        trapTimerRef.current = null;
+        void tryRecordTrapAvoided(scanKey, price);
+      }, delayMs);
+    };
+
+    if (trapTimerScanKeyRef.current !== scanKey) {
+      savedWithinTrapWindowRef.current = false;
+      trapTimerScanKeyRef.current = scanKey;
+      trapViewStartedAtRef.current = Date.now();
+      console.log("[breakdown] trap avoided timer started (14s, do not save)");
+      scheduleTrapRecord(TRAP_WINDOW_MS);
+    } else if (trapTimerRef.current == null) {
+      const startedAt = trapViewStartedAtRef.current ?? Date.now();
+      const elapsed = Date.now() - startedAt;
+      if (elapsed >= TRAP_WINDOW_MS) {
+        void tryRecordTrapAvoided(scanKey, price);
+      } else {
+        scheduleTrapRecord(TRAP_WINDOW_MS - elapsed);
+      }
+    }
+
+    return () => {
+      const startedAt = trapViewStartedAtRef.current;
+      const elapsed = startedAt != null ? Date.now() - startedAt : 0;
+      if (trapTimerRef.current) {
+        clearTimeout(trapTimerRef.current);
+        trapTimerRef.current = null;
+      }
+      if (elapsed >= TRAP_WINDOW_MS && trapTimerScanKeyRef.current === scanKey) {
+        void tryRecordTrapAvoided(scanKey, price);
+      }
+    };
+  }, [
+    authLoading,
+    user,
+    isPro,
+    validResult?.brand,
+    validResult?.name,
+    validResult?.verdict,
+    validResult?.price,
+    manualPriceApplied
+  ]);
 
   const ringDashOffset = useMemo(() => {
     const circumference = 188;

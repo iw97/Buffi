@@ -15,8 +15,9 @@ const TRACKING_EXACT = new Set([
   "msclkid"
 ]);
 
-function isGapFamilyHost(hostLower: string): boolean {
-  return hostLower === "gap.com" || hostLower.endsWith(".gap.com");
+export function isGapFamilyHost(hostLower: string): boolean {
+  const h = hostLower.toLowerCase();
+  return h === "gap.com" || h.endsWith(".gap.com");
 }
 
 function isTrackingParam(key: string, gapHost: boolean): boolean {

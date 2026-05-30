@@ -1,8 +1,9 @@
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
-import { cleanProductUrl } from "./cleanProductUrl";
+import { cleanProductUrl, isGapFamilyHost } from "./cleanProductUrl";
 import { isLuxuryBrandForSerpComposition } from "./luxuryBrands";
 import { getCompositionFromGoogleSearch } from "./serpapi";
+import { isZaraProductPageUrl } from "./zaraHints";
 import { scrapeZaraFromUrl } from "./zara";
 import { parseZaraOuterShellComposition } from "./zaraComposition";
 import { fetchWithBrightData } from "./unlockerFetch";
@@ -66,6 +67,12 @@ function normalizePrice(n: number | undefined): number | undefined {
   return n;
 }
 
+function parseGapPriceText(text: string): number | undefined {
+  const m = text.replace(/,/g, "").match(/\$?\s*(\d+(?:\.\d{1,2})?)/);
+  if (!m?.[1]) return undefined;
+  return normalizePrice(parseFloat(m[1]));
+}
+
 /** Extract brand from schema.org Product JSON-LD: brand.name or brand (string). */
 function extractBrandFromJsonLdItem(item: Record<string, unknown>): string | undefined {
   const b = item.brand;
@@ -93,14 +100,48 @@ function splitNameAndBrand(fullName: string): { name: string; brand?: string } {
   return { name: trimmed };
 }
 
+/** Discount copy (e.g. "25–50% off vacation looks") — not fiber composition. */
+function isPromoDiscountText(text: string): boolean {
+  return /\d+%\s*off/i.test(text) || /off\s+\d+%/i.test(text);
+}
+
 /** Heuristic: block looks like a care label / composition line, not random merchandising. */
-function looksLikeCompositionText(text: string): boolean {
+export function looksLikeCompositionText(text: string): boolean {
   const t = text.trim();
   if (t.length < 6 || t.length > 2000) return false;
+  if (isPromoDiscountText(t)) return false;
   if (t.includes("%")) return true;
-  return /cotton|polyester|linen|silk|wool|nylon|viscose|lyocell|modal|cashmere|elastane|spandex|leather|acetate|ramie|hemp|polyamide|acrylic/i.test(
+  return /cotton|polyester|linen|silk|wool|nylon|viscose|lyocell|modal|cashmere|elastane|spandex|leather|acetate|ramie|hemp|polyamide|acrylic|denim/i.test(
     t
   );
+}
+
+function looksLikePromoOrNonCompositionMaterials(text: string): boolean {
+  if (!text?.trim()) return false;
+  if (isPromoDiscountText(text)) return true;
+  return !looksLikeCompositionText(text);
+}
+
+function gapBrandFromHost(host: string): string {
+  const h = host.toLowerCase();
+  if (h.includes("oldnavy")) return "Old Navy";
+  if (h.includes("bananarepublic")) return "Banana Republic";
+  if (h.includes("athleta")) return "Athleta";
+  return "Gap";
+}
+
+/** Extract "Fabric: …" from Gap meta description (SSR PDP when Fabric & care panel is client-only). */
+function extractGapFabricFromMetaDescription(metaDesc: string): string | undefined {
+  const m = metaDesc.match(/Fabric:\s*(.+?),\s*Stretch/i);
+  let fabric = m?.[1]?.replace(/\u200b/g, "").replace(/[.,\s]+$/g, "").trim();
+  if (!fabric || fabric.length < 4) {
+    const broad = metaDesc.match(
+      /(?:shell|body|main fabric|fabric)\s*:\s*([^.,]+(?:\d+\s*%\s*[^.,]+)?)/i
+    );
+    fabric = broad?.[1]?.trim();
+  }
+  if (!fabric || fabric.length < 4) return undefined;
+  return looksLikeCompositionText(fabric) ? fabric : undefined;
 }
 
 // Prevents subcomponent details like
@@ -136,66 +177,70 @@ function normalizeCompositionSearchText(text: string): string {
   return text.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+/** Section labels in care-label copy: "Content: 100% polyester; Lining: 100% cupro". */
+const COMPOSITION_SECTION_LABELS =
+  "content|shell|body|main\\s+fabric|outer|face|lining|trim|gusset|insert|facing|pocket|waistband|liner|interlining";
+
+function isStructuredCompositionDisclosure(text: string): boolean {
+  const t = text.trim();
+  if (new RegExp(`^(?:${COMPOSITION_SECTION_LABELS})\\s*:\\s*\\d`, "i").test(t)) return true;
+  if (new RegExp(`;\\s*(?:${COMPOSITION_SECTION_LABELS})\\s*:\\s*\\d`, "i").test(t)) return true;
+  return false;
+}
+
+/** "Lining: 100% cupro" as a section — not "polyester lining:" where lining modifies the fiber. */
+function subcomponentAppearsAsLabel(text: string, word: string): boolean {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|;\\s*)\\b${escaped}\\s*:\\s*\\d`, "i").test(text.trim());
+}
+
+/** Sub-component modifier: "100% polyester lining" or "polyester lining:" — not "Lining: 100% cupro". */
+function subcomponentAppearsAsModifier(text: string, word: string): boolean {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp(`\\d{1,3}\\s*%\\s*(?:${BROAD_TEXT_FIBERS})\\s+${escaped}\\b`, "i").test(text)) {
+    return true;
+  }
+  if (
+    new RegExp(`\\b(?:${BROAD_TEXT_FIBERS})\\s+${escaped}\\s*:`, "i").test(text) &&
+    !subcomponentAppearsAsLabel(text, word)
+  ) {
+    return true;
+  }
+  if (
+    text.length < 80 &&
+    new RegExp(`\\b(?:${BROAD_TEXT_FIBERS})\\s+${escaped}\\b`, "i").test(text) &&
+    !subcomponentAppearsAsLabel(text, word)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function isGussetFalsePositive(text: string): boolean {
-  if (!text) {
-    console.log("[GFP] empty input, returning false");
+  if (!text?.trim()) return false;
+
+  if (isStructuredCompositionDisclosure(text)) {
+    debugScrapeMaterials("isGussetFalsePositive", {
+      input: text.slice(0, 200),
+      returned: false,
+      reason: "structured-composition-disclosure"
+    });
     return false;
   }
 
-  const subcomponentWords = SUBCOMPONENT_WORDS;
-
-  console.log("[GFP] input length:", text.length);
-  console.log("[GFP] input:", text.slice(0, 120));
-
-  const textLower = text.toLowerCase();
-  const hasSubcomponentWord = subcomponentWords.some((w) => textLower.includes(w));
-  console.log("[GFP] hasSubcomponentWord:", hasSubcomponentWord);
-
-  // Check 1 — short text with subcomponent word
-  console.log("[GFP] check1 — length < 80:", text.length < 80);
-  if (hasSubcomponentWord && text.length < 80) {
-    console.log("[GFP] returning true via check1");
+  for (const w of SUBCOMPONENT_WORDS) {
+    if (subcomponentAppearsAsLabel(text, w)) continue;
+    if (!subcomponentAppearsAsModifier(text, w)) continue;
     debugScrapeMaterials("isGussetFalsePositive", {
-      input: text,
-      inputLength: text.length,
-      hasSubcomponentWord,
+      input: text.slice(0, 200),
       returned: true,
-      reason: "short-text-with-subcomponent"
+      reason: `subcomponent-modifier:${w}`
     });
     return true;
   }
 
-  // Check 2 — proximity check
-  if (hasSubcomponentWord) {
-    for (const w of subcomponentWords) {
-      const idx = textLower.indexOf(w);
-      if (idx < 0) continue;
-      console.log("[GFP] found subcomponent word:", w, "at index:", idx);
-      const localStart = Math.max(0, idx - BROAD_TEXT_CONTEXT_RADIUS);
-      const localEnd = Math.min(text.length, idx + w.length + BROAD_TEXT_CONTEXT_RADIUS);
-      const local = textLower.slice(localStart, localEnd);
-      console.log("[GFP] local window:", local);
-      const hasPercent = /\d{1,3}\s*%\s*[a-z]+/i.test(local);
-      console.log("[GFP] local has percent+fiber:", hasPercent);
-      if (hasPercent) {
-        console.log("[GFP] returning true via check2");
-        debugScrapeMaterials("isGussetFalsePositive", {
-          input: text,
-          inputLength: text.length,
-          hasSubcomponentWord,
-          returned: true,
-          reason: `subcomponent-near-percent-fiber:${w}`
-        });
-        return true;
-      }
-    }
-  }
-
-  console.log("[GFP] returning false");
   debugScrapeMaterials("isGussetFalsePositive", {
-    input: text,
-    inputLength: text.length,
-    hasSubcomponentWord,
+    input: text.slice(0, 200),
     returned: false
   });
   return false;
@@ -374,22 +419,36 @@ function extractMaterialFromJsonLdNode(node: Record<string, unknown>): string | 
   return undefined;
 }
 
+function collectJsonLdNodes(parsed: unknown): Record<string, unknown>[] {
+  if (Array.isArray(parsed)) {
+    return parsed.filter(
+      (node): node is Record<string, unknown> =>
+        node != null && typeof node === "object" && !Array.isArray(node)
+    );
+  }
+  if (parsed != null && typeof parsed === "object") {
+    const obj = parsed as Record<string, unknown>;
+    const graph = obj["@graph"];
+    if (Array.isArray(graph)) {
+      return graph.filter(
+        (node): node is Record<string, unknown> =>
+          node != null && typeof node === "object" && !Array.isArray(node)
+      );
+    }
+    return [obj];
+  }
+  return [];
+}
+
 function tryExtractMaterialFromJsonLdScript(contentStr: string, pageText?: string): string | undefined {
   try {
-    const data = JSON.parse(contentStr) as Record<string, unknown>;
-    const graph = data["@graph"];
-    const nodes: Array<Record<string, unknown>> = Array.isArray(graph)
-      ? (graph as Record<string, unknown>[])
-      : [data];
+    const nodes = collectJsonLdNodes(JSON.parse(contentStr));
     for (const node of nodes) {
       if (!node || typeof node !== "object") continue;
       const m = extractMaterialFromJsonLdNode(node);
       const accepted = acceptMaterialsCandidate(m, "json-ld-node", { pageText });
       if (accepted) return accepted;
     }
-    const top = extractMaterialFromJsonLdNode(data);
-    const acceptedTop = acceptMaterialsCandidate(top, "json-ld-top", { pageText });
-    if (acceptedTop) return acceptedTop;
   } catch {
     /* ignore */
   }
@@ -713,6 +772,25 @@ function hasSchemaOrgType(node: Record<string, unknown>, typeName: string): bool
   return false;
 }
 
+/** True when JSON-LD includes schema.org Product or ProductGroup. */
+export function isRealProductPage($: cheerio.CheerioAPI): boolean {
+  for (const el of $('script[type="application/ld+json"]').toArray()) {
+    const contentStr = ($(el).html() || "").trim();
+    if (!contentStr) continue;
+    try {
+      const nodes = collectJsonLdNodes(JSON.parse(contentStr));
+      for (const node of nodes) {
+        if (hasSchemaOrgType(node, "Product") || hasSchemaOrgType(node, "ProductGroup")) {
+          return true;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return false;
+}
+
 type GenericHtmlExtraction = {
   brand?: string;
   name?: string;
@@ -772,17 +850,7 @@ async function extractGenericProductFromLoadedCheerio(
       const contentStr = ($(el).html() || "").trim();
       if (!contentStr) continue;
       try {
-        const data = JSON.parse(contentStr) as Record<string, unknown> & {
-          "@graph"?: unknown[];
-          "@type"?: string;
-          name?: string;
-          brand?: unknown;
-          description?: string;
-        };
-        const graph = data["@graph"];
-        const list: Array<Record<string, unknown>> = Array.isArray(graph)
-          ? (graph as Record<string, unknown>[])
-          : [data];
+        const list = collectJsonLdNodes(JSON.parse(contentStr));
         for (const item of list) {
           if (!item || typeof item !== "object") continue;
 
@@ -796,7 +864,10 @@ async function extractGenericProductFromLoadedCheerio(
             const imageFromLd = extractSchemaOrgImageUrl(item);
             if (imageFromLd && !imageUrl) imageUrl = imageFromLd;
             const offerPrice = parseSchemaOrgOfferPrice(item);
-            if (offerPrice != null && priceFromJsonLd == null) priceFromJsonLd = offerPrice;
+            if (offerPrice != null && priceFromJsonLd == null) {
+              priceFromJsonLd = offerPrice;
+              console.log(LOG_PREFIX, `[${pipelineLabel}] JSON-LD Product price`, offerPrice);
+            }
             const sku = item.sku as string | undefined;
             if (typeof sku === "string" && sku.trim() && !styleNumber) styleNumber = sku.trim().slice(0, 50);
             const productId = item.productID as string | undefined;
@@ -935,6 +1006,42 @@ async function extractGenericProductFromLoadedCheerio(
         $('[class*="material"]').text().trim() || $('[class*="composition"]').text().trim(),
         pageTextForComposition
       );
+    } else if (isGapFamilyHost(host)) {
+      brand = brand ?? gapBrandFromHost(host);
+      name =
+        name ??
+        ($('[data-testid="product-title"]').first().text().trim() ||
+          $("h1.pdp-product-title").first().text().trim() ||
+          $("h1").first().text().trim());
+      const metaDesc = $('meta[name="description"]').attr("content")?.trim() ?? "";
+      const gapMetaFabric = extractGapFabricFromMetaDescription(metaDesc);
+      const gapFabricPanel =
+        $('[data-testid="pdp-product-info-container"]')
+          .find(".fds_panel__title")
+          .filter((_, el) => /fabric\s*&\s*care/i.test($(el).text()))
+          .first()
+          .closest(".fds_panel")
+          .find(".product-information-item__list li")
+          .toArray()
+          .map((el) => $(el).text().trim())
+          .filter(Boolean)
+          .join("; ");
+      materials = pickMaterials(
+        materials,
+        gapMetaFabric || gapFabricPanel || undefined,
+        pageTextForComposition
+      );
+      if (!priceFromJsonLd) {
+        const priceText =
+          $('[data-testid="pdp-markdown-title-price"] .current-black-promo-price').first().text().trim() ||
+          $(".current-black-promo-price").first().text().trim();
+        const parsed = parseGapPriceText(priceText);
+        if (parsed != null) priceFromJsonLd = parsed;
+      }
+      console.log(LOG_PREFIX, `[${pipelineLabel}] Gap family host`, {
+        hasProductJsonLd: isRealProductPage($),
+        gapMetaFabric: gapMetaFabric?.slice(0, 80) ?? null
+      });
     }
 
     // Generic materials extraction for all other retailers (validated so we don't grab unrelated UI copy).
@@ -1166,7 +1273,9 @@ export async function scrapeProductFromUrl(url: string): Promise<{
     imageUrl?: string | null;
   } | null = null;
 
-  if (host.includes("zara.com")) {
+  const zaraHost = isZaraProductPageUrl(cleaned);
+
+  if (zaraHost) {
     const zara = await scrapeZaraFromUrl(cleaned);
     if (zara && (zara.name || zara.brand)) {
       const zaraMaterials = acceptMaterialsCandidate(
@@ -1201,12 +1310,18 @@ export async function scrapeProductFromUrl(url: string): Promise<{
       };
       console.log(
         LOG_PREFIX,
-        "Zara metadata without composition; continuing pipeline for Bright Data / HTML",
+        "Zara metadata without composition; returning name/price — no Bright Data or generic HTML fallback",
         cleaned.slice(0, 80)
       );
-    } else {
-      console.log(LOG_PREFIX, "Zara-specific scrape empty; falling back to generic HTML", cleaned.slice(0, 80));
+      return {
+        brand: zaraPartial.brand,
+        name: zaraPartial.name,
+        price: zaraPartial.price,
+        description: zaraPartial.description,
+        imageUrl: zaraPartial.imageUrl ?? null
+      };
     }
+    console.log(LOG_PREFIX, "Zara-specific scrape empty; falling back to generic HTML (no Bright Data)", cleaned.slice(0, 80));
   }
 
   const fetchUrls = host.includes("shein.") ? sheinFetchUrlCandidates(cleaned) : [cleaned];
@@ -1253,7 +1368,23 @@ export async function scrapeProductFromUrl(url: string): Promise<{
     console.log(LOG_PREFIX, "generic HTML fetch did not return OK body", { tried: fetchUrls.length });
   }
 
-  const zaraHost = host.includes("zara.com");
+  const gapHost = isGapFamilyHost(host);
+  let gapShellPage = false;
+  if (fetchOk && html.trim()) {
+    const $pageCheck = cheerio.load(html);
+    const shellPage = !isRealProductPage($pageCheck);
+    gapShellPage = gapHost && shellPage;
+    if (shellPage && cheerioExtraction?.materials?.trim()) {
+      if (looksLikePromoOrNonCompositionMaterials(cheerioExtraction.materials)) {
+        console.log(LOG_PREFIX, "shell page — rejecting promo/non-composition materials", {
+          host: host.slice(0, 40),
+          preview: cheerioExtraction.materials.slice(0, 80)
+        });
+        cheerioExtraction = { ...cheerioExtraction, materials: undefined };
+      }
+    }
+  }
+
   const step2CheerioFoundMaterials = !!cheerioExtraction?.materials?.trim();
   debugScrapeMaterials("step2-cheerio-html", {
     raw: cheerioExtraction?.materials ?? null,
@@ -1262,14 +1393,32 @@ export async function scrapeProductFromUrl(url: string): Promise<{
   console.log("[scrape] step 2 Cheerio:", step2CheerioFoundMaterials ? "found" : "not found");
   console.log("[scrape] pre-BrightData condition check", {
     zaraHost,
+    gapHost,
+    gapShellPage,
     standardFetchFailed,
     hasMaterialsFromGeneric: !!cheerioExtraction?.materials?.trim()
   });
-  const shouldTryBrightData =
-    !step2CheerioFoundMaterials && (!zaraHost || zaraPartial != null);
+
+  let shouldTryBrightData = !step2CheerioFoundMaterials;
+  if (gapHost && gapShellPage && !step2CheerioFoundMaterials) {
+    shouldTryBrightData = true;
+    console.log(
+      LOG_PREFIX,
+      "Gap page missing Product JSON-LD (shell/SSR) — forcing Bright Data for product data"
+    );
+  }
+  if (zaraHost) {
+    shouldTryBrightData = false;
+    console.log(
+      LOG_PREFIX,
+      "skipping Bright Data for Zara — name inference handles this"
+    );
+  }
   debugScrapeMaterials("bright-data-decision", {
     triggered: shouldTryBrightData,
     zaraHost,
+    gapHost,
+    gapShellPage,
     step2CheerioFoundMaterials
   });
 
@@ -1283,27 +1432,8 @@ export async function scrapeProductFromUrl(url: string): Promise<{
       console.log("[scrape] retrying parse with Bright Data HTML");
       const $bd = cheerio.load(brightDataHtml);
       bdExtraction = await extractGenericProductFromLoadedCheerio($bd, host, "Bright Data HTML (Cheerio)");
-      if (zaraHost) {
-        const zaraComp = parseZaraOuterShellComposition(brightDataHtml);
-        if (zaraComp) {
-          const accepted = acceptMaterialsCandidate(zaraComp) ?? zaraComp;
-          if (bdExtraction) {
-            bdExtraction.materials = accepted;
-            bdExtraction.brand = bdExtraction.brand ?? "Zara";
-            bdExtraction.name = bdExtraction.name ?? zaraPartial?.name;
-            bdExtraction.priceFromJsonLd = bdExtraction.priceFromJsonLd ?? zaraPartial?.price;
-          } else {
-            bdExtraction = {
-              brand: "Zara",
-              name: zaraPartial?.name,
-              materials: accepted,
-              imageUrl: zaraPartial?.imageUrl ?? null,
-              priceFromJsonLd: zaraPartial?.price,
-              materialsFromSerpSearch: false
-            };
-          }
-        }
-      }
+      console.log("[BD] price found:", bdExtraction?.priceFromJsonLd ?? null);
+      console.log("[BD] materials found:", bdExtraction?.materials ?? null);
       console.log("[BD] extraction result:", {
         hasMaterials: !!bdExtraction?.materials,
         hasName: !!bdExtraction?.name,
@@ -1322,26 +1452,12 @@ export async function scrapeProductFromUrl(url: string): Promise<{
       rawMaterials: bdExtraction?.materials ?? null
     });
     console.log("[scrape] step 3 Bright Data:", bdExtraction?.materials?.trim() ? "found" : "not found");
-  } else if (zaraHost && !step2CheerioFoundMaterials && !zaraPartial) {
-    console.log("[scrape] step 2 failed; Bright Data step 3 skipped for Zara (no partial metadata)");
   }
 
   let merged: GenericHtmlExtraction | null = null;
   merged = mergeGenericHtmlExtractions(merged, shopifySeed);
   merged = mergeGenericHtmlExtractions(merged, cheerioExtraction);
   merged = mergeGenericHtmlExtractions(merged, bdExtraction);
-
-  if (zaraPartial) {
-    merged = mergeGenericHtmlExtractions(merged, {
-      brand: zaraPartial.brand,
-      name: zaraPartial.name,
-      materials: undefined,
-      description: zaraPartial.description,
-      imageUrl: zaraPartial.imageUrl ?? null,
-      priceFromJsonLd: zaraPartial.price,
-      materialsFromSerpSearch: false
-    });
-  }
 
   if (!merged?.materials?.trim()) {
     console.log("[scrape] all methods exhausted, returning null");

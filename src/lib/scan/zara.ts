@@ -4,7 +4,6 @@
 
 import { parseFiberCompositionFromZaraContext } from "./analyze";
 import { getGoogleShoppingResults } from "./serpapi";
-import { fetchWithBrightData } from "./unlockerFetch";
 import { parseZaraOuterShellComposition, pickCompositionFromStrings } from "./zaraComposition";
 
 const LOG = "[zara]";
@@ -417,24 +416,10 @@ export async function scrapeZaraFromUrl(productPageUrl: string): Promise<ZaraScr
     });
   }
 
-  let compositionFrom: "extra_detail" | "itxrest" | "html" | "bright_data" | "claude_title" | "none" =
-    "none";
+  let compositionFrom: "extra_detail" | "itxrest" | "html" | "claude_title" | "none" = "none";
   if (extraDetailComposition) compositionFrom = "extra_detail";
   else if (itxrestComposition) compositionFrom = "itxrest";
   else if (htmlComposition) compositionFrom = "html";
-
-  if (!materials?.trim()) {
-    const bdHtml = await fetchWithBrightData(productPageUrl);
-    if (bdHtml) {
-      const fromBd = parseZaraOuterShellComposition(bdHtml);
-      if (fromBd) {
-        materials = fromBd;
-        htmlComposition = true;
-        compositionFrom = "bright_data";
-        console.log(LOG, "composition from Bright Data outer shell", { preview: fromBd.slice(0, 80) });
-      }
-    }
-  }
 
   let method = resolveZaraMethod(extraOk, itxOk, htmlWasOnlySource);
   let usedClaudeForComposition = false;
