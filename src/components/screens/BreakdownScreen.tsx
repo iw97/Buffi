@@ -408,7 +408,7 @@ export function BreakdownScreen() {
       if (trapTimerRef.current) {
         clearTimeout(trapTimerRef.current);
       }
-      trapTimerRef.current = window.setTimeout(() => {
+      trapTimerRef.current = setTimeout(() => {
         trapTimerRef.current = null;
         void tryRecordTrapAvoided(scanKey, price);
       }, delayMs);
