@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { getAnthropicClient, parseClaudeJsonResponse } from "@/lib/anthropic";
+import { getAdminAuth, getAdminFirestore } from "@/lib/firebase/admin";
+import { FieldValue } from "firebase-admin/firestore";
+import { CLAUDE_PRIMARY_MODEL } from "@/lib/scan/models";
 
 const VISION_URL = "https://vision.googleapis.com/v1/images:annotate";
+
+function readBearerToken(req: NextRequest): string | null {
+  const raw = req.headers.get("authorization") ?? "";
+  const [scheme, token] = raw.split(" ");
+  if (scheme?.toLowerCase() !== "bearer" || !token) return null;
+  return token.trim();
+}
 
 export interface ScanTagExtraction {
   fibers: { fiber: string; percentage: number }[];
@@ -10,7 +20,44 @@ export interface ScanTagExtraction {
   confidence: "high" | "medium" | "low";
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse<ScanTagExtraction | { ok: false; confidence: "low"; message: string }>> {
+type ScanTagErrorBody =
+  | { ok: false; confidence: "low"; message: string }
+  | { ok: false; code: string; message: string }
+  | { error: string };
+
+export async function POST(req: NextRequest): Promise<NextResponse<ScanTagExtraction | ScanTagErrorBody>> {
+  const adminAuth = getAdminAuth();
+  if (!adminAuth) {
+    return NextResponse.json({ error: "Server auth is not configured" }, { status: 500 });
+  }
+
+  const token = readBearerToken(req);
+  if (!token) {
+    return NextResponse.json({ error: "Missing bearer token" }, { status: 401 });
+  }
+
+  let uid: string;
+  try {
+    const decoded = await adminAuth.verifyIdToken(token);
+    uid = decoded.uid;
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const adminDb = getAdminFirestore();
+  if (adminDb) {
+    const userSnap = await adminDb.collection("users").doc(uid).get();
+    const userData = userSnap.data();
+    const isPro = userData?.isPro === true;
+    const completedScans = typeof userData?.completedScans === "number" ? userData.completedScans : 0;
+    if (!isPro && completedScans >= 2) {
+      return NextResponse.json(
+        { ok: false, code: "scan_limit_reached", message: "Scan limit reached. Upgrade to Buffi Pro to continue scanning." },
+        { status: 403 }
+      );
+    }
+  }
+
   try {
     const body = await req.json();
     let base64 = typeof body?.image === "string" ? body.image.trim() : "";
@@ -76,7 +123,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanTagExtrac
       );
     }
 
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = getAnthropicClient();
     const prompt = `Extract fiber composition from this clothing label text. Return JSON only with this shape:
 {
   "fibers": [{ "fiber": string, "percentage": number }],
@@ -84,29 +131,17 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanTagExtrac
   "styleNumber": string or null,
   "confidence": "high" | "medium" | "low"
 }
+Preserve branded fiber names exactly when printed on the label (e.g. "Naia Renew", "Naia") — do not rename them to generic "acetate" if the label specifies the brand. Cellulose acetate / acetate / triacetate are cellulosic (wood pulp); they are not the same as polyester.
 If no composition data is found return confidence: "low" and empty fibers array.
 Raw label text:
 ${rawText.slice(0, 8000)}`;
 
     const message = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: CLAUDE_PRIMARY_MODEL,
       max_tokens: 1024,
       messages: [{ role: "user", content: prompt }]
     });
-    const text =
-      (message.content as Array<{ type?: string; text?: string }>)
-        ?.filter((c) => c.type === "text" && c.text)
-        ?.map((c) => c.text!)
-        ?.join("") ?? "";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return NextResponse.json(
-        { ok: false, confidence: "low", message: "Could not parse label" },
-        { status: 200 }
-      );
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]) as ScanTagExtraction;
+    const parsed = parseClaudeJsonResponse<ScanTagExtraction>(message);
     const fibers = Array.isArray(parsed.fibers) ? parsed.fibers : [];
     const confidence = parsed.confidence === "high" || parsed.confidence === "medium" ? parsed.confidence : "low";
     const result: ScanTagExtraction = {
@@ -115,6 +150,24 @@ ${rawText.slice(0, 8000)}`;
       styleNumber: typeof parsed.styleNumber === "string" ? parsed.styleNumber : null,
       confidence
     };
+
+    // Fire-and-forget: log tag scan for manual product matching
+    if (result.fibers.length > 0 || result.styleNumber) {
+      const pendingDb = getAdminFirestore();
+      if (pendingDb) {
+        void pendingDb.collection("pendingMatches").add({
+          uid,
+          styleNumber: result.styleNumber ?? null,
+          fibers: result.fibers,
+          countryOfManufacture: result.countryOfManufacture ?? null,
+          rawOcrPreview: rawText.slice(0, 300),
+          confidence: result.confidence,
+          status: "pending",
+          createdAt: FieldValue.serverTimestamp()
+        }).catch((e: Error) => console.warn("[api/scan-tag] pendingMatches write failed:", e.message));
+      }
+    }
+
     return NextResponse.json(result);
   } catch (e) {
     console.error("[api/scan-tag]", e);

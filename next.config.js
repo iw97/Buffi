@@ -7,8 +7,14 @@ const nextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
-  // Netlify: @netlify/plugin-nextjs (OpenNext) handles build; no output or other overrides needed.
+  // Expose deployment hostname to the client so magic-link `continueUrl` matches preview/prod.
+  env: {
+    NEXT_PUBLIC_VERCEL_URL: process.env.VERCEL_URL ?? "",
+  },
+  // Browsers request /favicon.ico by default; we reuse the OG art until a dedicated .ico exists.
+  async rewrites() {
+    return [{ source: "/favicon.ico", destination: "/og-image.png" }];
+  },
 };
 
 module.exports = nextConfig;
-

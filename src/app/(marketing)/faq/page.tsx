@@ -14,8 +14,12 @@ const ITEMS = [
     a: "Just scan your product's tag if you have it in front of you, or if you're an online shopper, paste the URL. You'll receive a breakdown of the materials in plain English, and our verdict on whether you're paying for the item's true value."
   },
   {
-    q: "I'm a premium member — can I get a refund?",
-    a: "Yes! Reach out to us at heybuffi@gmail.com and we'll take care of you."
+    q: "Can I get a refund?",
+    a: "Yes! Please email us at heybuffi@gmail.com within 7 days of your billing date, and we'll take care of you."
+  },
+  {
+    q: "Can I cancel anytime?",
+    a: "Yes! You may cancel your subscription at any time. Your app access will end at the end of your current billing period, so you will still be able to use Buffi until then."
   },
   {
     q: "I have another question.",

@@ -1,35 +1,31 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { PaywallTierList } from "@/components/paywall/PaywallTierList";
+import { useStripeCheckout } from "@/hooks/useStripeCheckout";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { useScanResult, getStoredScanResult, isValidScanResult, normalizeScanResult } from "@/contexts/ScanResultContext";
-import { addSavedItem, removeSavedItem, setUserProfile } from "@/lib/firebase/firestore";
-import { isFirebaseConfigured } from "@/lib/firebase/client";
-import type { ScanAnalysis } from "@/lib/scan/types";
-import type { BetterAlternativeCard, BetterAlternativesPayload } from "@/lib/better-alternatives/types";
-
+import { addSavedItem, addScanHistoryEntry, incrementScannedCount, removeSavedItem, setUserProfile } from "@/lib/firebase/firestore";
+import { isFirebaseConfigured } from "@/lib/firebase";
+import type { ScanAnalysis, AlternativeSuggestion } from "@/lib/scan/types";
+import { MATERIALS_NOT_DETECTED_TAG } from "@/lib/scan/analyze";
+import { PETROLEUM_SYNTHETIC, PREMIUM_NATURAL, STANDARD_NATURAL, PREMIUM_CELLULOSIC, STANDARD_CELLULOSIC, DEFAULT_WEAR_COUNT } from "@/lib/scan/verdict";
 type InfoId = "material" | "cpw" | "markup";
 
-/** Always synthetic; never tag as natural. */
-const SYNTHETIC_FIBERS = [
-  "polyurethane",
-  "polyester",
-  "nylon",
-  "polyamide",
-  "elastane",
-  "spandex",
-  "acrylic",
-  "lycra",
-  "gore-tex",
-  "viscose",
-  "rayon"
+const NATURAL_OR_CELLULOSIC = [
+  ...PREMIUM_NATURAL,
+  ...STANDARD_NATURAL,
+  ...PREMIUM_CELLULOSIC,
+  ...STANDARD_CELLULOSIC,
 ];
 
 function fiberKind(fiber: string): "synthetic" | "natural" {
   const lower = fiber.toLowerCase();
-  return SYNTHETIC_FIBERS.some((s) => lower.includes(s)) ? "synthetic" : "natural";
+  if (PETROLEUM_SYNTHETIC.some((s) => lower.includes(s))) return "synthetic";
+  if (NATURAL_OR_CELLULOSIC.some((c) => lower.includes(c))) return "natural";
+  return "natural";
 }
 
 function badgeForKind(kind: "synthetic" | "natural"): string {
@@ -47,6 +43,19 @@ function verdictToStampClass(verdict: string): "trap" | "win" | "think-twice" {
   if (verdict === "Retail Trap") return "trap";
   if (verdict === "Think Twice") return "think-twice";
   return "win";
+}
+
+function verdictDisplayLabel(verdict: string): string {
+  switch (verdict) {
+    case "Retail Trap":
+      return "Not worth it.";
+    case "Worth It":
+      return "Worth It.";
+    case "Think Twice":
+      return "Think Twice.";
+    default:
+      return verdict.endsWith(".") ? verdict : `${verdict}.`;
+  }
 }
 
 /** Small copy shown under each verdict. */
@@ -102,52 +111,6 @@ function getMarkupMidpoint(a: ScanAnalysis): number {
   return a.markup ?? 0;
 }
 
-function betterAltBadgeLabel(badge: BetterAlternativeCard["badge"]): string {
-  switch (badge) {
-    case "more_natural":
-      return "More natural fibers";
-    case "lower_markup":
-      return "Lower markup";
-    case "better_cpw":
-      return "Better cost per wear";
-    default:
-      return "";
-  }
-}
-
-function BetterAltProductCard({ card }: { card: BetterAlternativeCard }) {
-  const [imgErr, setImgErr] = useState(false);
-  const priceStr =
-    card.price > 0
-      ? `$${card.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-      : "—";
-  return (
-    <a
-      href={card.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="better-alt-card"
-    >
-      <div className="better-alt-card-img-wrap">
-        {card.imageUrl && !imgErr ? (
-          <img src={card.imageUrl} alt="" onError={() => setImgErr(true)} />
-        ) : (
-          <div className="better-alt-card-img-placeholder" aria-hidden />
-        )}
-      </div>
-      <div className="better-alt-card-body">
-        <div className="better-alt-card-title">{card.title}</div>
-        <div className="better-alt-card-brand">{card.brand}</div>
-        <div className="better-alt-card-price-row">
-          <span className="better-alt-card-price">{priceStr}</span>
-          <span className="better-alt-card-badge">{betterAltBadgeLabel(card.badge)}</span>
-        </div>
-        <div className="better-alt-card-fiber">{card.fiberSummary}</div>
-      </div>
-    </a>
-  );
-}
-
 function analysisToSavedItem(a: ScanAnalysis) {
   const fibers = a.materials.map((m) => `${m.fiber} ${m.percentage}%`);
   const estCost = getMaterialCostMidpoint(a);
@@ -164,12 +127,22 @@ function analysisToSavedItem(a: ScanAnalysis) {
     verdictReason: a.verdictReason,
     tags: a.tags,
     isEstimated: true,
-    confidenceTier: 1
+    confidenceTier: a.confidenceTier ?? 1
+  };
+}
+
+function analysisToScanHistoryEntry(a: ScanAnalysis) {
+  return {
+    brandName: a.brand,
+    itemName: a.name,
+    verdict: verdictToSavedVerdict(a.verdict),
+    confidenceTier: a.confidenceTier ?? 1
   };
 }
 
 export function BreakdownScreen() {
   const router = useRouter();
+  const { startCheckout, checkoutError } = useStripeCheckout();
   const auth = useAuthOptional();
   const authLoading = auth?.loading ?? true;
   const isConfigured = auth?.isConfigured ?? false;
@@ -247,21 +220,81 @@ export function BreakdownScreen() {
   const isSaved = !!savedItemId;
   const [toast, setToast] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const isProFromProfile = auth?.profile?.isPro ?? false;
-  const [isProOverride, setIsProOverride] = useState(false);
-  const isPro = isProFromProfile || isProOverride;
+  const isPro = auth?.profile?.isPro ?? false;
+  const completedScans = auth?.profile?.completedScans ?? 0;
 
   // When scraper (or Claude) cannot provide a price (e.g. JS-rendered + bot detection),
   // allow user to enter price manually and recompute markup / cost-per-wear client-side.
   const [manualPriceInput, setManualPriceInput] = useState("");
   const [manualPriceApplied, setManualPriceApplied] = useState<number | null>(null);
   const [imageError, setImageError] = useState(false);
-  const [betterAlts, setBetterAlts] = useState<BetterAlternativesPayload | null>(null);
-  const [betterAltsLoading, setBetterAltsLoading] = useState(false);
-
-  const score = 25; // TODO: derive from analysis
+  const [alternatives, setAlternatives] = useState<AlternativeSuggestion[] | null>(null);
+  const [alternativesLoading, setAlternativesLoading] = useState(false);
+  const alternativesFetched = useRef(false);
+  const score = useMemo(() => {
+    const entries = result?.valuesMatch;
+    if (!entries || entries.length === 0) return 0;
+    const passCount = entries.filter(e => e.state === "pass").length;
+    return Math.round((passCount / entries.length) * 100);
+  }, [result?.valuesMatch]);
   const imageUrl = result?.imageUrl ?? null;
   const showProductImage = imageUrl && !imageError;
+
+  const hasFinalizedCurrentScan = useRef(false);
+  useEffect(() => {
+    if (hasFinalizedCurrentScan.current) return;
+    if (!isConfigured || authLoading || !user || !validResult) return;
+
+    if (!isPro && completedScans >= 2) {
+      hasFinalizedCurrentScan.current = true;
+      clearResult();
+      router.replace("/paywall");
+      return;
+    }
+
+    hasFinalizedCurrentScan.current = true;
+    if (isPro) {
+      void addScanHistoryEntry(user.uid, analysisToScanHistoryEntry(validResult));
+      void incrementScannedCount(user.uid);
+      return;
+    }
+
+    void (async () => {
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/increment-scan-count", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error("Could not increment scan count");
+        const data = (await res.json()) as { completedScans?: number; previousCompletedScans?: number };
+        const previousCompletedScans = data.previousCompletedScans ?? 0;
+
+        await addScanHistoryEntry(user.uid, analysisToScanHistoryEntry(validResult));
+
+        if (previousCompletedScans === 0 && scan) {
+          const firstScanSavedId = await addSavedItem(user.uid, { ...scan, firstScan: true });
+          await setUserProfile(user.uid, { savedCount: (auth?.profile?.savedCount ?? 0) + 1 });
+          setSavedItemId(firstScanSavedId);
+        }
+
+        await auth?.refreshProfile();
+      } catch (e) {
+        setSaveError(e instanceof Error ? e.message : "Could not finalize scan");
+      }
+    })();
+  }, [
+    isConfigured,
+    authLoading,
+    user,
+    validResult,
+    isPro,
+    completedScans,
+    clearResult,
+    router,
+    scan,
+    auth
+  ]);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -273,41 +306,39 @@ export function BreakdownScreen() {
   }, []);
 
   useEffect(() => {
-    if (!validResult) return;
-    const v = validResult.verdict;
-    if (v !== "Think Twice" && v !== "Retail Trap") {
-      setBetterAlts(null);
-      setBetterAltsLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setBetterAltsLoading(true);
-    setBetterAlts(null);
-    fetch("/api/better-alternatives", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scan: validResult })
-    })
-      .then(async (res) => {
-        if (!res.ok) throw new Error("better-alternatives failed");
-        return res.json() as Promise<BetterAlternativesPayload>;
-      })
-      .then((data) => {
-        if (cancelled) return;
-        setBetterAlts(data);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setBetterAlts({ sameBrand: null, sameBrandSkippedMessage: null, crossBrand: null });
+    if (alternativesFetched.current || !user || !validResult) return;
+    if (validResult.verdict !== "Think Twice" && validResult.verdict !== "Retail Trap") return;
+    alternativesFetched.current = true;
+    setAlternativesLoading(true);
+    void (async () => {
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/alternatives", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            brand: validResult.brand,
+            name: validResult.name,
+            price: validResult.price,
+            verdict: validResult.verdict,
+            materials: validResult.materials,
+            markupMin: validResult.markupMin,
+            markupMax: validResult.markupMax,
+            tags: validResult.tags,
+            ...(validResult.garmentCategory && { garmentCategory: validResult.garmentCategory })
+          })
+        });
+        if (res.ok) {
+          const data = (await res.json()) as AlternativeSuggestion[];
+          if (Array.isArray(data) && data.length > 0) setAlternatives(data);
         }
-      })
-      .finally(() => {
-        if (!cancelled) setBetterAltsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [validResult]);
+      } catch {
+        // alternatives are an enhancement — fail silently
+      } finally {
+        setAlternativesLoading(false);
+      }
+    })();
+  }, [user, validResult]);
 
   const ringDashOffset = useMemo(() => {
     const circumference = 188;
@@ -337,6 +368,7 @@ export function BreakdownScreen() {
       setSavedItemId(id);
       showToast();
       await setUserProfile(user.uid, { savedCount: (auth?.profile?.savedCount ?? 0) + 1 });
+      await auth?.refreshProfile();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Save failed");
     }
@@ -350,6 +382,7 @@ export function BreakdownScreen() {
       setSavedItemId(null);
       if (user && auth?.profile)
         await setUserProfile(user.uid, { savedCount: Math.max(0, (auth.profile.savedCount ?? 1) - 1) });
+      await auth?.refreshProfile();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Remove failed");
     }
@@ -367,10 +400,6 @@ export function BreakdownScreen() {
     }
     if (!isLoggedIn) {
       setSavePromptOpen(true);
-      return;
-    }
-    if (!isPro && saveCount >= 2 && !isSaved) {
-      setPremiumOpen(true);
       return;
     }
     toggleSave();
@@ -419,6 +448,18 @@ export function BreakdownScreen() {
     return null;
   }
 
+  const shouldShowPaywall = !!user && !isPro && completedScans >= 2;
+  if (shouldShowPaywall) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-10">
+        <div className="analyzing-label">Redirecting</div>
+        <p className="auth-legal" style={{ color: "var(--text-dim)" }}>
+          Free scans are used up.
+        </p>
+      </div>
+    );
+  }
+
   if (waitingForData) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-10">
@@ -437,6 +478,8 @@ export function BreakdownScreen() {
         .filter((m) => fiberKind(m.fiber) === "synthetic")
         .reduce((sum, m) => sum + m.percentage, 0)
     : 0;
+  /** Petroleum % shown as "plastic" metric; functional synthetics are excluded from this number (composition unchanged). */
+  const plasticMetricSyntheticPct = result?.functionalSynthetic === true ? 0 : syntheticPct;
 
   // Baseline values from analysis
   const basePrice = result?.price ?? 0;
@@ -473,34 +516,18 @@ export function BreakdownScreen() {
       const wearCount = basePrice / result.costPerWear;
       effectiveCostPerWear = wearCount > 0 ? effectivePrice / wearCount : result.costPerWear;
     } else {
-      const assumedWears = 50;
-      effectiveCostPerWear = effectivePrice / assumedWears;
+      effectiveCostPerWear = effectivePrice / DEFAULT_WEAR_COUNT;
     }
   }
 
-  const verdictForAlts = result?.verdict;
-  const showBetterAlternatives =
-    verdictForAlts === "Think Twice" || verdictForAlts === "Retail Trap";
-  const hasBetterAlternativesSection =
-    showBetterAlternatives &&
-    (betterAltsLoading ||
-      (betterAlts &&
-        (betterAlts.sameBrand != null ||
-          betterAlts.crossBrand != null ||
-          (betterAlts.sameBrandSkippedMessage != null && betterAlts.sameBrandSkippedMessage.length > 0))));
-
-  const origBrandForAlts = (result?.brand || "").trim();
-  const showBetterAltFromRow =
-    origBrandForAlts.length > 0 &&
-    !/^unknown$/i.test(origBrandForAlts) &&
-    betterAlts &&
-    (betterAlts.sameBrand != null ||
-      (betterAlts.sameBrandSkippedMessage != null && betterAlts.sameBrandSkippedMessage.length > 0));
   const certifications = Array.isArray(result?.certifications)
     ? result.certifications.filter((c): c is string => typeof c === "string" && c.trim().length > 0)
     : [];
   const showCertifiedMaterials = Boolean(result?.hasCertifiedMaterials) && certifications.length > 0;
-
+  const isZaraEstimatedComposition =
+    (result?.brand || "").trim().toLowerCase() === "zara" && (result?.confidenceTier ?? 0) >= 2;
+  const showMaterialsNotReadFromPage =
+    result?.confidenceTier === 3 && result?.tags?.includes(MATERIALS_NOT_DETECTED_TAG);
   return (
     <div className="min-h-screen flex flex-col">
       <div className="breakdown-header">
@@ -557,7 +584,7 @@ export function BreakdownScreen() {
           <div className={`verdict-stamp ${verdictToStampClass(result!.verdict)}`}>
             <div>
               <div className="verdict-eyebrow">Our Verdict</div>
-              <div className="verdict-text">{result!.verdict}.</div>
+              <div className="verdict-text">{verdictDisplayLabel(result!.verdict)}</div>
               <div className="verdict-subtitle-wrap">{verdictSubtitle(result!.verdict)}</div>
               {result!.verdictSpanNote && (
                 <p className="verdict-span-note">{result!.verdictSpanNote}</p>
@@ -650,7 +677,7 @@ export function BreakdownScreen() {
               <div
                 className={`receipt-val ${result!.functionalSynthetic ? "good" : syntheticPct > 50 ? "bad" : "good"}`}
               >
-                {Math.round(syntheticPct)}%
+                {showMaterialsNotReadFromPage ? "—" : `${Math.round(plasticMetricSyntheticPct)}%`}
               </div>
             </div>
 
@@ -721,30 +748,43 @@ export function BreakdownScreen() {
 
         <div className="pad">
           <div className="section-eyebrow">— Fiber Composition</div>
+          {isZaraEstimatedComposition && (
+            <p className="better-alt-disclaimer">
+              Composition estimated from product name — scan the physical tag for exact materials
+            </p>
+          )}
           {showCertifiedMaterials && (
             <div className="certified-materials-wrap">
               <span className="certified-materials-badge">Certified materials</span>
               <div className="certified-materials-list">{certifications.join(" · ")}</div>
             </div>
           )}
-          <div className="fiber-bars">
-            {result!.materials.map((f) => {
-              const kind = fiberKind(f.fiber);
-              return (
-                <div key={f.fiber} className="fiber-row">
-                  <div className="fiber-row-label">
-                    <div className="fiber-name">
-                      {f.fiber} <span className={`fiber-badge ${kind}`}>{badgeForKind(kind)}</span>
+          {showMaterialsNotReadFromPage ? (
+            <p className="scan-zara-tag-hint auth-legal">
+              We couldn&apos;t read the materials for this product. Scan the physical tag for an accurate breakdown.
+            </p>
+          ) : (
+            <div className="fiber-bars">
+              {result!.materials.map((f) => {
+                const kind = fiberKind(f.fiber);
+                return (
+                  <div key={f.fiber} className="fiber-row">
+                    <div className="fiber-row-label">
+                      <div className="fiber-name">
+                        {f.fiber} <span className={`fiber-badge ${kind}`}>{badgeForKind(kind)}</span>
+                      </div>
+                      <div className="fiber-pct">
+                        {f.percentage}%{isZaraEstimatedComposition ? " Est." : ""}
+                      </div>
                     </div>
-                    <div className="fiber-pct">{f.percentage}%</div>
+                    <div className="fiber-track">
+                      <div className={`fiber-fill ${kind}`} data-width={f.percentage} />
+                    </div>
                   </div>
-                  <div className="fiber-track">
-                    <div className={`fiber-fill ${kind}`} data-width={f.percentage} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="section-divider" />
@@ -779,42 +819,144 @@ export function BreakdownScreen() {
           </div>
         )}
 
-        {hasBetterAlternativesSection && (
+
+        {(alternativesLoading || (alternatives && alternatives.length > 0)) && (
           <>
             <div className="section-divider" />
             <div className="pad">
-              <div className="section-eyebrow">— Found something better?</div>
-              <p className="better-alt-disclaimer">
-                Based on fiber quality and value — not sponsored.
-              </p>
-              {betterAltsLoading ? (
-                <div className="better-alt-skeletons" aria-hidden>
-                  <div className="better-alt-skeleton-card" />
-                  <div className="better-alt-skeleton-card" />
-                </div>
-              ) : (
-                betterAlts && (
-                  <>
-                    {showBetterAltFromRow && (
-                      <>
-                        <div className="better-alt-slot-label better-alt-slot-from">
-                          FROM {origBrandForAlts.toUpperCase()}
-                        </div>
-                        {betterAlts.sameBrand ? (
-                          <BetterAltProductCard card={betterAlts.sameBrand} />
-                        ) : (
-                          <p className="better-alt-skip-msg">{betterAlts.sameBrandSkippedMessage}</p>
+              <div className="section-eyebrow">— Consider instead</div>
+              {alternativesLoading && !alternatives && (
+                <p className="auth-legal" style={{ color: "var(--text-dim)", marginTop: 8 }}>
+                  Finding better options…
+                </p>
+              )}
+              {alternatives && alternatives.length > 0 && (
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                  {alternatives.map((alt, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        border: "1px solid var(--border-light)",
+                        borderRadius: 6,
+                        overflow: "hidden"
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "100%",
+                          aspectRatio: "1 / 1",
+                          background: "rgba(255,255,255,0.04)",
+                          position: "relative",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          overflow: "hidden"
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontFamily: "var(--font-mono, monospace)",
+                            fontSize: 32,
+                            color: "var(--teal)",
+                            opacity: 0.35
+                          }}
+                        >
+                          {alt.brand.charAt(0).toUpperCase()}
+                        </span>
+                        {alt.imageUrl && (
+                          <img
+                            src={alt.imageUrl}
+                            alt={alt.productName}
+                            style={{
+                              position: "absolute",
+                              inset: 0,
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover"
+                            }}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = "none";
+                            }}
+                          />
                         )}
-                      </>
-                    )}
-                    {betterAlts.crossBrand && (
-                      <>
-                        <div className="better-alt-slot-label better-alt-slot-worth">WORTH CONSIDERING</div>
-                        <BetterAltProductCard card={betterAlts.crossBrand} />
-                      </>
-                    )}
-                  </>
-                )
+                      </div>
+                      <div style={{ padding: "10px 12px 14px" }}>
+                        <div
+                          style={{
+                            fontFamily: "var(--font-mono, monospace)",
+                            fontSize: 9,
+                            letterSpacing: "0.08em",
+                            color: "var(--teal)",
+                            marginBottom: 4,
+                            textTransform: "uppercase"
+                          }}
+                        >
+                          {alt.brand}
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: "var(--text)",
+                            lineHeight: 1.3,
+                            marginBottom: 6
+                          }}
+                        >
+                          {alt.productName}
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: 11,
+                            color: "var(--text-dim)",
+                            marginBottom: 1
+                          }}
+                        >
+                          {alt.estimatedPrice}
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: 11,
+                            color: "var(--text-dim)",
+                            marginBottom: 8
+                          }}
+                        >
+                          {alt.keyMaterial}
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: 11,
+                            color: "var(--text-dim)",
+                            fontStyle: "italic",
+                            lineHeight: 1.35,
+                            marginBottom: 12
+                          }}
+                        >
+                          {alt.whyBetter}
+                        </div>
+                        <a
+                          href={`https://www.google.com/search?tbm=shop&q=${encodeURIComponent(alt.searchQuery)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            fontFamily: "var(--font-sans)",
+                            fontSize: 12,
+                            color: "var(--teal)",
+                            textDecoration: "underline",
+                            textUnderlineOffset: 3
+                          }}
+                        >
+                          Search →
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </>
@@ -831,7 +973,7 @@ export function BreakdownScreen() {
             type="button"
             onClick={handleSaveTap}
           >
-            {isSaved ? "✓ Saved" : "🔖 Save"}
+            {isSaved ? "Unsave" : "🔖 Save"}
           </button>
           <button className="btn-share" type="button" onClick={() => setShareOpen(true)}>
             ↑ Share
@@ -908,27 +1050,35 @@ export function BreakdownScreen() {
         <div className="premium-modal-inner" onClick={(e) => e.stopPropagation()}>
           <div className="premium-eyebrow">Buffi Pro</div>
           <div className="premium-title">
-            The full
+            Buffi works for you,
             <br />
-            <em>picture.</em>
+            <em>not for brands.</em>
           </div>
           <div className="premium-subtitle">
-            Unlock everything Buffi has to offer — unlimited saves, deep analytics, and real-time price comparisons.
+            We don&apos;t take sponsored posts, brand deals, or payments from
+            manufacturers. Our verdicts can&apos;t be bought. To keep it that
+            way, Buffi is funded entirely by the people who use it.
+          </div>
+          <div className="premium-sub-line">
+            Join the people who decided they deserved honest information.
           </div>
 
-          <button
-            className="ob-next"
-            type="button"
-            style={{ width: "100%" }}
-            onClick={() => {
-              setIsProOverride(true);
+          <PaywallTierList
+            variant="modal"
+            onSelectPlan={(plan) => {
               setPremiumOpen(false);
-              showToast();
+              void startCheckout(plan);
             }}
-          >
-            Start Pro — $30 / year
+          />
+          {checkoutError && (
+            <p className="auth-legal" style={{ color: "var(--red)", textAlign: "center", marginTop: 4 }}>
+              {checkoutError}
+            </p>
+          )}
+          <button type="button" className="share-close" onClick={() => router.push("/upgrade")} style={{ marginTop: 8 }}>
+            View full upgrade page
           </button>
-          <button className="share-close" type="button" onClick={() => setPremiumOpen(false)} style={{ marginTop: 8 }}>
+          <button className="share-close" type="button" onClick={() => setPremiumOpen(false)} style={{ marginTop: 4 }}>
             Maybe later
           </button>
         </div>
@@ -942,7 +1092,7 @@ export function BreakdownScreen() {
           >
             <div className="share-card-eyebrow">buffi · receipt</div>
             <div className="share-card-headline">
-              {result!.verdict}.
+              {verdictDisplayLabel(result!.verdict)}
               <br />
               {Math.round(getMarkupMidpoint(result!)).toLocaleString()}% markup.
             </div>
@@ -956,7 +1106,7 @@ export function BreakdownScreen() {
                 <div className="share-stat-key">Real Cost</div>
               </div>
               <div className="share-stat">
-                <div className="share-stat-val">{Math.round(syntheticPct)}%</div>
+                <div className="share-stat-val">{Math.round(plasticMetricSyntheticPct)}%</div>
                 <div className="share-stat-key">Synthetic</div>
               </div>
             </div>

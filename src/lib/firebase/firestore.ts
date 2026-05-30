@@ -8,6 +8,8 @@ import {
   addDoc,
   deleteDoc,
   setDoc,
+  updateDoc,
+  increment,
   serverTimestamp,
   query,
   where,
@@ -17,7 +19,7 @@ import {
 } from "firebase/firestore";
 import type { Unsubscribe } from "firebase/firestore";
 import type { Timestamp } from "firebase/firestore";
-import { firestore, firebaseAuth } from "./client";
+import { auth, firestore } from "@/lib/firebase";
 import { COLLECTIONS, type UserProfile, type SavedItem, type ScanHistoryEntry } from "./types";
 
 function timestampToIso(t: unknown): string {
@@ -33,7 +35,7 @@ function getDb() {
 
 function requireAuth(operation: string): boolean {
   if (typeof window === "undefined") return false;
-  if (!firebaseAuth?.currentUser) {
+  if (!auth?.currentUser) {
     console.warn("[Firestore] skipped (not authenticated):", operation);
     return false;
   }
@@ -62,10 +64,13 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   });
 }
 
+function userFieldMissing(data: Record<string, unknown>, key: string): boolean {
+  return !(key in data) || data[key] === undefined;
+}
+
 /**
- * Ensure a user document exists in users/{uid}. If it exists, do nothing.
- * If not (new signup or first time), create it with email, displayName, and default fields.
- * Call from onAuthStateChanged to handle both new signups and returning users.
+ * Ensures users/{uid} has required profile + counter fields. Runs on every sign-in (OAuth, magic link, etc.).
+ * Uses setDoc(merge: true) so existing values are kept; only fills keys that are missing or undefined.
  */
 export async function ensureUserDocument(
   uid: string,
@@ -79,19 +84,24 @@ export async function ensureUserDocument(
     const db = getDb();
     const ref = doc(db, COLLECTIONS.USERS, uid);
     const snap = await getDoc(ref);
-    if (snap.exists()) return;
-    await setDoc(ref, {
-      email: email ?? null,
-      displayName: displayName ?? "",
-      photoURL: photoURL ?? null,
-      createdAt: serverTimestamp(),
-      isPro: false,
-      scanCount: 0,
-      scanCountResetAt: serverTimestamp(),
-      saveCount: 0,
-      savedCount: 0,
-      scannedCount: 0
-    });
+    const data = (snap.exists() ? snap.data() : {}) as Record<string, unknown>;
+    const patch: Record<string, unknown> = {};
+
+    if (userFieldMissing(data, "email")) patch.email = email ?? null;
+    if (userFieldMissing(data, "displayName")) patch.displayName = displayName ?? "";
+    if (userFieldMissing(data, "photoURL")) patch.photoURL = photoURL ?? "";
+    if (userFieldMissing(data, "createdAt")) patch.createdAt = serverTimestamp();
+    if (userFieldMissing(data, "updatedAt")) patch.updatedAt = serverTimestamp();
+    if (userFieldMissing(data, "isPro")) patch.isPro = false;
+    if (userFieldMissing(data, "scanCount")) patch.scanCount = 0;
+    if (userFieldMissing(data, "completedScans")) patch.completedScans = 0;
+    if (userFieldMissing(data, "scanCountResetAt")) patch.scanCountResetAt = serverTimestamp();
+    if (userFieldMissing(data, "savedCount")) patch.savedCount = 0;
+    if (userFieldMissing(data, "scannedCount")) patch.scannedCount = 0;
+
+    if (Object.keys(patch).length === 0) return;
+
+    await setDoc(ref, patch, { merge: true });
   });
 }
 
@@ -103,6 +113,13 @@ export async function setUserProfile(
   const db = getDb();
   const ref = doc(db, COLLECTIONS.USERS, uid);
   await setDoc(ref, { ...data, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+/** Atomically increment scannedCount on the user document. */
+export async function incrementScannedCount(uid: string): Promise<void> {
+  const db = getDb();
+  const ref = doc(db, COLLECTIONS.USERS, uid);
+  await updateDoc(ref, { scannedCount: increment(1), updatedAt: serverTimestamp() });
 }
 
 /** Normalize saved item from Firestore (timestamps → ISO string) */
@@ -122,6 +139,7 @@ function toSavedItem(docId: string, data: Record<string, unknown>): SavedItem {
     tags: Array.isArray(data.tags) ? (data.tags as string[]) : [],
     isEstimated: (data.isEstimated as boolean) ?? true,
     confidenceTier: (data.confidenceTier as number) ?? 0,
+    firstScan: (data.firstScan as boolean) ?? false,
     savedAt: timestampToIso(data.savedAt)
   };
 }

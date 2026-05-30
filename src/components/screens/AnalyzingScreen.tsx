@@ -4,7 +4,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
-import { usePendingScan, useScanResult, useScanError, type ScanErrorCode } from "@/contexts/ScanResultContext";
+import {
+  usePendingScan,
+  useScanResult,
+  useScanError,
+  setZaraUrlTagScanHint,
+  type ScanErrorCode
+} from "@/contexts/ScanResultContext";
+import { isZaraCompositionInsufficient, isZaraProductPageUrl } from "@/lib/scan/zaraHints";
+import type { ScanAnalysis } from "@/lib/scan/types";
 
 type ProgressId = "p1" | "p2" | "p3" | "p4";
 
@@ -76,6 +84,7 @@ export function AnalyzingScreen() {
             composition: pending.tag.composition,
             ...(pending.tag.brand && { brand: pending.tag.brand }),
             ...(pending.tag.price != null && pending.tag.price > 0 && { price: pending.tag.price }),
+            ...(pending.tag.garmentCategory && { garmentCategory: pending.tag.garmentCategory }),
             ...(selectedValues.length > 0 && { selectedValues })
           }
         : { barcode: pending.barcode, ...(selectedValues.length > 0 && { selectedValues }) };
@@ -88,10 +97,26 @@ export function AnalyzingScreen() {
 
     const run = async () => {
       try {
+        if (!user) {
+          console.log("[scan flow] missing user, cannot authorize /api/scan");
+          setLastError("unknown");
+          setPending(null);
+          setFlowError(
+            isConfigured
+              ? "Sign in to run an analysis."
+              : "Cannot verify your session. Ensure Firebase client env vars are set, then sign in."
+          );
+          return;
+        }
         console.log("[scan flow] fetch /api/scan starting");
+        const token = await user.getIdToken();
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        };
         const res = await fetch("/api/scan", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify(body),
           signal: controller.signal
         });
@@ -114,14 +139,30 @@ export function AnalyzingScreen() {
 
         if (!res.ok) {
           console.log("[scan flow] res not ok", res.status, data);
+          if (res.status === 403 && (data as { code?: string }).code === "scan_limit_reached") {
+            setPending(null);
+            hasNavigated.current = true;
+            router.replace("/paywall");
+            return;
+          }
           setLastError(toErrorCode(res.status, data as { code?: string }));
           setPending(null);
-          setFlowError((data.message as string) || `Request failed (${res.status})`);
+          const errMsg =
+            (typeof data.message === "string" && data.message) ||
+            (typeof (data as { error?: string }).error === "string" && (data as { error: string }).error) ||
+            `Request failed (${res.status})`;
+          setFlowError(errMsg);
           return;
         }
         if (data.ok && data.analysis) {
           console.log("[scan flow] success – writing scanResult then navigating");
-          const analysis = data.analysis as Parameters<typeof setResult>[0];
+          const analysis = data.analysis as ScanAnalysis;
+          const scannedUrl = typeof pending?.url === "string" ? pending.url.trim() : "";
+          if (scannedUrl && isZaraProductPageUrl(scannedUrl) && isZaraCompositionInsufficient(analysis)) {
+            setZaraUrlTagScanHint(true);
+          } else {
+            setZaraUrlTagScanHint(false);
+          }
           setResult(analysis);
           hasNavigated.current = true;
           router.replace("/breakdown");

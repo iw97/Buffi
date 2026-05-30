@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { onboardingReturnToQuery } from "@/lib/auth/returnTo";
+import { saveObAnswer } from "@/lib/auth/onboardingAnswers";
 
 const DEFAULT_CHIPS = [
   { label: "Natural fibers only", selected: true },
   { label: "No virgin plastic", selected: false },
-  { label: "Secondhand first", selected: true },
   { label: "Made in USA", selected: false },
   { label: "Union-made", selected: false },
   { label: "Cost-per-wear thinker", selected: true },
@@ -18,11 +19,17 @@ const DEFAULT_CHIPS = [
 
 export function OnboardingValuesScreen() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const stepQ = onboardingReturnToQuery(searchParams);
   const [chips, setChips] = useState(DEFAULT_CHIPS);
 
   const progress = useMemo(
     () => (
       <div className="ob-progress">
+        <div className="ob-pip done" />
+        <div className="ob-pip done" />
+        <div className="ob-pip done" />
+        <div className="ob-pip done" />
         <div className="ob-pip active" />
         <div className="ob-pip" />
         <div className="ob-pip" />
@@ -36,11 +43,11 @@ export function OnboardingValuesScreen() {
       <div className="ob-shell">
         {progress}
 
-        <div className="ob-step-label">Step 1 of 3 · Your Values</div>
+        <div className="ob-step-label">Step 5 of 7</div>
         <h2 className="ob-title">
-          What matters
+          What matters most to you
           <br />
-          most to <em>you?</em>
+          when you <em>shop?</em>
         </h2>
         <p className="ob-desc">
           Select everything that applies. This shapes how we score every item
@@ -65,7 +72,22 @@ export function OnboardingValuesScreen() {
         </div>
 
         <div className="ob-nav">
-          <button className="ob-next" type="button" onClick={() => router.push("/onboarding/priorities")}>
+          <button
+            className="ob-back"
+            type="button"
+            onClick={() => router.push(`/onboarding/awareness${stepQ}`)}
+          >
+            ←
+          </button>
+          <button
+            className="ob-next"
+            type="button"
+            onClick={() => {
+              const selected = chips.filter((c) => c.selected).map((c) => c.label);
+              saveObAnswer("buffi_ob_values", JSON.stringify(selected));
+              router.push(`/onboarding/priorities${stepQ}`);
+            }}
+          >
             Continue →
           </button>
         </div>

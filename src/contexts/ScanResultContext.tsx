@@ -1,9 +1,32 @@
 "use client";
 
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import type { GarmentCategoryId } from "@/lib/scan/garmentCategories";
 import type { ScanAnalysis } from "@/lib/scan/types";
 
 export const SCAN_RESULT_STORAGE_KEY = "buffi_scan_result";
+
+/** One-session UX flag: show Zara tag-scan suggestion on /scan after a weak Zara URL composition. */
+const ZARA_URL_TAG_HINT_KEY = "buffi_zara_url_tag_hint";
+
+export function setZaraUrlTagScanHint(show: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (show) sessionStorage.setItem(ZARA_URL_TAG_HINT_KEY, "1");
+    else sessionStorage.removeItem(ZARA_URL_TAG_HINT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function readZaraUrlTagScanHint(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return sessionStorage.getItem(ZARA_URL_TAG_HINT_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 export function getStoredScanResult(): ScanAnalysis | null {
   if (typeof window === "undefined") return null;
@@ -89,6 +112,7 @@ export interface PendingScan {
     composition: string;
     brand?: string;
     price?: number;
+    garmentCategory?: GarmentCategoryId;
   };
 }
 

@@ -1,30 +1,29 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { getAnthropicClient, parseClaudeJsonResponse } from "@/lib/anthropic";
 import type { RawProductData } from "./types";
-import type { ScanAnalysis, MinimalScanResponse, ValuesMatchEntry, ValuesMatchState } from "./types";
-import { computeVerdict, computeVerdictFromRange, parseFibersToMaterials } from "./verdict";
+import type { ScanAnalysis, MinimalScanResponse, ValuesMatchEntry, ValuesMatchState, VerdictTier, MarkupContext } from "./types";
+import { normalizeMarkupLeniencyFlags } from "./brands";
+import { ETHICAL_BRANDS_CLAUSE, MATERIAL_COST_AND_TAXONOMY_PROMPT } from "./materialCostPrompt";
+import { isZaraProductPageUrl } from "./zaraHints";
+import { getGarmentCategoryLabel } from "./garmentCategories";
+import { computeVerdictFromRange, parseFibersToMaterials } from "./verdict";
+import { CLAUDE_PRIMARY_MODEL, CLAUDE_MINIMAL_MODEL } from "./models";
+
+export const MATERIALS_NOT_DETECTED_TAG = "Materials not detected";
 
 const CLAUDE_TIMEOUT_MS = 45000;
-
-const MATERIAL_COST_RULES = `
-Material cost estimation: Use these fabric costs per yard (USD): Basic cotton $2–4, Premium cotton (combed, pima) $5–9. Polyester $1–3, Nylon $3–6. Basic linen $5–8, Premium linen $9–15. Viscose/Rayon $2–5, Modal $6–10, Lyocell/Tencel $7–12. Acrylic $1–3. Basic wool $8–15, Merino wool $15–30, Cashmere $50–100, Silk $20–40.
-Yardage by category: T-shirt 1.5–2, Dress (simple) 2.5–3.5, Blazer/Jacket 2.5–3.5 plus lining, Trousers/Pants 2–3, Skirt (midi) 2–3, Outerwear coat 3.5–5.
-Add 15–25% for thread, labels, packaging, trimmings. Add 30–50% for labor on top of materials.
-Certified/recycled material premiums (apply when detected in product description, composition notes, or known brand context): recycled polyester 1.4x base polyester cost; REPREVE or OceanCycle recycled polyester 1.8x base polyester cost; recycled nylon 1.5x base nylon cost; GOTS certified organic cotton 1.6x base cotton cost; Bluesign-certified materials 1.3x relevant base cost. Fair Trade certified manufacturing adds an additional $8–$15 to total estimated production cost regardless of fiber type.
-When certified/recycled materials are detected, set hasCertifiedMaterials: true, return certifications as an array of strings (e.g. ["REPREVE", "OceanCycle", "Fair Trade"]), and acknowledge this context in verdictReason.
-Return estimatedMaterialCostMin and estimatedMaterialCostMax (USD): total cost to produce including materials and basic labor. The range should reflect genuine uncertainty — typically ±30–40% around the midpoint for standard garments, wider for complex construction or specialty fibers.
-markupMin = (price / costMax - 1) * 100, markupMax = (price / costMin - 1) * 100 (so markupMin is the conservative/low markup, markupMax is the high markup).
-`;
+const ZARA_TITLE_COMPOSITION_TIMEOUT_MS = 15000;
 
 const MINIMAL_SCAN_SYSTEM_PROMPT = `You are a material intelligence analyst for clothing and apparel. You will receive JSON input with: brandName, fibers (array of strings, e.g. "Cotton 100%" or "Polyester 80%, Elastane 20%"), price (retail price in USD), and confidenceTier (number).
 
 Apply these rules:
-- Small/indie brand: if brandName suggests an independent or small brand (not a major retailer or fast-fashion chain), set isSmallBusiness: true; higher markups are normal for small-business sustainability.
-- Fiber quality: premium natural (cashmere, silk, merino wool, modal, linen, lyocell/Tencel) > standard natural (cotton, wool, hemp) > synthetic. Synthetics (never tag as natural): polyurethane, polyester, nylon, acrylic, spandex, elastane, lycra, Gore-Tex, viscose, rayon. Favor verdict for premium-natural-heavy garments.
-- verdictReason must include context (e.g. small-brand markup vs fast-fashion synthetic). Verdict stays "Retail Trap" or "Worth It".
+- Small/indie brand: if brandName suggests an independent or small brand (not a major retailer, global athletic label, or fast-fashion chain), set isSmallBusiness: true. Never set isSmallBusiness for megabrands such as Nike, Adidas, Under Armour, Lululemon, H&M, Zara, Uniqlo, Gap, or Shein — those are not indie economics.
+- Classify every fiber using **PART 1** taxonomy below. **Never** count cellulosic fibers (viscose, rayon, modal, Tencel, Naia, acetate, etc.) toward petroleum "synthetic %" / plastic framing — only Part 1 **SYNTHETIC / PETROLEUM-BASED** fibers count.
+- verdictReason must include context (fiber class, markup, brand). Verdict label is advisory only (app uses three tiers: Worth It | Think Twice | Retail Trap).
 - markupContext: exactly one of "justified" | "partially justified" | "unjustified" based on fiber quality and small-business context.
 - functionalSynthetic: true when garment category makes synthetics appropriate (rainwear, activewear, swimwear, lingerie, hosiery, tights); false for formal/everyday/casual.
-- isEthicalBrand: true when brand is a known ethical/sustainable brand (Patagonia, Eileen Fisher, Reformation, Kotn, Pact, Thought Clothing, Amour Vert, Girlfriend Collective, Whimsy and Row, Colorful Standard, Organic Basics, tentree, prAna, Stella McCartney, Veja, Allbirds, Mara Hoffman). Apply same higher markup threshold as indie brands; verdictReason should acknowledge sustainability reputation and supply-chain transparency.
-${MATERIAL_COST_RULES}
+- isEthicalBrand: true when brand is a known ethical/sustainable brand: ${ETHICAL_BRANDS_CLAUSE}. Apply Part 5 markup interpretation; acknowledge in verdictReason.
+
+${MATERIAL_COST_AND_TAXONOMY_PROMPT}
 
 Respond with only valid JSON and nothing else. No markdown, no code fence, no explanation. The JSON must have exactly these fields:
 - estimatedMaterialCostMin (number, USD)
@@ -47,96 +46,147 @@ const VALUES_EVALUATION_RULES = `
 **Values evaluation (only for values in the selectedValues array)**
 For each value in selectedValues, evaluate the product and return exactly one of: pass, fail, or unverified. Use a short note (one phrase) explaining why.
 
-- **Natural fibers only**: pass = 100% natural fibers; fail = any synthetic content; unverified = never (fiber data is always available).
+- **Natural fibers only**: pass = no **petroleum-based** synthetics (Part 1 SYNTHETIC list: polyester, nylon, acrylic, etc.); **natural + cellulosic** (cotton, viscose, Tencel, modal, Naia, etc.) all count toward pass; fail = meaningful petroleum synthetic content; unverified = never.
 - **No virgin plastic**: pass = no polyester, nylon, or acrylic present; fail = any of those present; unverified = never.
 - **Cost-per-wear thinker**: pass = cost per wear under $2.00; fail = cost per wear over $5.00; unverified = if price was not available.
 - **Avoid fast fashion**: pass = brand is not a known fast fashion retailer; fail = brand is a known fast fashion retailer (Shein, Zara, H&M, Primark, Fashion Nova, Boohoo, PrettyLittleThing, ASOS own brand); unverified = brand unknown or ambiguous.
 - **No animal products**: pass = no wool, silk, cashmere, leather, fur, down; fail = any animal-derived fiber present; unverified = never.
 - **Fair labor**: pass = brand has known fair labor certification (Fair Trade, B Corp, SA8000); fail = brand has known labor violations on record; unverified = most cases — be honest that this cannot be confirmed from label data alone.
 - **Made in USA**: pass = country of manufacture confirmed USA; fail = country confirmed not USA; unverified = country not available.
-- **Secondhand first**: always return unverified with note: "Check secondhand options in Buffi Pro".
-- **Capsule wardrobe**: pass = natural fibers, neutral category, versatile construction; fail = very trend-specific or low durability; unverified = insufficient data.
-- **Certified sustainable**: pass = known certification in product data (GOTS, OEKO-TEX, Bluesign, B Corp); fail = no certification and brand is known fast fashion; unverified = most cases.
+- **Capsule wardrobe**: pass = natural and/or cellulosic fibers (not petroleum-heavy), neutral category, versatile construction; fail = very trend-specific or low durability; unverified = insufficient data.
+- **Certified sustainable**: pass = known certification in product data (GOTS, OEKO-TEX, Bluesign, B Corp, **Naia Renew** with stated OEKO-TEX / GRS / TUV Austria context); fail = no certification and brand is known fast fashion; unverified = most cases.
 - **Union-made**: pass = union-made indicated; fail = known non-union; unverified = most cases.
 `;
 
-export async function analyzeWithClaude(raw: RawProductData, selectedValues: string[] = []): Promise<ScanAnalysis> {
-  const client = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY
+type Finalizable = {
+  markupMin: number;
+  markupMax: number;
+  isSmallBusiness?: boolean;
+  isEthicalBrand?: boolean;
+  hasCertifiedMaterials?: boolean;
+  functionalSynthetic?: boolean;
+  certifications?: string[];
+  verdict: VerdictTier;
+  verdictReason: string;
+  verdictSpanNote?: string | null;
+  markupContext: MarkupContext;
+};
+
+function finalizeAnalysis<T extends Finalizable>(
+  parsed: T,
+  materials: { fiber: string; percentage: number }[]
+): T {
+  const { verdict, verdictReason, verdictSpanNote } = computeVerdictFromRange({
+    markupMin: parsed.markupMin,
+    markupMax: parsed.markupMax,
+    materials,
+    isSmallBusiness: parsed.isSmallBusiness,
+    isEthicalBrand: parsed.isEthicalBrand,
+    hasCertifiedMaterials: parsed.hasCertifiedMaterials,
+    functionalSynthetic: parsed.functionalSynthetic
   });
+  parsed.verdict = verdict;
+  parsed.verdictReason =
+    parsed.functionalSynthetic && !verdictReason.includes("appropriate for this garment type")
+      ? `${verdictReason} Synthetic materials are appropriate for this garment type.`
+      : verdictReason;
+  if (parsed.hasCertifiedMaterials && (parsed.certifications?.length ?? 0) > 0) {
+    const certText = parsed.certifications!.slice(0, 3).join(", ");
+    if (!parsed.verdictReason.toLowerCase().includes("certif")) {
+      parsed.verdictReason = `${parsed.verdictReason} Certified materials (${certText}) are factored into this assessment.`;
+    }
+  }
+  parsed.verdictSpanNote = verdictSpanNote ?? undefined;
+  parsed.markupContext =
+    verdict === "Worth It" ? "justified" : verdict === "Think Twice" ? "partially justified" : "unjustified";
+  return parsed;
+}
+
+export async function analyzeWithClaude(raw: RawProductData, selectedValues: string[] = []): Promise<ScanAnalysis> {
+  /** Retired onboarding label; ignore if still present on older profiles. */
+  selectedValues = selectedValues.filter((v) => v !== "Secondhand first");
+
+  const client = getAnthropicClient();
 
   const isTagSource = raw.source === "tag";
   const hasPrice = typeof raw.price === "number" && raw.price > 0;
   const hasBrand = !!raw.brand?.trim();
   const runFullAnalysis = isTagSource ? hasPrice : true;
 
+  const zaraUrl =
+    raw.source === "url" && typeof raw.url === "string" && isZaraProductPageUrl(raw.url);
+  const nonZaraUrlMissingPageComposition =
+    raw.source === "url" && typeof raw.url === "string" && !zaraUrl && !raw.materials?.trim();
+
+  const rawForPrompt: RawProductData = nonZaraUrlMissingPageComposition
+    ? { ...raw, url: undefined, description: undefined, materials: undefined }
+    : raw;
+
+  let dataSourceInstructions: string;
+  if (isTagSource && !runFullAnalysis) {
+    dataSourceInstructions = `This is a TAG/CARE-LABEL input: we have composition (materials) but NO retail price. Do a PARTIAL analysis:
+- Focus on material quality only: parse materials using Part 1 taxonomy; estimate material cost from Part 2–3; judge value using **petroleum synthetic %** vs natural/cellulosic (cellulosic is not plastic).
+- Set markup to 0 and costPerWear to 0 (markup analysis requires a price).
+- Include in tags: "Partial analysis", "Markup requires price". If brand was not provided, also add "Brand unknown".
+- Set isSmallBusiness and markupContext using the rules below where applicable.`;
+  } else if (isTagSource) {
+    const garmentNote = raw.garmentCategory
+      ? ` The shopper confirmed garment type: "${getGarmentCategoryLabel(raw.garmentCategory)}". Use this for functionalSynthetic and product naming — do NOT infer garment type from fiber composition alone (e.g. do not call a nylon shell a "nylon jacket" when the user said jacket).`
+      : "";
+    dataSourceInstructions = `This is a TAG/CARE-LABEL input with composition and optional brand/price.${garmentNote} If brand or price was not provided, still produce a full analysis using what you have, and add to tags any missing data (e.g. "Brand unknown" or "Price estimated") so the user knows the confidence level. Apply the small-brand, fiber-quality, and markup-context rules below.`;
+  } else if (raw.source === "url") {
+    if (zaraUrl && raw.materials?.trim()) {
+      dataSourceInstructions = `This is a Zara product URL. raw.materials is the OUTER SHELL (main fabric) only — lining, sleeves, and interior sections are already excluded. Parse those fiber types and percentages exactly. Do not add fibers from product description or URL. Apply the rules below.`;
+    } else if (zaraUrl) {
+      dataSourceInstructions = `This is a Zara product URL without reliable composition from the page. Do NOT invent specific fiber percentages from product title (e.g. "wool blend" does not justify 70/30). Return materials as exactly one entry: { "fiber": "Unknown", "percentage": 100 }. Include tag "${MATERIALS_NOT_DETECTED_TAG}". Apply the rules below.`;
+    } else if (raw.materialsFromSerpSearch && raw.materials?.trim()) {
+      dataSourceInstructions = `This is a non-Zara luxury retailer URL. Fiber composition was retrieved from web search snippets (SerpAPI Google organic), not the product page, because composition is often rendered only in client-side JavaScript. Treat raw.materials as a best-effort excerpt; parse percentages conservatively and reflect uncertainty in tags where appropriate. Apply the rules below.`;
+    } else if (raw.materials?.trim()) {
+      dataSourceInstructions = `This is a non-Zara retailer URL. Treat raw.materials as the only page-derived fiber composition. Do not invent or adjust fiber percentages from product name, URL path, or marketing description. Apply the rules below.`;
+    } else {
+      dataSourceInstructions = `This is a non-Zara retailer URL without page-extracted composition. Follow the CRITICAL block below exactly. Apply the rules below.`;
+    }
+  } else {
+    dataSourceInstructions = `If the raw data is sparse, make reasonable inferences for clothing/apparel. Apply the rules below.`;
+  }
+
+  const criticalNonZaraNoComposition = nonZaraUrlMissingPageComposition
+    ? `
+
+**CRITICAL (non-Zara URL, no composition from page):** The scraper did not extract a care-label-style composition string. Do NOT infer fibers from product title, URL, slug, or description. Return materials as exactly one entry: { "fiber": "Unknown", "percentage": 100 }. Use broad conservative estimatedMaterialCostMin/Max for unknown generic apparel. Include tag "${MATERIALS_NOT_DETECTED_TAG}".`
+    : "";
+
   const prompt = `You are a material intelligence analyst for clothing and apparel. Given the following raw product data, produce a structured analysis.
 
 Raw product data:
-${JSON.stringify(raw, null, 2)}
+${JSON.stringify(rawForPrompt, null, 2)}
 ${selectedValues.length > 0 ? `\nUser selected values to evaluate (return one entry per value in valuesMatch):\n${JSON.stringify(selectedValues)}\n${VALUES_EVALUATION_RULES}` : ""}
 
-${
-  isTagSource && !runFullAnalysis
-    ? `This is a TAG/CARE-LABEL input: we have composition (materials) but NO retail price. Do a PARTIAL analysis:
-- Focus on material quality only: parse materials from the composition text, estimate material cost, and give a verdict based purely on whether the materials are good value for typical apparel (synthetic-heavy vs natural, durability, etc.).
-- Set markup to 0 and costPerWear to 0 (markup analysis requires a price).
-- Include in tags: "Partial analysis", "Markup requires price". If brand was not provided, also add "Brand unknown".
-- Set isSmallBusiness and markupContext using the rules below where applicable.`
-    : isTagSource
-      ? `This is a TAG/CARE-LABEL input with composition and optional brand/price. If brand or price was not provided, still produce a full analysis using what you have, and add to tags any missing data (e.g. "Brand unknown" or "Price estimated") so the user knows the confidence level. Apply the small-brand, fiber-quality, and markup-context rules below.`
-      : `If the raw data is sparse, make reasonable inferences for clothing/apparel. Apply the rules below.`
-}
+${dataSourceInstructions}${criticalNonZaraNoComposition}
 
 **Small / indie brand detection**
-- If the brand appears to be an independent or small brand (not a major retailer or fast-fashion chain), treat higher markups as normal and necessary for small-business sustainability. Set isSmallBusiness: true in that case.
-- Major retailers and fast-fashion chains: set isSmallBusiness: false.
+- If the brand appears to be an independent or small brand (not a major retailer, global athletic brand, or fast-fashion chain), treat higher markups as normal for small-batch economics. Set isSmallBusiness: true in that case.
+- Major retailers, global athletic brands (Nike, Adidas, Under Armour, Puma, New Balance, Lululemon, Gymshark, etc.), and fast-fashion chains: set isSmallBusiness: false — they do not get indie markup leniency in the app.
 
 **Known ethical/sustainable brands**
-These brands have a strong sustainability/ethics reputation; higher markup is expected and partially justified. Set isEthicalBrand: true when the brand is one of: Patagonia, Eileen Fisher, Reformation, Kotn, Pact, Thought Clothing, Amour Vert, Girlfriend Collective, Whimsy and Row, Colorful Standard, Organic Basics, tentree, prAna, Stella McCartney, Veja, Allbirds, Mara Hoffman (or the same company under another name). For these brands: note the brand's sustainability reputation and supply-chain transparency in verdictReason; apply the same higher markup threshold as indie brands before Retail Trap; return isEthicalBrand: true in the JSON response.
+Set isEthicalBrand: true when the brand matches: ${ETHICAL_BRANDS_CLAUSE}. Note sustainability reputation in verdictReason; apply Part 5 markup thresholds.
 
-**Fiber quality weighting (for verdict and verdictReason)**
-Not all natural fibers are equal. Weight fibers in this order for quality assessment:
-- Premium natural: cashmere, silk, merino wool, modal, linen, lyocell/Tencel
-- Standard natural: cotton, wool, hemp
-- Synthetic (these must never be tagged as natural): polyurethane, polyester, nylon, acrylic, spandex, elastane, lycra, Gore-Tex, viscose, rayon
-A garment that is predominantly premium natural fibers should receive a more favorable verdict than the same markup on synthetic fibers.
+**Fiber taxonomy, costs, certifications, verdict thresholds**
+Follow the block below exactly for classification, $/yard estimates, yardage, certified materials, and how markup interacts with fiber class. **Materials** in JSON must list fibers with **correct taxonomy**: cellulosic fibers are never "synthetic plastic" in tags or reasoning.
 
-**Functional synthetic (garment category)**
-Synthetic fibers that are appropriate or necessary for the garment type should not be penalized. Set functionalSynthetic: true when synthetics are expected for the category; set false when synthetics are a quality compromise.
-- Rain jackets, waterproof outerwear, windbreakers: nylon, polyester, polyurethane are expected and appropriate — do not penalize. High synthetic % is normal. Evaluate verdict primarily on markup and brand context only.
-- Activewear, swimwear, athletic wear: nylon, polyester, spandex/elastane are functional requirements — do not penalize synthetic content.
-- Lingerie, hosiery, tights: nylon is standard and appropriate — do not penalize.
-- Formal wear, everyday clothing, casualwear: apply normal fiber quality weighting; natural fibers preferred, synthetics penalized.
-When functionalSynthetic is true: do not factor synthetic % into verdict; base verdict on markup range and brand context only. In verdictReason acknowledge: "Synthetic materials are appropriate for this garment type."
+${MATERIAL_COST_AND_TAXONOMY_PROMPT}
 
-**Verdict nuancing**
-- Verdict label stays exactly "Retail Trap" or "Worth It".
-- verdictReason MUST include context. For small brands with quality fibers, acknowledge both the markup and mitigating factors.
-  Example (small brand + quality fibers): "Independent brand markup — quality cotton-modal blend partially justifies the price. You are paying a premium for small-batch production."
-  Example (fast fashion synthetic): "Steep markup on low-quality synthetic materials with no justification beyond brand recognition."
-- Add a new field markupContext — exactly one of: "justified" | "partially justified" | "unjustified". Use it to reflect whether the markup is justified by fiber quality, small-business context, or neither.
+**Functional synthetic (garment category — display and verdictReason nuance only)**
+Set functionalSynthetic: true when petroleum synthetics are **expected** for the category; false when they are an avoidable compromise.
+- Rain jackets, waterproof outerwear, windbreakers: nylon, polyester, polyurethane expected.
+- Activewear, swimwear, athletic wear: nylon, polyester, spandex/elastane are functional.
+- Lingerie, hosiery, tights: nylon is standard.
+- Formal wear, everyday clothing, casualwear: prefer natural/cellulosic when synthetics are not functionally required.
+When functionalSynthetic is true: the app **does not** count that item's petroleum synthetic % toward the user-facing "plastic" metric, and may soften **fiber** language in verdictReason. It does **not** widen Worth It / Think Twice / Retail Trap markup bands — those come only from markup plus Part 5 leniency (ethical, small business, certified materials). In verdictReason you may note: "Synthetic materials are appropriate for this garment type."
 
-**Material cost estimation (use these figures when calculating estimatedMaterialCost)**
-Fabric cost per yard (USD):
-- Basic cotton: $2–4/yard. Premium cotton (combed, pima): $5–9/yard.
-- Polyester: $1–3/yard. Nylon: $3–6/yard.
-- Basic linen: $5–8/yard. Premium linen: $9–15/yard.
-- Viscose/Rayon: $2–5/yard. Modal: $6–10/yard. Lyocell/Tencel: $7–12/yard.
-- Acrylic: $1–3/yard.
-- Basic wool: $8–15/yard. Merino wool: $15–30/yard. Cashmere: $50–100/yard. Silk: $20–40/yard.
-- Elastane/spandex: treat as a small blend share; use blended yard cost for the main fabric and add a small amount for stretch content.
-
-Fabric usage by garment category (approximate yards):
-- T-shirt: 1.5–2 yards. Dress (simple): 2.5–3.5 yards. Blazer/Jacket: 2.5–3.5 yards plus lining. Trousers/Pants: 2–3 yards. Skirt (midi): 2–3 yards. Outerwear coat: 3.5–5 yards.
-Infer category from product name/description when possible; otherwise use a reasonable default (e.g. top 1.5–2, bottom 2–2.5, dress 2.5–3).
-
-On top of fabric cost:
-- Add 15–25% for thread, labels, packaging, and basic trimmings.
-- Add 30–50% for labor cost on top of materials (manufacturing in standard production countries).
-Return a range for total cost to produce (fabric + trimmings + labor), in USD. The range should reflect genuine uncertainty — typically ±30–40% around the midpoint for standard garments, wider for complex construction or specialty fibers.
-- estimatedMaterialCostMin, estimatedMaterialCostMax (numbers, USD).
-- markupMin = (price / estimatedMaterialCostMax - 1) * 100, markupMax = (price / estimatedMaterialCostMin - 1) * 100 (use 0 for both if no price).
+**Verdict nuancing (for verdictReason and tags; app recomputes tier)**
+- verdictReason MUST include fiber class (natural vs cellulosic vs petroleum synthetic), markup context, and brand where relevant.
+- markupContext — exactly one of: "justified" | "partially justified" | "unjustified".
 
 Return a JSON object with exactly these fields (no other fields, no markdown, no explanation):
 - brand (string, use provided brand or "Unknown" if missing)
@@ -154,9 +204,9 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
 - isSmallBusiness (boolean: true if independent/small brand, false if major retailer or fast fashion)
 - markupContext (string: exactly "justified" | "partially justified" | "unjustified")
 - functionalSynthetic (boolean: true if synthetic fibers are appropriate for the garment category, false if synthetics are a quality compromise)
-- isEthicalBrand (boolean: true if brand is a known ethical/sustainable brand from the list above — Patagonia, Eileen Fisher, Reformation, Kotn, Pact, Thought Clothing, Amour Vert, Girlfriend Collective, Whimsy and Row, Colorful Standard, Organic Basics, tentree, prAna, Stella McCartney, Veja, Allbirds, Mara Hoffman)
+- isEthicalBrand (boolean: true if brand matches Part 6 / ethical list: ${ETHICAL_BRANDS_CLAUSE})
 - hasCertifiedMaterials (boolean: true when recycled/certified materials or certifications are detected from product text, composition notes, or known brand context)
-- certifications (array of strings: include detected labels, e.g. "REPREVE", "OceanCycle", "GOTS", "Fair Trade", "Bluesign"; empty array if none)${selectedValues.length > 0 ? `
+- certifications (array of strings: include detected labels, e.g. "REPREVE", "OceanCycle", "GOTS", "Fair Trade", "Bluesign", "Naia Renew", "OEKO-TEX"; empty array if none)${selectedValues.length > 0 ? `
 - valuesMatch (array of objects, one per value in selectedValues: { value: string (the value label), state: "pass" | "fail" | "unverified", note: string (one short phrase) })` : ""}`;
 
   const controller = new AbortController();
@@ -165,7 +215,7 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
   try {
     const message = await client.messages.create(
       {
-        model: "claude-sonnet-4-20250514",
+        model: CLAUDE_PRIMARY_MODEL,
         max_tokens: 1024,
         messages: [{ role: "user", content: prompt }]
       },
@@ -174,15 +224,7 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
 
     clearTimeout(timeout);
 
-    const text = (message.content as Array<{ type?: string; text?: string }>)
-      .filter((c) => c.type === "text" && c.text)
-      .map((c) => c.text!)
-      .join("") || "";
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON in Claude response");
-
-    const parsed = JSON.parse(jsonMatch[0]) as ScanAnalysis;
+    const parsed = parseClaudeJsonResponse<ScanAnalysis>(message);
     const pre = parsed as unknown as Record<string, unknown>;
 
     // Validate required fields (verdict/verdictReason are overwritten by computeVerdictFromRange)
@@ -243,29 +285,24 @@ Return a JSON object with exactly these fields (no other fields, no markdown, no
           .map((x) => x.trim())
       : [];
 
-    const { verdict, verdictReason, verdictSpanNote } = computeVerdictFromRange({
-      markupMin: parsed.markupMin,
-      markupMax: parsed.markupMax,
-      materials: parsed.materials,
-      isSmallBusiness: parsed.isSmallBusiness,
-      isEthicalBrand: parsed.isEthicalBrand,
-      costPerWear: parsed.costPerWear,
-      functionalSynthetic: parsed.functionalSynthetic
-    });
-    parsed.verdict = verdict;
-    parsed.verdictReason =
-      parsed.functionalSynthetic && !verdictReason.includes("appropriate for this garment type")
-        ? `${verdictReason} Synthetic materials are appropriate for this garment type.`
-        : verdictReason;
-    if (parsed.hasCertifiedMaterials && (parsed.certifications?.length ?? 0) > 0) {
-      const certText = parsed.certifications!.slice(0, 3).join(", ");
-      if (!parsed.verdictReason.toLowerCase().includes("certif")) {
-        parsed.verdictReason = `${parsed.verdictReason} Certified materials (${certText}) are factored into this assessment.`;
-      }
+    if (nonZaraUrlMissingPageComposition) {
+      parsed.materials = [{ fiber: "Unknown", percentage: 100 }];
+      parsed.confidenceTier = 3;
+      const tagSet = new Set(parsed.tags);
+      tagSet.add(MATERIALS_NOT_DETECTED_TAG);
+      parsed.tags = [...tagSet];
+      parsed.hasCertifiedMaterials = false;
+      parsed.certifications = [];
     }
-    parsed.verdictSpanNote = verdictSpanNote ?? undefined;
-    parsed.markupContext =
-      verdict === "Worth It" ? "justified" : verdict === "Think Twice" ? "partially justified" : "unjustified";
+
+    const leniencyFlags = normalizeMarkupLeniencyFlags(parsed.brand, {
+      isSmallBusiness: parsed.isSmallBusiness ?? false,
+      isEthicalBrand: parsed.isEthicalBrand ?? false
+    });
+    parsed.isSmallBusiness = leniencyFlags.isSmallBusiness;
+    parsed.isEthicalBrand = leniencyFlags.isEthicalBrand;
+
+    finalizeAnalysis(parsed, parsed.materials);
 
     return parsed;
   } catch (err) {
@@ -286,9 +323,7 @@ export async function analyzeMinimalScan(input: {
   price: number;
   confidenceTier: number;
 }): Promise<MinimalScanResponse> {
-  const client = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY
-  });
+  const client = getAnthropicClient();
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), CLAUDE_TIMEOUT_MS);
@@ -296,7 +331,7 @@ export async function analyzeMinimalScan(input: {
   try {
     const message = await client.messages.create(
       {
-        model: "claude-sonnet-4-5",
+        model: CLAUDE_MINIMAL_MODEL,
         max_tokens: 1024,
         system: MINIMAL_SCAN_SYSTEM_PROMPT,
         messages: [
@@ -316,16 +351,7 @@ export async function analyzeMinimalScan(input: {
 
     clearTimeout(timeout);
 
-    const text = (message.content as Array<{ type?: string; text?: string }>)
-      .filter((c) => c.type === "text" && c.text)
-      .map((c) => c.text!)
-      .join("")
-      .trim() || "";
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON in Claude response");
-
-    const parsed = JSON.parse(jsonMatch[0]) as MinimalScanResponse;
+    const parsed = parseClaudeJsonResponse<MinimalScanResponse>(message);
     const preM = parsed as unknown as Record<string, unknown>;
 
     const validMarkupContext = ["justified", "partially justified", "unjustified"] as const;
@@ -366,30 +392,15 @@ export async function analyzeMinimalScan(input: {
           .map((x) => x.trim())
       : [];
 
-    const materials = parseFibersToMaterials(input.fibers);
-    const { verdict, verdictReason, verdictSpanNote } = computeVerdictFromRange({
-      markupMin: parsed.markupMin,
-      markupMax: parsed.markupMax,
-      materials,
+    const leniencyFlagsM = normalizeMarkupLeniencyFlags(input.brandName, {
       isSmallBusiness: parsed.isSmallBusiness,
-      isEthicalBrand: parsed.isEthicalBrand,
-      costPerWear: 0,
-      functionalSynthetic: parsed.functionalSynthetic
+      isEthicalBrand: parsed.isEthicalBrand
     });
-    parsed.verdict = verdict;
-    parsed.verdictReason =
-      parsed.functionalSynthetic && !verdictReason.includes("appropriate for this garment type")
-        ? `${verdictReason} Synthetic materials are appropriate for this garment type.`
-        : verdictReason;
-    if (parsed.hasCertifiedMaterials && (parsed.certifications?.length ?? 0) > 0) {
-      const certText = parsed.certifications!.slice(0, 3).join(", ");
-      if (!parsed.verdictReason.toLowerCase().includes("certif")) {
-        parsed.verdictReason = `${parsed.verdictReason} Certified materials (${certText}) are factored into this assessment.`;
-      }
-    }
-    parsed.verdictSpanNote = verdictSpanNote ?? undefined;
-    parsed.markupContext =
-      verdict === "Worth It" ? "justified" : verdict === "Think Twice" ? "partially justified" : "unjustified";
+    parsed.isSmallBusiness = leniencyFlagsM.isSmallBusiness;
+    parsed.isEthicalBrand = leniencyFlagsM.isEthicalBrand;
+
+    const materials = parseFibersToMaterials(input.fibers);
+    finalizeAnalysis(parsed, materials);
 
     return parsed;
   } catch (err) {
@@ -400,5 +411,63 @@ export async function analyzeMinimalScan(input: {
       throw timeoutErr;
     }
     throw err;
+  }
+}
+
+/**
+ * Infer composition from Zara-style title + optional shopping snippet.
+ * Callers must only invoke this for zara.com URLs — see scrapeZaraFromUrl.
+ * Name inference is Zara-only because Zara consistently includes fiber content in product titles.
+ * For other brands this causes incorrect readings.
+ */
+export async function parseFiberCompositionFromZaraContext(input: {
+  productName: string;
+  searchDescription?: string;
+}): Promise<string | undefined> {
+  const productName = input.productName.trim();
+  const searchDescription = input.searchDescription?.trim();
+  if (!process.env.ANTHROPIC_API_KEY?.trim() || !productName) return undefined;
+
+  const client = getAnthropicClient();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ZARA_TITLE_COMPOSITION_TIMEOUT_MS);
+
+  try {
+    const message = await client.messages.create(
+      {
+        model: CLAUDE_PRIMARY_MODEL,
+        max_tokens: 256,
+        messages: [
+          {
+            role: "user",
+            content: `Extract fiber composition ONLY when explicit percentages appear in the product name or description (e.g. "100% LINEN", "80% COTTON 20% POLYESTER"). Do NOT guess percentages for vague names like "WOOL BLEND" or "LINEN BLEND" — return composition null instead.
+
+Product name:
+"${productName}"
+
+Search/description context:
+"${searchDescription || "(none)"}"
+
+Respond ONLY as valid JSON:
+{"composition":"<care-label string with explicit percentages only>","confidenceTier":2}
+If no explicit percentages are present, return:
+{"composition":null,"confidenceTier":2}
+No markdown. No explanation.`
+          }
+        ]
+      },
+      { signal: controller.signal }
+    );
+
+    clearTimeout(timeout);
+
+    const parsed = parseClaudeJsonResponse<{ composition?: string | null; confidenceTier?: number }>(message);
+    const c = parsed.composition;
+    if (typeof c !== "string" || !c.trim()) return undefined;
+    return c.trim().slice(0, 500);
+  } catch (e) {
+    clearTimeout(timeout);
+    console.warn("[analyze] parseFiberCompositionFromZaraContext failed:", (e as Error).message);
+    return undefined;
   }
 }

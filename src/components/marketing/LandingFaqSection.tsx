@@ -12,8 +12,8 @@ const FAQ_ITEMS: { q: string; a: string }[] = [
     a: "Material costs are estimates based on fiber composition, garment construction, and current commodity prices. We show a range rather than a single number to reflect real uncertainty — actual production costs vary by manufacturer, order volume, and country of production.",
   },
   {
-    q: "What does Retail Trap mean?",
-    a: "Retail Trap means the markup is high relative to the actual quality of materials — you are likely paying more for brand recognition than for what the garment is made of.",
+    q: "What does Not worth it mean?",
+    a: "Not worth it means the markup is high relative to the actual quality of materials — you are likely paying more for brand recognition than for what the garment is made of.",
   },
   {
     q: "What does Think Twice mean?",

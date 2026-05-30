@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAdminAuth, getAdminFirestore } from "@/lib/firebase/admin";
+import { cleanProductUrl } from "@/lib/scan/cleanProductUrl";
 import { scrapeProductFromUrl } from "@/lib/scan/scrape";
 import { getPriceFromGoogleShopping } from "@/lib/scan/serpapi";
 import { lookupBarcode } from "@/lib/scan/barcode";
 import { analyzeWithClaude, analyzeMinimalScan } from "@/lib/scan/analyze";
-import type { RawProductData, ScanResult, ScanError } from "@/lib/scan/types";
+import { getGarmentCategoryLabel, isGarmentCategoryId } from "@/lib/scan/garmentCategories";
+import type { RawProductData, ScanResult, ScanError, ScanAnalysis } from "@/lib/scan/types";
 import { extractGtinAndUpsertMapping } from "@/lib/firebase/productMappingsServer";
 import {
   getCacheTtlDays,
@@ -12,7 +15,67 @@ import {
   recordProductScan
 } from "@/lib/firebase/productScansServer";
 
+/** Allow Bright Data Web Unlocker (~3–8s) plus scrape + Claude without platform timeout. */
+export const maxDuration = 30;
+
+function readBearerToken(req: NextRequest): string | null {
+  const raw = req.headers.get("authorization") ?? "";
+  const [scheme, token] = raw.split(" ");
+  if (scheme?.toLowerCase() !== "bearer" || !token) return null;
+  return token.trim();
+}
+
+function isZaraUrl(url: string | undefined): boolean {
+  return typeof url === "string" && /(^|\.)zara\.com$/i.test(new URL(url).hostname);
+}
+
+function applyUserGarmentCategory(analysis: ScanAnalysis, raw: RawProductData): ScanAnalysis {
+  if (!raw.garmentCategory) return analysis;
+  return {
+    ...analysis,
+    garmentCategory: raw.garmentCategory,
+    name: getGarmentCategoryLabel(raw.garmentCategory)
+  };
+}
+
+function applyZaraConfidence(analysis: ScanAnalysis, sourceUrl: string): ScanAnalysis {
+  if (!isZaraUrl(sourceUrl)) return analysis;
+  return { ...analysis, confidenceTier: 2 };
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | ScanError | unknown>> {
+  const adminAuth = getAdminAuth();
+  if (!adminAuth) {
+    return NextResponse.json({ error: "Server auth is not configured" }, { status: 500 });
+  }
+
+  const token = readBearerToken(req);
+  if (!token) {
+    return NextResponse.json({ error: "Missing bearer token" }, { status: 401 });
+  }
+
+  let uid: string;
+  try {
+    const decoded = await adminAuth.verifyIdToken(token);
+    uid = decoded.uid;
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const adminDb = getAdminFirestore();
+  if (adminDb) {
+    const userSnap = await adminDb.collection("users").doc(uid).get();
+    const userData = userSnap.data();
+    const isPro = userData?.isPro === true;
+    const completedScans = typeof userData?.completedScans === "number" ? userData.completedScans : 0;
+    if (!isPro && completedScans >= 2) {
+      return NextResponse.json(
+        { ok: false, code: "scan_limit_reached", message: "Scan limit reached. Upgrade to Buffi Pro to continue scanning." },
+        { status: 403 }
+      );
+    }
+  }
+
   console.log("[api/scan] POST received");
   try {
     const body = await req.json();
@@ -23,6 +86,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
     const composition = typeof body?.composition === "string" ? body.composition.trim() : undefined;
     const brand = typeof body?.brand === "string" ? body.brand.trim() || undefined : undefined;
     const price = typeof body?.price === "number" && body.price > 0 ? body.price : undefined;
+    const garmentCategory = isGarmentCategoryId(body?.garmentCategory) ? body.garmentCategory : undefined;
     const selectedValues = Array.isArray(body?.selectedValues)
       ? (body.selectedValues as string[]).filter((s): s is string => typeof s === "string")
       : [];
@@ -76,21 +140,23 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
         );
       }
 
+      const productUrl = cleanProductUrl(url);
+
       const ttlDays = getCacheTtlDays();
       try {
-        const cached = await getCachedProductScanIfFresh(url, ttlDays);
+        const cached = await getCachedProductScanIfFresh(productUrl, ttlDays);
         if (cached) {
-          console.log(`[scan] cache hit for ${url}`);
-          const analysis = productScanToScanAnalysis(cached);
+          console.log(`[scan] cache hit for ${productUrl}`);
+          const analysis = applyZaraConfidence(productScanToScanAnalysis(cached), productUrl);
           return NextResponse.json({ ok: true, source: "cache", analysis });
         }
       } catch (cacheErr) {
         console.warn("[api/scan] productScans cache lookup failed:", (cacheErr as Error).message);
       }
 
-      console.log(`[scan] fresh scan for ${url}`);
-      console.log("[api/scan] scraping URL", url.slice(0, 60));
-      const scraped = await scrapeProductFromUrl(url);
+      console.log(`[scan] fresh scan for ${productUrl}`);
+      console.log("[api/scan] scraping URL", productUrl.slice(0, 60));
+      const scraped = await scrapeProductFromUrl(productUrl);
       console.log("[api/scan] scrape result", scraped ? { name: !!scraped.name, brand: !!scraped.brand, price: !!scraped.price } : "null");
       if (!scraped || (!scraped.name && !scraped.brand)) {
         console.log("[api/scan] scrape failed or empty (need at least name or brand)");
@@ -100,8 +166,31 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
         );
       }
       let scrapedWithPrice = { ...scraped };
-      if ((scraped.name || scraped.brand) && (scraped.price == null || scraped.price <= 0)) {
-        const query = [scraped.brand, scraped.name].filter(Boolean).join(" ").trim();
+      const query = [scraped.brand, scraped.name].filter(Boolean).join(" ").trim();
+      const isZara = isZaraUrl(productUrl);
+
+      if (isZara && query) {
+        const prior = scraped.price;
+        const serpResult = await getPriceFromGoogleShopping(query);
+        if (serpResult) {
+          scrapedWithPrice = { ...scrapedWithPrice, price: serpResult.price };
+          console.log(
+            "[api/scan] Zara: SerpAPI price lookup succeeded:",
+            serpResult.price,
+            "query:",
+            query.slice(0, 100),
+            "priorPriceFromScrape:",
+            prior ?? "none"
+          );
+        } else {
+          console.log(
+            "[api/scan] Zara: SerpAPI price lookup failed or empty; keeping scrape/API price:",
+            prior ?? "none",
+            "query:",
+            query.slice(0, 100)
+          );
+        }
+      } else if ((scraped.name || scraped.brand) && (scraped.price == null || scraped.price <= 0)) {
         if (query) {
           const serpResult = await getPriceFromGoogleShopping(query);
           if (serpResult) {
@@ -112,7 +201,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
           }
         }
       }
-      raw = { ...scrapedWithPrice, url, source: "url" };
+      raw = { ...scrapedWithPrice, url: productUrl, source: "url", gtin: scraped.gtin ?? null, styleNumber: scraped.styleNumber ?? null };
       console.log("[api/scan] raw built from URL", raw.price != null ? `price=${raw.price}` : "no price (manual fallback)");
     } else if (barcode) {
       console.log("[api/scan] barcode flow, looking up", barcode.slice(0, 16));
@@ -133,7 +222,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
         materials: composition,
         brand,
         price,
-        source: "tag"
+        source: "tag",
+        ...(garmentCategory && { garmentCategory })
       };
       console.log("[api/scan] raw built from tag, calling Claude");
     } else {
@@ -145,11 +235,24 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
     }
 
     console.log("[api/scan] calling analyzeWithClaude", selectedValues.length ? { selectedValuesCount: selectedValues.length } : "");
-    const analysis = await analyzeWithClaude(raw, selectedValues);
+    let analysis = await analyzeWithClaude(raw, selectedValues);
+    analysis = applyUserGarmentCategory(analysis, raw);
+    if (raw.source === "url" && typeof raw.url === "string") {
+      analysis = applyZaraConfidence(analysis, raw.url);
+    }
+    if (raw.source === "url" && raw.materialsFromSerpSearch) {
+      analysis = { ...analysis, confidenceTier: 2, isEstimated: true };
+    }
     if (raw.imageUrl != null) analysis.imageUrl = raw.imageUrl;
     if (raw.source === "url" && typeof raw.url === "string" && raw.url.trim()) {
       const u = raw.url.trim();
-      void Promise.all([recordProductScan(u, analysis), extractGtinAndUpsertMapping(u, analysis.brand, analysis.name)]).catch(
+      void Promise.all([
+        recordProductScan(u, analysis, {
+          styleNumber: raw.styleNumber ?? undefined,
+          gtin: raw.gtin ?? undefined
+        }),
+        extractGtinAndUpsertMapping(u, analysis.brand, analysis.name)
+      ]).catch(
         (e) => console.warn("[api/scan] background productScans/productMappings failed:", (e as Error).message)
       );
     }

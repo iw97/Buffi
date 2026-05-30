@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { onboardingReturnToQuery } from "@/lib/auth/returnTo";
+import { saveObAnswer } from "@/lib/auth/onboardingAnswers";
 
 function labelFor(val: number) {
   return val >= 75 ? "High" : val >= 40 ? "Medium" : "Low";
@@ -9,6 +11,8 @@ function labelFor(val: number) {
 
 export function OnboardingPrioritiesScreen() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const stepQ = onboardingReturnToQuery(searchParams);
   const [fiber, setFiber] = useState(85);
   const [price, setPrice] = useState(90);
   const [ethics, setEthics] = useState(55);
@@ -17,6 +21,10 @@ export function OnboardingPrioritiesScreen() {
   const progress = useMemo(
     () => (
       <div className="ob-progress">
+        <div className="ob-pip done" />
+        <div className="ob-pip done" />
+        <div className="ob-pip done" />
+        <div className="ob-pip done" />
         <div className="ob-pip done" />
         <div className="ob-pip active" />
         <div className="ob-pip" />
@@ -30,15 +38,15 @@ export function OnboardingPrioritiesScreen() {
       <div className="ob-shell">
         {progress}
 
-        <div className="ob-step-label">Step 2 of 3 · Priorities</div>
+        <div className="ob-step-label">Step 6 of 7</div>
         <h2 className="ob-title">
           How do you
           <br />
           <em>weigh</em> these?
         </h2>
         <p className="ob-desc">
-          Set how much each factor matters in your score. Adjust anytime in
-          settings.
+          To give you the most relevant analysis, tell me what matters most
+          when you evaluate a piece.
         </p>
 
         <div className="slider-rows">
@@ -116,10 +124,20 @@ export function OnboardingPrioritiesScreen() {
         </div>
 
         <div className="ob-nav">
-          <button className="ob-back" type="button" onClick={() => router.push("/onboarding/values")}>
+          <button className="ob-back" type="button" onClick={() => router.push(`/onboarding/values${stepQ}`)}>
             ←
           </button>
-          <button className="ob-next" type="button" onClick={() => router.push("/onboarding/budget")}>
+          <button
+            className="ob-next"
+            type="button"
+            onClick={() => {
+              saveObAnswer(
+                "buffi_ob_priorities",
+                JSON.stringify({ fiber, price, ethics, env })
+              );
+              router.push(`/onboarding/shopper${stepQ}`);
+            }}
+          >
             Continue →
           </button>
         </div>

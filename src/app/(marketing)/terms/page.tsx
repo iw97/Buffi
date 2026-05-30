@@ -45,7 +45,8 @@ export default function TermsPage() {
           extended scan history, personal analytics, and additional features as described at the time of purchase.
         </p>
         <p>
-          Pro subscription fees are billed in advance on a monthly or annual basis. Fees are non-refundable except
+          Pro fees are billed in advance depending on your plan: weekly subscriptions renew each billing period,
+          annual plans renew once per year, and lifetime access is a one-time purchase. Fees are non-refundable except
           as required by law or at our discretion. We reserve the right to change Pro pricing with reasonable notice
           to existing subscribers.
         </p>
@@ -79,7 +80,7 @@ export default function TermsPage() {
             production expenses including labor, design, logistics, and overhead.
           </li>
           <li>
-            Verdicts (Worth It, Think Twice, Retail Trap) represent Buffi&apos;s independent assessment based on
+            Verdicts (Worth It, Think Twice, Not worth it) represent Buffi&apos;s independent assessment based on
             available data and should be used as one input among many in your purchasing decisions, not as
             definitive financial or consumer advice.
           </li>

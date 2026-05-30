@@ -6,3 +6,11 @@ export function safeReturnPath(raw: string | null | undefined, fallback = "/scan
   if (t.includes("://")) return fallback;
   return t;
 }
+
+/** Query suffix to pass `returnTo` between onboarding steps (empty if no param). */
+export function onboardingReturnToQuery(searchParams: { get: (k: string) => string | null }): string {
+  const raw = searchParams.get("returnTo");
+  if (!raw?.trim()) return "";
+  const safe = safeReturnPath(raw, "/scan");
+  return `?${new URLSearchParams({ returnTo: safe }).toString()}`;
+}

@@ -1,3 +1,4 @@
+import type { Timestamp } from "firebase/firestore";
 import type { MarkupContext, ValuesMatchEntry, VerdictTier } from "@/lib/scan/types";
 
 /**
@@ -61,6 +62,10 @@ export interface ProductScanDocument {
   lastScannedAt: unknown;
   /** Present on new writes; legacy docs may omit. */
   latestScan?: ProductScanLatestSnapshot;
+  /** Style/SKU number from product page JSON-LD or meta tags. */
+  styleNumber?: string;
+  /** GTIN from product page JSON-LD. */
+  gtin?: string;
 }
 
 /** productMappings/{gtin} — written only from server. */
@@ -76,25 +81,45 @@ export interface ProductMappingDocument {
   staleAt?: unknown;
 }
 
-/** User profile and preferences (stored in users/{uid}) */
+/**
+ * User profile and preferences (stored in users/{uid}).
+ * Time fields are Firestore `Timestamp` when written with `serverTimestamp()` (e.g. `ensureUserDocument`, `setUserProfile`).
+ * `createdAt` may be an ISO string from older client-only writes (`setUserProfile` with `toISOString()`).
+ */
 export interface UserProfile {
   displayName: string | null;
   email: string | null;
   photoURL: string | null;
-  createdAt: string;
+  createdAt: Timestamp | string;
+  /** Set on every merged profile write via `serverTimestamp()`. */
+  updatedAt: Timestamp;
   valuesSelected?: string[];
   priorities?: Record<string, number>;
   budgetPerItem?: number;
+  /** Onboarding quiz answers */
+  onboardingRegret?: string;
+  onboardingQuality?: string;
+  onboardingAwareness?: string;
+  shopperType?: string;
   savedCount?: number;
   scannedCount?: number;
   trapsAvoidedDollars?: number;
   /** Pro subscription */
   isPro?: boolean;
+  /** Stripe Customer id (cus_…). */
+  stripeCustomerId?: string | null;
+  /** Active subscription id (sub_…); omitted for one-time lifetime purchase. */
+  stripeSubscriptionId?: string | null;
+  /** Stripe subscription status, or `lifetime` for one-time Buffi Pro. */
+  subscriptionStatus?: string | null;
+  /** End of current paid period (subscriptions); null for lifetime. Firestore `Timestamp` when read from DB. */
+  proExpiresAt?: Timestamp | null;
   /** Scan count (can be reset) */
   scanCount?: number;
-  scanCountResetAt?: string;
-  /** Saved items count */
-  saveCount?: number;
+  /** Count of completed breakdown views used for scan paywall. */
+  completedScans?: number;
+  /** Present after `ensureUserDocument`; stored as Firestore `Timestamp`. */
+  scanCountResetAt?: Timestamp | string;
 }
 
 /** A saved scan result (savedItems collection) */
@@ -113,6 +138,8 @@ export interface SavedItem {
   tags: string[];
   isEstimated: boolean;
   confidenceTier: number;
+  /** Auto-pinned first completed scan for non-pro users. */
+  firstScan?: boolean;
   savedAt: string;
 }
 

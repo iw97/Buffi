@@ -1,3 +1,5 @@
+import type { GarmentCategoryId } from "./garmentCategories";
+
 /** Raw product data from URL scrape, barcode lookup, or tag (OCR) flow, before Claude analysis */
 export interface RawProductData {
   brand?: string;
@@ -9,6 +11,14 @@ export interface RawProductData {
   url?: string;
   barcode?: string;
   source: "url" | "barcode" | "tag";
+  /** GTIN extracted from JSON-LD on the product page. */
+  gtin?: string | null;
+  /** Style/SKU number extracted from JSON-LD or meta tags on the product page. */
+  styleNumber?: string | null;
+  /** When true, `materials` came from SerpAPI organic search (luxury JS-only PDP), not static HTML. */
+  materialsFromSerpSearch?: boolean;
+  /** User-confirmed garment type from tag scan (IRL); primary signal for alternatives search. */
+  garmentCategory?: GarmentCategoryId;
 }
 
 /** Context for whether markup is justified; used to nuance verdict presentation. */
@@ -65,6 +75,10 @@ export interface ScanAnalysis {
   certifications?: string[];
   /** Set when analysis is served from productScans cache (URL scans). */
   confidenceTier?: number;
+  /** True when composition or cost signals are from search/snippet rather than PDP scrape. */
+  isEstimated?: boolean;
+  /** User-confirmed garment type from tag scan; overrides inferred category in alternatives search. */
+  garmentCategory?: GarmentCategoryId | null;
 }
 
 /** Full scan result returned by /api/scan */
@@ -95,26 +109,16 @@ export interface MinimalScanResponse {
   certifications?: string[];
 }
 
-/** Lightweight Claude comparison of a candidate product vs an original scan (better-alternatives flow). */
-export interface AlternativeAnalysisResult {
-  fibers: { fiber: string; percentage: number }[];
-  estimatedMaterialCostMin: number;
-  estimatedMaterialCostMax: number;
-  markupMin: number;
-  markupMax: number;
-  costPerWear: number;
-  isGenuinelyBetter: boolean;
-  primaryImprovement: "fiber" | "markup" | "costPerWear" | null;
-  /** At most six words (enforced in post-processing). */
-  improvementSummary: string;
-}
-
-/** Input for `analyzeAlternative`: minimal candidate fields + composition text. */
-export interface AlternativeCandidateProduct {
-  name: string;
+/** A Claude-suggested alternative product shown when verdict is Think Twice or Retail Trap. */
+export interface AlternativeSuggestion {
   brand: string;
-  price: number;
-  rawCompositionText: string;
+  productName: string;
+  estimatedPrice: string;
+  keyMaterial: string;
+  whyBetter: string;
+  searchQuery: string;
+  /** Thumbnail URL from Google Shopping — null when SerpAPI is unconfigured or returns nothing. */
+  imageUrl?: string | null;
 }
 
 /** Error codes for explicit handling */

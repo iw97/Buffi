@@ -1,71 +1,80 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
-import { BUFFI_SIGNIN_EMAIL_KEY } from "@/lib/firebase/client";
 import { safeReturnPath } from "@/lib/auth/returnTo";
-
-type AuthTab = "magic" | "password";
+import { useSignIn } from "@/hooks/useSignIn";
+import { flushOnboardingAnswers } from "@/lib/auth/onboardingAnswers";
 
 export function OnboardingAccountScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = safeReturnPath(searchParams.get("returnTo"), "/scan");
   const auth = useAuthOptional();
-  const [tab, setTab] = useState<AuthTab>("magic");
+  const authLoading = auth?.loading ?? true;
+  const user = auth?.user ?? null;
   const [magicEmail, setMagicEmail] = useState("");
-  const [passwordEmail, setPasswordEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const digitRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const { handleGoogle: signInWithGoogle, handleEmailLink: sendMagicLink } = useSignIn();
 
   const isConfigured = auth?.isConfigured ?? false;
 
-  const handleGoogle = async () => {
-    setError(null);
-    if (isConfigured && auth) {
-      try {
-        await auth.signInWithGoogle();
-        router.push(returnTo);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Sign-in failed");
-      }
-    } else {
-      router.push("/scan");
-    }
-  };
+  if (isConfigured && authLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-10">
+        <div className="analyzing-label">Loading</div>
+        <p className="auth-legal" style={{ color: "var(--text-dim)" }}>
+          Checking your account…
+        </p>
+      </div>
+    );
+  }
 
-  const handleSignUp = async () => {
-    setError(null);
-    if (isConfigured && auth && passwordEmail.trim() && password.length >= 6) {
-      try {
-        await auth.signUpWithEmail(passwordEmail.trim(), password);
-        router.push(returnTo);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Sign-up failed");
-      }
-    } else if (!isConfigured) {
-      router.push(returnTo);
-    } else {
-      setError("Email and password (min 6 characters) required");
-    }
-  };
+  if (isConfigured && user) {
+    const signedInAs = user.email?.trim() || user.displayName?.trim() || "your account";
+    return (
+      <div className="min-h-screen">
+        <div className="ob-shell">
+          <div className="ob-step-label" style={{ marginBottom: 12 }}>
+            You&apos;re signed in
+          </div>
+          <h2 className="ob-title">
+            Create your
+            <br />
+            <em>account.</em>
+          </h2>
+          <p className="ob-desc">
+            You&apos;re already signed in as <strong style={{ color: "var(--ivory)" }}>{signedInAs}</strong>.
+          </p>
+          <button
+            className="ob-next"
+            type="button"
+            onClick={() => {
+              void flushOnboardingAnswers(user.uid, user.displayName);
+              router.push(returnTo);
+            }}
+          >
+            Continue →
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-  const handleSignIn = async () => {
-    setError(null);
-    if (isConfigured && auth && passwordEmail.trim() && password) {
-      try {
-        await auth.signInWithEmail(passwordEmail.trim(), password);
-        router.push(returnTo);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Sign-in failed");
-      }
-    } else if (!isConfigured) {
-      router.push(returnTo);
-    } else {
-      setError("Email and password required");
+  const onGoogle = async () => {
+    try {
+      setError(null);
+      const signedInUser = await signInWithGoogle();
+      const isNewUser =
+        !!signedInUser.metadata.creationTime &&
+        signedInUser.metadata.creationTime === signedInUser.metadata.lastSignInTime;
+      // Fire-and-forget: flush onboarding answers to profile (no-op if empty)
+      void flushOnboardingAnswers(signedInUser.uid, signedInUser.displayName);
+      router.push(isNewUser ? "/scan" : returnTo);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Sign-in failed");
     }
   };
 
@@ -76,50 +85,30 @@ export function OnboardingAccountScreen() {
       setError("Enter your email address");
       return;
     }
-    if (!isConfigured || !auth) {
-      router.push(returnTo);
-      return;
-    }
     try {
-      await auth.sendSignInLinkToEmail(email, returnTo);
-      try {
-        window.localStorage.setItem(BUFFI_SIGNIN_EMAIL_KEY, email);
-      } catch {
-        /* ignore */
-      }
+      await sendMagicLink(email, { returnTo, mode: "signup" });
       setLinkSentTo(email);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to send sign-in link");
     }
   };
 
-  const progress = useMemo(
-    () => (
-      <div className="ob-step-label" style={{ marginBottom: 12 }}>
-        Last Step · Create Account
-      </div>
-    ),
-    []
-  );
-
   const linkSentVisible = linkSentTo !== null;
 
   return (
     <div className="min-h-screen">
       <div className="ob-shell">
-        {progress}
         <h2 className="ob-title">
-          Save your
+          Create your
           <br />
-          <em>profile.</em>
+          <em>account.</em>
         </h2>
         <p className="ob-desc">
-          Create a free account to keep your values, save scans, and sync across devices.
-          New accounts can use the email magic link — no password required.
+          Free to join. No credit card needed.
         </p>
 
         <div className="auth-block">
-          <button className="btn-google" type="button" onClick={handleGoogle}>
+          <button className="btn-google" type="button" onClick={onGoogle}>
             <span aria-hidden>G</span>
             Continue with Google
           </button>
@@ -136,117 +125,40 @@ export function OnboardingAccountScreen() {
             <div className="auth-divider-line" />
           </div>
 
-          <div className="auth-method-tabs">
-            <button
-              className={`auth-tab ${tab === "magic" ? "active" : ""}`}
-              type="button"
-              onClick={() => setTab("magic")}
-            >
-              Magic link
-            </button>
-            <button
-              className={`auth-tab ${tab === "password" ? "active" : ""}`}
-              type="button"
-              onClick={() => setTab("password")}
-            >
-              Password
-            </button>
-          </div>
-
-          <div className={`auth-panel ${tab === "magic" ? "active" : ""}`}>
-            {!linkSentVisible ? (
-              <>
-                <div className="auth-input-wrap">
-                  <div className="auth-input-label">Email Address</div>
-                  <input
-                    className="auth-input"
-                    type="email"
-                    placeholder="you@example.com"
-                    value={magicEmail}
-                    onChange={(e) => setMagicEmail(e.target.value)}
-                  />
-                </div>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  style={{ width: "100%", marginTop: 12 }}
-                  onClick={handleSendSignInLink}
-                >
-                  Send magic link
-                </button>
-              </>
-            ) : (
-              <>
-                <p className="auth-legal" style={{ marginTop: 0, marginBottom: 8 }}>
-                  Check your email — we sent you a link to sign in or create your account at{" "}
-                  <strong style={{ color: "var(--ivory)" }}>{linkSentTo}</strong>.
-                </p>
-                <p className="auth-legal" style={{ color: "var(--text-dim)", fontSize: 13 }}>
-                  You can close this tab.
-                </p>
-                <button
-                  type="button"
-                  className="auth-tab"
-                  style={{ marginTop: 16 }}
-                  onClick={() => setLinkSentTo(null)}
-                >
-                  Use a different email
-                </button>
-              </>
-            )}
-          </div>
-
-          <div className={`auth-panel ${tab === "password" ? "active" : ""}`}>
+          {!linkSentVisible ? (
             <div className="auth-input-wrap">
               <div className="auth-input-label">Email Address</div>
               <input
                 className="auth-input"
                 type="email"
                 placeholder="you@example.com"
-                value={passwordEmail}
-                onChange={(e) => setPasswordEmail(e.target.value)}
+                value={magicEmail}
+                onChange={(e) => setMagicEmail(e.target.value)}
               />
             </div>
-            <div className="auth-input-wrap">
-              <div className="auth-input-label">Password</div>
-              <input
-                className="auth-input"
-                type="password"
-                placeholder="Create a password (min 6 characters)"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            <button className="ob-next" type="button" style={{ marginTop: 4 }} onClick={handleSignUp}>
-              Create Account →
+          ) : (
+            <p className="auth-legal" style={{ marginTop: 0, marginBottom: 8 }}>
+              Check your email — we sent you a link to sign in or create your account at{" "}
+              <strong style={{ color: "var(--ivory)" }}>{linkSentTo}</strong>.
+            </p>
+          )}
+
+          {!linkSentVisible ? (
+            <button type="button" className="btn-primary" style={{ width: "100%", marginTop: 12 }} onClick={handleSendSignInLink}>
+              Send magic link
             </button>
-          </div>
+          ) : null}
 
-          <div className="auth-legal">
-            By creating an account you agree to our
-            <br />
-            Terms of Service &amp; Privacy Policy
-          </div>
-        </div>
-
-        <div className="ob-nav" style={{ marginTop: 24 }}>
-          <button className="ob-back" type="button" onClick={() => router.push("/onboarding/budget")}>
-            ←
-          </button>
-          <button
-            className="ob-next"
-            type="button"
-            style={{
-              background: "transparent",
-              border: "1px solid var(--border-light)",
-              color: "var(--text-dim)",
-              fontSize: 11,
-              letterSpacing: 1
-            }}
-            onClick={() => router.push("/")}
-          >
-            Back to home
-          </button>
+          <p className="auth-legal" style={{ marginTop: 12 }}>
+            Already have an account?{" "}
+            <button
+              type="button"
+              className="auth-tab"
+              onClick={() => router.push(`/signin?${new URLSearchParams({ returnTo }).toString()}`)}
+            >
+              Sign in
+            </button>
+          </p>
         </div>
       </div>
     </div>
