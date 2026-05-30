@@ -103,7 +103,12 @@ export interface UserProfile {
   shopperType?: string;
   savedCount?: number;
   scannedCount?: number;
+  /** @deprecated Use estimatedMoneySaved — legacy profile field */
   trapsAvoidedDollars?: number;
+  /** Pro analytics: count of Not Worth It scans not saved within 14s */
+  trapsAvoided?: number;
+  /** Pro analytics: sum of item prices for traps avoided */
+  estimatedMoneySaved?: number;
   /** Pro subscription */
   isPro?: boolean;
   /** Stripe Customer id (cus_…). */

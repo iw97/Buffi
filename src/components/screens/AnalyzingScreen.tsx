@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { UrlScrapeFallbackStep } from "@/components/scan/UrlScrapeFallbackStep";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import {
@@ -11,6 +12,7 @@ import {
   setZaraUrlTagScanHint,
   type ScanErrorCode
 } from "@/contexts/ScanResultContext";
+import { parseProductFromUrl } from "@/lib/scan/parseProductFromUrl";
 import { isZaraCompositionInsufficient, isZaraProductPageUrl } from "@/lib/scan/zaraHints";
 import type { ScanAnalysis } from "@/lib/scan/types";
 
@@ -55,9 +57,11 @@ export function AnalyzingScreen() {
 
   const items = useMemo(() => ORDER, []);
   const [flowError, setFlowError] = useState<string | null>(null);
+  const [urlFallback, setUrlFallback] = useState<{ brand: string; name: string } | null>(null);
   const hasNavigated = useRef(false);
 
   useEffect(() => {
+    if (urlFallback) return;
     if (hasNavigated.current) {
       console.log("[scan flow] effect skipped – already navigated");
       return;
@@ -78,7 +82,16 @@ export function AnalyzingScreen() {
 
     const selectedValues = auth?.profile?.valuesSelected ?? [];
     const body = pending.url
-      ? { url: pending.url, ...(selectedValues.length > 0 && { selectedValues }) }
+      ? {
+          url: pending.url,
+          ...(pending.urlManual && {
+            brand: pending.urlManual.brand,
+            productName: pending.urlManual.name,
+            ...(pending.urlManual.price != null &&
+              pending.urlManual.price > 0 && { price: pending.urlManual.price })
+          }),
+          ...(selectedValues.length > 0 && { selectedValues })
+        }
       : pending.tag
         ? {
             composition: pending.tag.composition,
@@ -127,7 +140,7 @@ export function AnalyzingScreen() {
           const text = await res.text();
           console.log("[scan flow] response body length", text?.length ?? 0);
           data = text ? JSON.parse(text) : {};
-        }         catch (parseErr) {
+        } catch (parseErr) {
           console.error("[scan flow] JSON parse failed", parseErr);
           setFlowError("Invalid response from server");
           setLastError("unknown");
@@ -145,7 +158,21 @@ export function AnalyzingScreen() {
             router.replace("/paywall");
             return;
           }
-          setLastError(toErrorCode(res.status, data as { code?: string }));
+
+          const code = toErrorCode(res.status, data as { code?: string });
+          if (
+            code === "url_scrape_failed" &&
+            pending?.url &&
+            !pending.urlManual
+          ) {
+            const parsed = parseProductFromUrl(pending.url);
+            setUrlFallback(parsed ?? { brand: "", name: "" });
+            setFlowError(null);
+            setLastError(null);
+            return;
+          }
+
+          setLastError(code);
           setPending(null);
           const errMsg =
             (typeof data.message === "string" && data.message) ||
@@ -190,9 +217,10 @@ export function AnalyzingScreen() {
 
     run();
     return () => controller.abort();
-  }, [pending, setPending, setResult, setLastError, router, isConfigured, authLoading, user]);
+  }, [pending, urlFallback, setPending, setResult, setLastError, router, isConfigured, authLoading, user]);
 
   useEffect(() => {
+    if (urlFallback) return;
     const timers: Array<number> = [];
     items.forEach(({ id, delayMs }) => {
       const start = window.setTimeout(() => {
@@ -206,7 +234,28 @@ export function AnalyzingScreen() {
       }, delayMs);
     });
     return () => timers.forEach((t) => window.clearTimeout(t));
-  }, [items]);
+  }, [items, urlFallback]);
+
+  function handleUrlFallbackBack() {
+    setUrlFallback(null);
+    setPending(null);
+    hasNavigated.current = true;
+    router.replace("/scan");
+  }
+
+  function handleUrlFallbackSubmit(payload: { brand: string; name: string; price?: number }) {
+    if (!pending?.url) return;
+    setUrlFallback(null);
+    setFlowError(null);
+    setPending({
+      url: pending.url,
+      urlManual: {
+        brand: payload.brand,
+        name: payload.name,
+        ...(payload.price != null && { price: payload.price })
+      }
+    });
+  }
 
   if (isConfigured && authLoading) {
     return (
@@ -221,6 +270,27 @@ export function AnalyzingScreen() {
 
   if (isConfigured && !user) {
     return null;
+  }
+
+  if (urlFallback && pending?.url) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <div className="scan-header">
+          <div>
+            <div className="wordmark">
+              Buffi<span>.</span>
+            </div>
+            <div className="header-tag">Material Intelligence</div>
+          </div>
+        </div>
+        <UrlScrapeFallbackStep
+          brand={urlFallback.brand}
+          name={urlFallback.name}
+          onBack={handleUrlFallbackBack}
+          onSubmit={handleUrlFallbackSubmit}
+        />
+      </div>
+    );
   }
 
   return (

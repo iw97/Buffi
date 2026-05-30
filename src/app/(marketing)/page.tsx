@@ -18,6 +18,9 @@ export default function MarketingLandingPage() {
         <WaitlistCtaLink className="landing-cta">
           Join the waitlist →
         </WaitlistCtaLink>
+        <Link href="/signin" className="landing-invite-signin">
+          Have an invite? Sign in →
+        </Link>
       </section>
 
       <LandingHowItWorks />

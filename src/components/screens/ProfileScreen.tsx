@@ -14,8 +14,15 @@ const MOCK_DISPLAY = {
   memberSince: "January 2025",
   savedCount: 2,
   scannedCount: 5,
-  trapsAvoidedDollars: 127
+  trapsAvoided: 4,
+  estimatedMoneySaved: 312,
+  completedScans: 12
 };
+
+function formatImpactMoney(amount: number): string {
+  const rounded = Math.round(amount);
+  return `$${rounded.toLocaleString("en-US")}`;
+}
 
 export function ProfileScreen() {
   const router = useRouter();
@@ -134,6 +141,16 @@ export function ProfileScreen() {
     : (user!.displayName ?? profile?.displayName ?? user!.email?.split("@")[0] ?? "User");
   const initial = TESTING_ALWAYS_SHOW_LOGGED_IN ? MOCK_DISPLAY.initial : displayName.charAt(0).toUpperCase();
   const email = TESTING_ALWAYS_SHOW_LOGGED_IN ? MOCK_DISPLAY.email : (user!.email ?? profile?.email ?? "");
+  const isPro = TESTING_ALWAYS_SHOW_LOGGED_IN ? true : (profile?.isPro ?? false);
+  const trapsAvoided = TESTING_ALWAYS_SHOW_LOGGED_IN
+    ? MOCK_DISPLAY.trapsAvoided
+    : (profile?.trapsAvoided ?? 0);
+  const estimatedMoneySaved = TESTING_ALWAYS_SHOW_LOGGED_IN
+    ? MOCK_DISPLAY.estimatedMoneySaved
+    : (profile?.estimatedMoneySaved ?? 0);
+  const completedScans = TESTING_ALWAYS_SHOW_LOGGED_IN
+    ? MOCK_DISPLAY.completedScans
+    : (profile?.completedScans ?? 0);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -155,7 +172,7 @@ export function ProfileScreen() {
           Member since {TESTING_ALWAYS_SHOW_LOGGED_IN ? MOCK_DISPLAY.memberSince : (user!.metadata?.creationTime ? new Date(user!.metadata.creationTime).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "—")}
         </div>
 
-        <div className="profile-stats-row">
+        <div className="profile-stats-row profile-stats-row--two">
           <div className="profile-stat">
             <div className="profile-stat-val">{TESTING_ALWAYS_SHOW_LOGGED_IN ? MOCK_DISPLAY.savedCount : (profile?.savedCount ?? 0)}</div>
             <div className="profile-stat-key">Saved</div>
@@ -164,12 +181,63 @@ export function ProfileScreen() {
             <div className="profile-stat-val">{TESTING_ALWAYS_SHOW_LOGGED_IN ? MOCK_DISPLAY.scannedCount : (profile?.scannedCount ?? 0)}</div>
             <div className="profile-stat-key">Scanned</div>
           </div>
-          <div className="profile-stat">
-            <div className="profile-stat-val">${TESTING_ALWAYS_SHOW_LOGGED_IN ? MOCK_DISPLAY.trapsAvoidedDollars : (profile?.trapsAvoidedDollars ?? 0)}</div>
-            <div className="profile-stat-key">Traps Avoided</div>
-          </div>
         </div>
       </div>
+
+      <section className="profile-impact" aria-labelledby="profile-impact-heading">
+        <h2 id="profile-impact-heading" className="profile-impact-heading">
+          YOUR IMPACT
+        </h2>
+
+        {isPro ? (
+          <>
+            <div className="profile-impact-stats">
+              <div className="profile-impact-stat">
+                <div className="profile-impact-stat-val">{trapsAvoided}</div>
+                <div className="profile-impact-stat-key">RETAIL TRAPS AVOIDED</div>
+              </div>
+              <div className="profile-impact-stat">
+                <div className="profile-impact-stat-val">{formatImpactMoney(estimatedMoneySaved)}</div>
+                <div className="profile-impact-stat-key">ESTIMATED SAVINGS</div>
+              </div>
+              <div className="profile-impact-stat">
+                <div className="profile-impact-stat-val">{completedScans}</div>
+                <div className="profile-impact-stat-key">TOTAL SCANS</div>
+              </div>
+            </div>
+            <p className="profile-impact-disclaimer">
+              Savings estimated from scans you chose not to save after a Not Worth It verdict.
+            </p>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="profile-impact-locked-btn"
+            onClick={() => router.push("/upgrade")}
+          >
+            <div className="profile-impact-stats profile-impact-stats--locked">
+              <div className="profile-impact-stat">
+                <div className="profile-impact-stat-val profile-impact-stat-val--placeholder">12</div>
+                <div className="profile-impact-stat-key">RETAIL TRAPS AVOIDED</div>
+              </div>
+              <div className="profile-impact-stat">
+                <div className="profile-impact-stat-val profile-impact-stat-val--placeholder">$340</div>
+                <div className="profile-impact-stat-key">ESTIMATED SAVINGS</div>
+              </div>
+              <div className="profile-impact-stat">
+                <div className="profile-impact-stat-val profile-impact-stat-val--placeholder">8</div>
+                <div className="profile-impact-stat-key">TOTAL SCANS</div>
+              </div>
+            </div>
+            <div className="profile-impact-overlay">
+              <span className="profile-impact-lock" aria-hidden>
+                ◆
+              </span>
+              Unlock with Buffi Pro
+            </div>
+          </button>
+        )}
+      </section>
 
       <div className="profile-menu">
         <div className="menu-section-label">My Account</div>

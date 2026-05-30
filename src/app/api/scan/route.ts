@@ -81,7 +81,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
     const body = await req.json();
     console.log("[api/scan] body parsed", { keys: Object.keys(body || {}), hasUrl: !!body?.url });
 
-    const url = typeof body?.url === "string" ? body.url.trim() : undefined;
+    let url = typeof body?.url === "string" ? body.url.trim() : undefined;
     const barcode = typeof body?.barcode === "string" ? body.barcode.trim() : undefined;
     const composition = typeof body?.composition === "string" ? body.composition.trim() : undefined;
     const brand = typeof body?.brand === "string" ? body.brand.trim() || undefined : undefined;
@@ -91,7 +91,14 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
       ? (body.selectedValues as string[]).filter((s): s is string => typeof s === "string")
       : [];
 
+    const productName =
+      typeof body?.productName === "string"
+        ? body.productName.trim()
+        : typeof body?.name === "string"
+          ? body.name.trim()
+          : undefined;
     const brandName = typeof body?.brandName === "string" ? body.brandName.trim() : undefined;
+    const manualBrand = brand ?? brandName;
     const fibers = Array.isArray(body?.fibers) ? (body.fibers as string[]).filter((f) => typeof f === "string") : undefined;
     const minimalPrice = typeof body?.price === "number" ? body.price : undefined;
     const confidenceTier = typeof body?.confidenceTier === "number" ? body.confidenceTier : undefined;
@@ -133,6 +140,10 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
     if (url) {
       console.log("[api/scan] URL flow, validating URL");
       if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        url = `https://${url}`;
+        console.log("[api/scan] auto-prepended https:// to URL:", url.slice(0, 80));
+      }
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
         console.log("[api/scan] URL invalid scheme");
         return NextResponse.json(
           { ok: false, code: "invalid_input", message: "Invalid URL" },
@@ -154,54 +165,88 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
         console.warn("[api/scan] productScans cache lookup failed:", (cacheErr as Error).message);
       }
 
-      console.log(`[scan] fresh scan for ${productUrl}`);
-      console.log("[api/scan] scraping URL", productUrl.slice(0, 60));
-      const scraped = await scrapeProductFromUrl(productUrl);
-      console.log("[api/scan] scrape result", scraped ? { name: !!scraped.name, brand: !!scraped.brand, price: !!scraped.price } : "null");
-      if (!scraped || (!scraped.name && !scraped.brand)) {
-        console.log("[api/scan] scrape failed or empty (need at least name or brand)");
-        return NextResponse.json(
-          { ok: false, code: "url_scrape_failed", message: "Could not extract product data from URL" },
-          { status: 422 }
-        );
-      }
-      let scrapedWithPrice = { ...scraped };
-      const query = [scraped.brand, scraped.name].filter(Boolean).join(" ").trim();
-      const isZara = isZaraUrl(productUrl);
-
-      if (isZara && query) {
-        const prior = scraped.price;
-        const serpResult = await getPriceFromGoogleShopping(query);
-        if (serpResult) {
-          scrapedWithPrice = { ...scrapedWithPrice, price: serpResult.price };
-          console.log(
-            "[api/scan] Zara: SerpAPI price lookup succeeded:",
-            serpResult.price,
-            "query:",
-            query.slice(0, 100),
-            "priorPriceFromScrape:",
-            prior ?? "none"
-          );
-        } else {
-          console.log(
-            "[api/scan] Zara: SerpAPI price lookup failed or empty; keeping scrape/API price:",
-            prior ?? "none",
-            "query:",
-            query.slice(0, 100)
-          );
-        }
-      } else if ((scraped.name || scraped.brand) && (scraped.price == null || scraped.price <= 0)) {
-        if (query) {
-          const serpResult = await getPriceFromGoogleShopping(query);
-          if (serpResult) {
-            scrapedWithPrice = { ...scraped, price: serpResult.price };
-            console.log("[api/scan] price from SerpAPI Google Shopping:", serpResult.price, "query:", query);
-          } else {
-            console.log("[api/scan] SerpAPI returned no matching result; manual price entry may be used");
+      if (manualBrand && productName) {
+        console.log("[api/scan] URL manual fallback (skip scrape)", {
+          brand: manualBrand,
+          name: productName.slice(0, 60)
+        });
+        let manualPrice = price;
+        if (manualPrice == null || manualPrice <= 0) {
+          const query = [manualBrand, productName].filter(Boolean).join(" ").trim();
+          if (query) {
+            const serpResult = await getPriceFromGoogleShopping(query);
+            if (serpResult) {
+              manualPrice = serpResult.price;
+              console.log("[api/scan] manual URL: price from SerpAPI:", manualPrice);
+            }
           }
         }
+        raw = {
+          brand: manualBrand,
+          name: productName,
+          price: manualPrice,
+          url: productUrl,
+          source: "url"
+        };
+      } else {
+        console.log(`[scan] fresh scan for ${productUrl}`);
+        console.log("[api/scan] scraping URL", productUrl.slice(0, 60));
+        const scraped = await scrapeProductFromUrl(productUrl);
+        console.log(
+          "[api/scan] scrape result",
+          scraped ? { name: !!scraped.name, brand: !!scraped.brand, price: !!scraped.price } : "null"
+        );
+        if (!scraped || (!scraped.name && !scraped.brand)) {
+          console.log("[api/scan] scrape failed or empty (need at least name or brand)");
+          return NextResponse.json(
+            { ok: false, code: "url_scrape_failed", message: "Could not extract product data from URL" },
+            { status: 422 }
+          );
+        }
+        let scrapedWithPrice = { ...scraped };
+        const query = [scraped.brand, scraped.name].filter(Boolean).join(" ").trim();
+        const isZara = isZaraUrl(productUrl);
+
+        if (isZara && query) {
+          const prior = scraped.price;
+          const serpResult = await getPriceFromGoogleShopping(query);
+          if (serpResult) {
+            scrapedWithPrice = { ...scrapedWithPrice, price: serpResult.price };
+            console.log(
+              "[api/scan] Zara: SerpAPI price lookup succeeded:",
+              serpResult.price,
+              "query:",
+              query.slice(0, 100),
+              "priorPriceFromScrape:",
+              prior ?? "none"
+            );
+          } else {
+            console.log(
+              "[api/scan] Zara: SerpAPI price lookup failed or empty; keeping scrape/API price:",
+              prior ?? "none",
+              "query:",
+              query.slice(0, 100)
+            );
+          }
+        } else if ((scraped.name || scraped.brand) && (scraped.price == null || scraped.price <= 0)) {
+          if (query) {
+            const serpResult = await getPriceFromGoogleShopping(query);
+            if (serpResult) {
+              scrapedWithPrice = { ...scraped, price: serpResult.price };
+              console.log("[api/scan] price from SerpAPI Google Shopping:", serpResult.price, "query:", query);
+            } else {
+              console.log("[api/scan] SerpAPI returned no matching result; manual price entry may be used");
+            }
+          }
+        }
+        raw = {
+          ...scrapedWithPrice,
+          url: productUrl,
+          source: "url",
+          gtin: scraped.gtin ?? null,
+          styleNumber: scraped.styleNumber ?? null
+        };
       }
-      raw = { ...scrapedWithPrice, url: productUrl, source: "url", gtin: scraped.gtin ?? null, styleNumber: scraped.styleNumber ?? null };
       console.log("[api/scan] raw built from URL", raw.price != null ? `price=${raw.price}` : "no price (manual fallback)");
     } else if (barcode) {
       console.log("[api/scan] barcode flow, looking up", barcode.slice(0, 16));
