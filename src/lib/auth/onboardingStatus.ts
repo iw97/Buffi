@@ -18,25 +18,21 @@ export function onboardingIntroPath(returnTo = "/scan"): string {
   return `/onboarding/intro?${new URLSearchParams({ returnTo: safe }).toString()}`;
 }
 
-export function isBrandNewFirebaseUser(user: {
-  metadata: { creationTime?: string | null; lastSignInTime?: string | null };
-}): boolean {
-  const created = user.metadata.creationTime ?? null;
-  const last = user.metadata.lastSignInTime ?? null;
-  return Boolean(created && last && created === last);
-}
-
 /**
  * Where to send the user immediately after auth completes.
- * New accounts skip onboarding only when quiz answers are already in localStorage
- * (account step right after reflection).
+ * Sign-in: incomplete profiles go to the quiz. Sign-up (account step after quiz): go to app.
  */
 export function resolvePostAuthPath(options: {
   returnTo?: string | null;
   profile?: UserProfile | null;
-  user?: { metadata: { creationTime?: string | null; lastSignInTime?: string | null } } | null;
+  /** `signup` = auth from /onboarding/account after the quiz. */
+  authMode?: "signup" | "signin";
 }): string {
   const returnTo = safeReturnPath(options.returnTo, "/scan");
+
+  if (options.authMode === "signup") {
+    return returnTo;
+  }
 
   if (profileHasCompletedOnboarding(options.profile)) {
     return returnTo;
@@ -46,9 +42,5 @@ export function resolvePostAuthPath(options: {
     return returnTo;
   }
 
-  if (options.user && isBrandNewFirebaseUser(options.user)) {
-    return onboardingIntroPath(returnTo);
-  }
-
-  return returnTo;
+  return onboardingIntroPath(returnTo);
 }

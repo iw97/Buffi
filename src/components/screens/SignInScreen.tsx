@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
+import { getUserProfile } from "@/lib/firebase/firestore";
 import { safeReturnPath } from "@/lib/auth/returnTo";
 import { useSignIn } from "@/hooks/useSignIn";
 import {
@@ -35,11 +36,22 @@ export function SignInScreen() {
     );
   }
 
+  if (isConfigured && user && auth?.profile === null) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-10">
+        <div className="analyzing-label">Loading</div>
+        <p className="auth-legal" style={{ color: "var(--text-dim)" }}>
+          Checking your account…
+        </p>
+      </div>
+    );
+  }
+
   if (isConfigured && user) {
     const destination = resolvePostAuthPath({
       returnTo,
       profile: auth?.profile ?? null,
-      user
+      authMode: "signin"
     });
     router.replace(destination);
     return null;
@@ -49,9 +61,11 @@ export function SignInScreen() {
     try {
       setError(null);
       const signedInUser = await handleGoogle();
+      const profile = await getUserProfile(signedInUser.uid);
       const destination = resolvePostAuthPath({
         returnTo,
-        user: signedInUser
+        profile,
+        authMode: "signin"
       });
       router.push(destination);
     } catch (e) {

@@ -64,8 +64,8 @@ export function OnboardingAccountScreen() {
           <button
             className="ob-next"
             type="button"
-            onClick={() => {
-              void flushOnboardingAnswers(user.uid, user.displayName);
+            onClick={async () => {
+              await flushOnboardingAnswers(user.uid, user.displayName);
               router.push(returnTo);
             }}
           >
@@ -80,12 +80,11 @@ export function OnboardingAccountScreen() {
     try {
       setError(null);
       const signedInUser = await signInWithGoogle();
-      void flushOnboardingAnswers(signedInUser.uid, signedInUser.displayName);
+      await flushOnboardingAnswers(signedInUser.uid, signedInUser.displayName);
       router.push(
         resolvePostAuthPath({
           returnTo,
-          user: signedInUser,
-          profile: auth?.profile ?? null
+          authMode: "signup"
         })
       );
     } catch (error) {

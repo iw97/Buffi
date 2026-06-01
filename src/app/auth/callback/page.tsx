@@ -5,18 +5,24 @@ import { useRouter } from "next/navigation";
 import type { User } from "firebase/auth";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { auth as firebaseAuth, BUFFI_SIGNIN_EMAIL_KEY } from "@/lib/firebase";
+import { getUserProfile } from "@/lib/firebase/firestore";
 import { flushOnboardingAnswers } from "@/lib/auth/onboardingAnswers";
 import { resolvePostAuthPath } from "@/lib/auth/onboardingStatus";
 
 type Status = "checking" | "need-email" | "signing-in" | "success" | "error";
 
-function afterSignInPath(user: User | null): string {
+async function afterSignInPath(user: User | null): Promise<string> {
   if (typeof window === "undefined") return "/scan";
   const url = new URL(window.location.href);
-  return resolvePostAuthPath({
-    returnTo: url.searchParams.get("returnTo"),
-    user
-  });
+  const mode = url.searchParams.get("mode");
+  const returnTo = url.searchParams.get("returnTo");
+
+  if (mode === "signup") {
+    return resolvePostAuthPath({ returnTo, authMode: "signup" });
+  }
+
+  const profile = user ? await getUserProfile(user.uid) : null;
+  return resolvePostAuthPath({ returnTo, profile, authMode: "signin" });
 }
 
 export default function AuthCallbackPage() {
@@ -52,13 +58,13 @@ export default function AuthCallbackPage() {
       setStatus("signing-in");
       auth
         .completeSignInWithEmailLink(storedEmail, fullUrl)
-        .then(() => {
+        .then(async () => {
           setStatus("success");
           const currentUser = firebaseAuth?.currentUser ?? null;
           if (currentUser) {
-            void flushOnboardingAnswers(currentUser.uid, currentUser.displayName);
+            await flushOnboardingAnswers(currentUser.uid, currentUser.displayName);
           }
-          router.replace(afterSignInPath(currentUser));
+          router.replace(await afterSignInPath(currentUser));
         })
         .catch(() => {
           setStatus("error");
@@ -85,9 +91,9 @@ export default function AuthCallbackPage() {
       setStatus("success");
       const currentUser = firebaseAuth?.currentUser ?? null;
       if (currentUser) {
-        void flushOnboardingAnswers(currentUser.uid, currentUser.displayName);
+        await flushOnboardingAnswers(currentUser.uid, currentUser.displayName);
       }
-      router.replace(afterSignInPath(currentUser));
+      router.replace(await afterSignInPath(currentUser));
     } catch {
       setStatus("error");
       setErrorMessage(

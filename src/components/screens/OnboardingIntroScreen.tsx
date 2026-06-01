@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { onboardingReturnToQuery } from "@/lib/auth/returnTo";
+import { onboardingReturnToQuery, safeReturnPath } from "@/lib/auth/returnTo";
 import { saveObAnswer } from "@/lib/auth/onboardingAnswers";
 
 export function OnboardingIntroScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const stepQ = onboardingReturnToQuery(searchParams);
+  const returnTo = safeReturnPath(searchParams.get("returnTo"), "/scan");
   const [name, setName] = useState("");
 
   function handleContinue() {
@@ -64,6 +65,19 @@ export function OnboardingIntroScreen() {
             Continue →
           </button>
         </div>
+
+        <p className="auth-legal" style={{ marginTop: 24 }}>
+          Already finished setup?{" "}
+          <button
+            type="button"
+            className="auth-tab"
+            onClick={() =>
+              router.push(`/signin?${new URLSearchParams({ returnTo }).toString()}`)
+            }
+          >
+            Sign in
+          </button>
+        </p>
       </div>
     </div>
   );
