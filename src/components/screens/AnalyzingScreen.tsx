@@ -18,11 +18,15 @@ import type { ScanAnalysis } from "@/lib/scan/types";
 
 type ProgressId = "p1" | "p2" | "p3" | "p4";
 
+/** Each bar fills in (100 / step) * intervalMs — keep total near scan wait time. */
+const PROGRESS_BAR_FILL_STEP = 2;
+const PROGRESS_BAR_FILL_INTERVAL_MS = 40;
+
 const ORDER: Array<{ id: ProgressId; label: string; delayMs: number }> = [
-  { id: "p1", label: "Fiber Composition", delayMs: 200 },
-  { id: "p2", label: "Material Market Value", delayMs: 900 },
-  { id: "p3", label: "Markup Analysis", delayMs: 1600 },
-  { id: "p4", label: "Values Match", delayMs: 2300 }
+  { id: "p1", label: "Fiber Composition", delayMs: 400 },
+  { id: "p2", label: "Material Market Value", delayMs: 2000 },
+  { id: "p3", label: "Markup Analysis", delayMs: 3600 },
+  { id: "p4", label: "Values Match", delayMs: 5200 }
 ];
 
 function toErrorCode(status: number, body?: { code?: string }): ScanErrorCode {
@@ -226,12 +230,13 @@ export function AnalyzingScreen() {
       const start = window.setTimeout(() => {
         let n = 0;
         const t = window.setInterval(() => {
-          n = Math.min(n + 4, 100);
+          n = Math.min(n + PROGRESS_BAR_FILL_STEP, 100);
           setProgress((prev) => ({ ...prev, [id]: n }));
           if (n >= 100) window.clearInterval(t);
-        }, 20);
-        timers.push(start);
+        }, PROGRESS_BAR_FILL_INTERVAL_MS);
+        timers.push(t);
       }, delayMs);
+      timers.push(start);
     });
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, [items, urlFallback]);

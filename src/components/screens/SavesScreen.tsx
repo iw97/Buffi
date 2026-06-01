@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { removeSavedItem, setUserProfile, subscribeSavedItems } from "@/lib/firebase/firestore";
 import type { SavedItem } from "@/lib/firebase/types";
+import { onboardingIntroPath } from "@/lib/auth/onboardingStatus";
 
 export function SavesScreen() {
   const router = useRouter();
@@ -66,7 +67,7 @@ export function SavesScreen() {
           <div className="saves-empty-icon" aria-hidden>🔖</div>
           <p className="saves-empty-text">Your saved items will appear here.</p>
           <p className="saves-empty-sub">Create an account or sign in to save scans.</p>
-          <button className="btn-primary" type="button" onClick={() => router.push("/onboarding/account")} style={{ marginTop: 16 }}>
+          <button className="btn-primary" type="button" onClick={() => router.push(onboardingIntroPath("/saves"))} style={{ marginTop: 16 }}>
             Sign in / Create account
           </button>
         </div>

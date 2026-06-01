@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import type { PaywallPlanId } from "@/lib/paywall/planIds";
+import { onboardingIntroPath } from "@/lib/auth/onboardingStatus";
 
 export function useStripeCheckout() {
   const auth = useAuthOptional();
@@ -16,7 +17,7 @@ export function useStripeCheckout() {
       const user = auth?.user;
       const isConfigured = auth?.isConfigured ?? false;
       if (!isConfigured || !user) {
-        router.push(`/onboarding/account?${new URLSearchParams({ returnTo: "/upgrade" }).toString()}`);
+        router.push(onboardingIntroPath("/upgrade"));
         return;
       }
       try {

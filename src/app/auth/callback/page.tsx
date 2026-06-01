@@ -5,23 +5,18 @@ import { useRouter } from "next/navigation";
 import type { User } from "firebase/auth";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { auth as firebaseAuth, BUFFI_SIGNIN_EMAIL_KEY } from "@/lib/firebase";
-import { safeReturnPath } from "@/lib/auth/returnTo";
 import { flushOnboardingAnswers } from "@/lib/auth/onboardingAnswers";
+import { resolvePostAuthPath } from "@/lib/auth/onboardingStatus";
 
 type Status = "checking" | "need-email" | "signing-in" | "success" | "error";
 
 function afterSignInPath(user: User | null): string {
   if (typeof window === "undefined") return "/scan";
   const url = new URL(window.location.href);
-  const returnTo = safeReturnPath(url.searchParams.get("returnTo"), "/scan");
-  const mode = url.searchParams.get("mode");
-  if (mode === "signup") {
-    const created = user?.metadata.creationTime ?? null;
-    const last = user?.metadata.lastSignInTime ?? null;
-    const isBrandNew = !!created && created === last;
-    return isBrandNew ? "/scan" : returnTo;
-  }
-  return returnTo;
+  return resolvePostAuthPath({
+    returnTo: url.searchParams.get("returnTo"),
+    user
+  });
 }
 
 export default function AuthCallbackPage() {

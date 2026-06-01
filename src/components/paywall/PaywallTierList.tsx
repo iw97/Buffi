@@ -17,12 +17,11 @@ type TierDef = {
 const TIERS: TierDef[] = [
   {
     id: "lifetime",
-    badge: "Most popular",
-    badgeKind: "popular",
+    badge: null,
     title: "Lifetime — $149",
     subtitle: "Pay once, use forever",
-    featured: true,
-    tone: "featured"
+    featured: false,
+    tone: "standard"
   },
   {
     id: "yearly",
@@ -35,11 +34,12 @@ const TIERS: TierDef[] = [
   },
   {
     id: "weekly",
-    badge: null,
+    badge: "Most popular",
+    badgeKind: "popular",
     title: "Weekly — $2.99/week",
     subtitle: "Cancel anytime",
-    featured: false,
-    tone: "muted"
+    featured: true,
+    tone: "featured"
   }
 ];
 

@@ -5,6 +5,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { safeReturnPath } from "@/lib/auth/returnTo";
 import { useSignIn } from "@/hooks/useSignIn";
+import {
+  onboardingIntroPath,
+  resolvePostAuthPath
+} from "@/lib/auth/onboardingStatus";
 
 export function SignInScreen() {
   const router = useRouter();
@@ -32,15 +36,24 @@ export function SignInScreen() {
   }
 
   if (isConfigured && user) {
-    router.replace(returnTo);
+    const destination = resolvePostAuthPath({
+      returnTo,
+      profile: auth?.profile ?? null,
+      user
+    });
+    router.replace(destination);
     return null;
   }
 
   const onGoogle = async () => {
     try {
       setError(null);
-      await handleGoogle();
-      router.push(returnTo);
+      const signedInUser = await handleGoogle();
+      const destination = resolvePostAuthPath({
+        returnTo,
+        user: signedInUser
+      });
+      router.push(destination);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign-in failed");
     }
@@ -117,7 +130,7 @@ export function SignInScreen() {
             <button
               type="button"
               className="auth-tab"
-              onClick={() => router.push(`/onboarding/account?${new URLSearchParams({ returnTo }).toString()}`)}
+              onClick={() => router.push(onboardingIntroPath(returnTo))}
             >
               Create account
             </button>

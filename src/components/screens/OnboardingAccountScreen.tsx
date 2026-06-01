@@ -1,11 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { safeReturnPath } from "@/lib/auth/returnTo";
 import { useSignIn } from "@/hooks/useSignIn";
 import { flushOnboardingAnswers } from "@/lib/auth/onboardingAnswers";
+import {
+  hasLocalOnboardingAnswers,
+  onboardingIntroPath,
+  profileHasCompletedOnboarding,
+  resolvePostAuthPath
+} from "@/lib/auth/onboardingStatus";
 
 export function OnboardingAccountScreen() {
   const router = useRouter();
@@ -20,6 +26,13 @@ export function OnboardingAccountScreen() {
   const { handleGoogle: signInWithGoogle, handleEmailLink: sendMagicLink } = useSignIn();
 
   const isConfigured = auth?.isConfigured ?? false;
+
+  useEffect(() => {
+    if (!isConfigured || authLoading || !user) return;
+    if (auth?.profile === null) return;
+    if (profileHasCompletedOnboarding(auth?.profile) || hasLocalOnboardingAnswers()) return;
+    router.replace(onboardingIntroPath(returnTo));
+  }, [isConfigured, authLoading, user, auth?.profile, returnTo, router]);
 
   if (isConfigured && authLoading) {
     return (
@@ -67,12 +80,14 @@ export function OnboardingAccountScreen() {
     try {
       setError(null);
       const signedInUser = await signInWithGoogle();
-      const isNewUser =
-        !!signedInUser.metadata.creationTime &&
-        signedInUser.metadata.creationTime === signedInUser.metadata.lastSignInTime;
-      // Fire-and-forget: flush onboarding answers to profile (no-op if empty)
       void flushOnboardingAnswers(signedInUser.uid, signedInUser.displayName);
-      router.push(isNewUser ? "/scan" : returnTo);
+      router.push(
+        resolvePostAuthPath({
+          returnTo,
+          user: signedInUser,
+          profile: auth?.profile ?? null
+        })
+      );
     } catch (error) {
       setError(error instanceof Error ? error.message : "Sign-in failed");
     }

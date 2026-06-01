@@ -10,6 +10,7 @@ import { useStripeCheckout } from "@/hooks/useStripeCheckout";
 import { TagDetailsStep } from "@/components/scan/TagDetailsStep";
 import { TagConfirmStep, type TagExtraction } from "@/components/scan/TagConfirmStep";
 import type { GarmentCategoryId } from "@/lib/scan/garmentCategories";
+import { onboardingIntroPath } from "@/lib/auth/onboardingStatus";
 
 const TagCameraScanner = dynamic(
   () => import("@/components/scan/TagCameraScanner").then((m) => ({ default: m.TagCameraScanner })),
@@ -336,9 +337,7 @@ export function ScanScreen() {
             <button
               type="button"
               onClick={() =>
-                router.push(
-                  `/onboarding/account?${new URLSearchParams({ returnTo: "/scan" }).toString()}`
-                )
+                router.push(onboardingIntroPath("/scan"))
               }
               style={{
                 background: "none",

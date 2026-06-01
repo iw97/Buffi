@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
+import { onboardingIntroPath } from "@/lib/auth/onboardingStatus";
 
 /** Set to true to always show the logged-in profile UI (for testing). */
 const TESTING_ALWAYS_SHOW_LOGGED_IN = false;
@@ -118,7 +119,7 @@ export function ProfileScreen() {
         <div style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.7 }}>
           You&apos;re not signed in.
           <div style={{ marginTop: 14 }}>
-            <button className="btn-primary" type="button" onClick={() => router.push("/onboarding/account")}>
+            <button className="btn-primary" type="button" onClick={() => router.push(onboardingIntroPath("/profile"))}>
               Create account / Sign in
             </button>
           </div>

@@ -3417,9 +3417,9 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .premium-subtitle {
   font-family: var(--font-sans, sans-serif);
   font-size: 13px;
-  font-weight: 300;
-  color: var(--text-secondary);
-  line-height: 1.6;
+  font-weight: 400;
+  color: var(--ivory-dim);
+  line-height: 1.65;
   margin-bottom: 24px;
 }
 
