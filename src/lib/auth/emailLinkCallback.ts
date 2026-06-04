@@ -1,5 +1,6 @@
 import { BUFFI_SIGNIN_EMAIL_KEY } from "@/lib/firebase";
 import { normalizeAuthEmail } from "@/lib/auth/demoAccount";
+import { savePendingMagicLink } from "@/lib/auth/magicLinkSession";
 import { safeReturnPath } from "@/lib/auth/returnTo";
 import { getPublicAppUrl } from "@/lib/publicAppUrl";
 
@@ -23,7 +24,9 @@ export function buildEmailLinkCallbackUrl(options: {
   callback.searchParams.set("mode", options.mode);
   callback.searchParams.set("returnTo", returnTo);
   callback.searchParams.set("loginEmail", normalizeAuthEmail(options.email));
-  return callback.toString();
+  const url = callback.toString();
+  savePendingMagicLink({ mode: options.mode, returnTo });
+  return url;
 }
 
 /** Remember email on the device that requested the link (same-browser fallback). */

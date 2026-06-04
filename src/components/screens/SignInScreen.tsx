@@ -112,7 +112,7 @@ export function SignInScreen() {
           </div>
 
           <MagicLinkAuthBlock
-            returnTo={returnTo}
+            returnTo="/scan"
             mode="signin"
             onSignedIn={finishSignIn}
             footer={

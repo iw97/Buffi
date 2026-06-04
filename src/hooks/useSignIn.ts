@@ -63,11 +63,14 @@ export function useSignIn() {
       return { kind: "demo-code" };
     }
 
+    const linkReturnTo =
+      options.mode === "signin" ? "/scan" : options.returnTo;
+
     try {
       await sendSignInLinkToEmail(auth, trimmed, {
         url: buildEmailLinkCallbackUrl({
           email: trimmed,
-          returnTo: options.returnTo,
+          returnTo: linkReturnTo,
           mode: options.mode
         }),
         handleCodeInApp: true

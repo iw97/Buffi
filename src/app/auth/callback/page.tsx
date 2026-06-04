@@ -6,21 +6,13 @@ import { useAuthOptional } from "@/contexts/AuthContext";
 import { auth as firebaseAuth } from "@/lib/firebase";
 import { flushOnboardingAnswers } from "@/lib/auth/onboardingAnswers";
 import { readLoginEmailForLink } from "@/lib/auth/emailLinkCallback";
-import { safeReturnPath } from "@/lib/auth/returnTo";
+import {
+  destinationAfterMagicLink,
+  markSkipOnboardingGateOnce,
+  readPendingMagicLink
+} from "@/lib/auth/magicLinkSession";
 
 type Status = "checking" | "need-email" | "signing-in" | "success" | "error";
-
-function destinationAfterLinkSignIn(fullUrl: string): string {
-  const url = new URL(fullUrl);
-  const mode = url.searchParams.get("mode");
-  const returnTo = safeReturnPath(url.searchParams.get("returnTo"), "/scan");
-
-  if (mode === "signup") {
-    return returnTo;
-  }
-
-  return returnTo;
-}
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -41,13 +33,16 @@ export default function AuthCallbackPage() {
 
       const currentUser = firebaseAuth?.currentUser ?? null;
       const url = new URL(fullUrl);
-      const isSignup = url.searchParams.get("mode") === "signup";
+      const pending = readPendingMagicLink();
+      const isSignup =
+        url.searchParams.get("mode") === "signup" || pending?.mode === "signup";
 
       if (currentUser && isSignup) {
         await flushOnboardingAnswers(currentUser.uid, currentUser.displayName);
       }
 
-      router.replace(destinationAfterLinkSignIn(fullUrl));
+      markSkipOnboardingGateOnce();
+      router.replace(destinationAfterMagicLink(fullUrl));
     } catch {
       setStatus("error");
       setErrorMessage(

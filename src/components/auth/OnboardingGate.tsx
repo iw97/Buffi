@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
+import { consumeSkipOnboardingGate } from "@/lib/auth/magicLinkSession";
 import {
   hasLocalOnboardingAnswers,
   onboardingIntroPath,
@@ -25,6 +26,7 @@ export function OnboardingGate() {
   useEffect(() => {
     if (!isConfigured || loading || !user) return;
     if (pathname.startsWith("/onboarding") || pathname.startsWith("/auth/")) return;
+    if (consumeSkipOnboardingGate()) return;
     if (profile === null) return;
 
     if (profileHasCompletedOnboarding(profile) || hasLocalOnboardingAnswers()) {
