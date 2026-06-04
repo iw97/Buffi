@@ -8,11 +8,13 @@ import {
   signInWithPopup,
   type User
 } from "firebase/auth";
-import { auth, BUFFI_SIGNIN_EMAIL_KEY } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import { isDemoReviewEmail, normalizeAuthEmail } from "@/lib/auth/demoAccount";
+import {
+  buildEmailLinkCallbackUrl,
+  persistLoginEmailForLink
+} from "@/lib/auth/emailLinkCallback";
 import { firebaseAuthUserMessage } from "@/lib/auth/firebaseErrorMessage";
-import { safeReturnPath } from "@/lib/auth/returnTo";
-import { getPublicAppUrl } from "@/lib/publicAppUrl";
 
 type SignInMode = "signup" | "signin";
 
@@ -61,21 +63,19 @@ export function useSignIn() {
       return { kind: "demo-code" };
     }
 
-    const returnTo = safeReturnPath(options.returnTo, "/scan");
-    const base = getPublicAppUrl();
-    const callback = new URL("/auth/callback", `${base}/`);
-    callback.searchParams.set("mode", options.mode);
-    callback.searchParams.set("returnTo", returnTo);
-
     try {
       await sendSignInLinkToEmail(auth, trimmed, {
-        url: callback.toString(),
+        url: buildEmailLinkCallbackUrl({
+          email: trimmed,
+          returnTo: options.returnTo,
+          mode: options.mode
+        }),
         handleCodeInApp: true
       });
     } catch (e) {
       throw new Error(firebaseAuthUserMessage(e, "Failed to send sign-in link"));
     }
-    window.localStorage.setItem(BUFFI_SIGNIN_EMAIL_KEY, trimmed);
+    persistLoginEmailForLink(trimmed);
     return { kind: "link-sent" };
   }
 

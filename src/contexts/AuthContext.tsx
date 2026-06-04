@@ -25,9 +25,12 @@ import {
   auth,
   firebaseAuthReady,
   isFirebaseConfigured,
-  BUFFI_SIGNIN_EMAIL_KEY
 } from "@/lib/firebase";
-import { getPublicAppUrl } from "@/lib/publicAppUrl";
+import {
+  buildEmailLinkCallbackUrl,
+  clearPersistedLoginEmailForLink,
+  persistLoginEmailForLink
+} from "@/lib/auth/emailLinkCallback";
 import { setUserProfile, getUserProfile, ensureUserDocument } from "@/lib/firebase/firestore";
 import type { UserProfile } from "@/lib/firebase/types";
 
@@ -173,16 +176,16 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   const sendSignInLinkToEmailAction = useCallback(
     async (email: string, returnTo?: string) => {
       if (!auth || !isConfigured) return;
-      const base = getPublicAppUrl();
-      let callbackUrl = `${base}/auth/callback`;
-      const rt = returnTo?.trim();
-      if (rt && rt.startsWith("/") && !rt.startsWith("//") && !rt.includes("://")) {
-        callbackUrl += `?returnTo=${encodeURIComponent(rt)}`;
-      }
-      await sendSignInLinkToEmail(auth, email.trim(), {
-        url: callbackUrl,
+      const trimmed = email.trim();
+      await sendSignInLinkToEmail(auth, trimmed, {
+        url: buildEmailLinkCallbackUrl({
+          email: trimmed,
+          returnTo,
+          mode: "signin"
+        }),
         handleCodeInApp: true
       });
+      persistLoginEmailForLink(trimmed);
     },
     [isConfigured]
   );
@@ -196,13 +199,7 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
     async (email: string, linkOrFullUrl: string) => {
       if (!auth || !isConfigured) return;
       await firebaseSignInWithEmailLink(auth, email.trim(), linkOrFullUrl);
-      if (typeof window !== "undefined") {
-        try {
-          window.localStorage.removeItem(BUFFI_SIGNIN_EMAIL_KEY);
-        } catch {
-          /* ignore */
-        }
-      }
+      clearPersistedLoginEmailForLink();
       // ensureUserDocument is triggered by onAuthStateChanged
     },
     [isConfigured]
