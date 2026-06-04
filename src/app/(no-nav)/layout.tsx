@@ -3,6 +3,6 @@ export default function NoNavLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <div className="app-shell">{children}</div>;
+  return <div className="app-shell app-shell--no-nav">{children}</div>;
 }
 

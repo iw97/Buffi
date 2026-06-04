@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://buffi.app/sitemap.xml

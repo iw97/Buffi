@@ -1,7 +1,9 @@
+import { OnboardingPageTransition } from "@/components/onboarding/OnboardingPageTransition";
+
 export default function OnboardingTemplate({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <div className="ob-page-enter">{children}</div>;
+  return <OnboardingPageTransition>{children}</OnboardingPageTransition>;
 }

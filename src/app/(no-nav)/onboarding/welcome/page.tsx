@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { OnboardingPersonalizedScreen } from "@/components/screens/OnboardingPersonalizedScreen";
+import { OnboardingWelcomeScreen } from "@/components/screens/OnboardingWelcomeScreen";
 
 export default function Page() {
   return (
@@ -12,7 +12,7 @@ export default function Page() {
         </div>
       }
     >
-      <OnboardingPersonalizedScreen />
+      <OnboardingWelcomeScreen />
     </Suspense>
   );
 }

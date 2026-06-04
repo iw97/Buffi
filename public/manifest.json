@@ -2,7 +2,7 @@
   "name": "Buffi",
   "short_name": "Buffi",
   "description": "Material intelligence for the conscious shopper.",
-  "start_url": "/scan",
+  "start_url": "/splash",
   "display": "standalone",
   "background_color": "#080807",
   "theme_color": "#080807",

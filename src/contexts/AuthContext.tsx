@@ -8,6 +8,7 @@ import {
   useMemo,
   useState
 } from "react";
+import { useRouter } from "next/navigation";
 import type { User } from "firebase/auth";
 import {
   onAuthStateChanged,
@@ -70,6 +71,7 @@ const MOCK_USER = {
 } as unknown as User;
 
 export function FirebaseAuthProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(TESTING_FORCE_LOGGED_IN ? MOCK_USER : null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(!TESTING_FORCE_LOGGED_IN);
@@ -209,7 +211,8 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   const signOut = useCallback(async () => {
     if (!auth) return;
     await firebaseSignOut(auth);
-  }, []);
+    router.replace("/signin");
+  }, [router]);
 
   const refreshProfile = useCallback(async () => {
     const u = user;

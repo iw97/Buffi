@@ -2,9 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import type { User } from "firebase/auth";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { safeReturnPath } from "@/lib/auth/returnTo";
 import { useSignIn } from "@/hooks/useSignIn";
+import { SocialSignInButtons } from "@/components/auth/SocialSignInButtons";
+import { MagicLinkAuthBlock } from "@/components/auth/MagicLinkAuthBlock";
 import { flushOnboardingAnswers } from "@/lib/auth/onboardingAnswers";
 import {
   hasLocalOnboardingAnswers,
@@ -20,10 +23,8 @@ export function OnboardingAccountScreen() {
   const auth = useAuthOptional();
   const authLoading = auth?.loading ?? true;
   const user = auth?.user ?? null;
-  const [magicEmail, setMagicEmail] = useState("");
-  const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { handleGoogle: signInWithGoogle, handleEmailLink: sendMagicLink } = useSignIn();
+  const { handleGoogle: signInWithGoogle, handleApple: signInWithApple } = useSignIn();
 
   const isConfigured = auth?.isConfigured ?? false;
 
@@ -76,38 +77,33 @@ export function OnboardingAccountScreen() {
     );
   }
 
+  async function finishSignup(signedInUser: User) {
+    await flushOnboardingAnswers(signedInUser.uid, signedInUser.displayName);
+    router.push(
+      resolvePostAuthPath({
+        returnTo,
+        authMode: "signup"
+      })
+    );
+  }
+
   const onGoogle = async () => {
     try {
       setError(null);
-      const signedInUser = await signInWithGoogle();
-      await flushOnboardingAnswers(signedInUser.uid, signedInUser.displayName);
-      router.push(
-        resolvePostAuthPath({
-          returnTo,
-          authMode: "signup"
-        })
-      );
+      await finishSignup(await signInWithGoogle());
     } catch (error) {
       setError(error instanceof Error ? error.message : "Sign-in failed");
     }
   };
 
-  const handleSendSignInLink = async () => {
-    setError(null);
-    const email = magicEmail.trim();
-    if (!email) {
-      setError("Enter your email address");
-      return;
-    }
+  const onApple = async () => {
     try {
-      await sendMagicLink(email, { returnTo, mode: "signup" });
-      setLinkSentTo(email);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to send sign-in link");
+      setError(null);
+      await finishSignup(await signInWithApple());
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Sign-in failed");
     }
   };
-
-  const linkSentVisible = linkSentTo !== null;
 
   return (
     <div className="min-h-screen">
@@ -122,10 +118,7 @@ export function OnboardingAccountScreen() {
         </p>
 
         <div className="auth-block">
-          <button className="btn-google" type="button" onClick={onGoogle}>
-            <span aria-hidden>G</span>
-            Continue with Google
-          </button>
+          <SocialSignInButtons onGoogle={onGoogle} onApple={onApple} />
 
           {error && (
             <p className="auth-legal" style={{ color: "var(--red)" }}>
@@ -139,40 +132,23 @@ export function OnboardingAccountScreen() {
             <div className="auth-divider-line" />
           </div>
 
-          {!linkSentVisible ? (
-            <div className="auth-input-wrap">
-              <div className="auth-input-label">Email Address</div>
-              <input
-                className="auth-input"
-                type="email"
-                placeholder="you@example.com"
-                value={magicEmail}
-                onChange={(e) => setMagicEmail(e.target.value)}
-              />
-            </div>
-          ) : (
-            <p className="auth-legal" style={{ marginTop: 0, marginBottom: 8 }}>
-              Check your email — we sent you a link to sign in or create your account at{" "}
-              <strong style={{ color: "var(--ivory)" }}>{linkSentTo}</strong>.
-            </p>
-          )}
-
-          {!linkSentVisible ? (
-            <button type="button" className="btn-primary" style={{ width: "100%", marginTop: 12 }} onClick={handleSendSignInLink}>
-              Send magic link
-            </button>
-          ) : null}
-
-          <p className="auth-legal" style={{ marginTop: 12 }}>
-            Already have an account?{" "}
-            <button
-              type="button"
-              className="auth-tab"
-              onClick={() => router.push(`/signin?${new URLSearchParams({ returnTo }).toString()}`)}
-            >
-              Sign in
-            </button>
-          </p>
+          <MagicLinkAuthBlock
+            returnTo={returnTo}
+            mode="signup"
+            onSignedIn={finishSignup}
+            footer={
+              <p className="auth-legal" style={{ marginTop: 12 }}>
+                Already have an account?{" "}
+                <button
+                  type="button"
+                  className="auth-tab"
+                  onClick={() => router.push(`/signin?${new URLSearchParams({ returnTo }).toString()}`)}
+                >
+                  Sign in
+                </button>
+              </p>
+            }
+          />
         </div>
       </div>
     </div>

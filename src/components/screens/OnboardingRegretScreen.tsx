@@ -55,7 +55,7 @@ export function OnboardingRegretScreen() {
           <button
             className="ob-back"
             type="button"
-            onClick={() => router.push(`/onboarding/intro${stepQ}`)}
+            onClick={() => router.push(`/onboarding/welcome${stepQ}`)}
           >
             ←
           </button>

@@ -20,7 +20,7 @@ export function OnboardingShopperScreen() {
 
   function handleContinue() {
     if (selected) saveObAnswer("buffi_ob_shopper", selected);
-    router.push(`/onboarding/personalized${stepQ}`);
+    router.push(`/onboarding/reflection${stepQ}`);
   }
 
   return (

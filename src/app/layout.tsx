@@ -26,9 +26,15 @@ const dmMono = DM_Mono({
   variable: "--font-mono"
 });
 
+const siteDescription =
+  "Scan any clothing tag or product URL. Buffi shows you the real material cost, markup percentage, and whether the price is worth it. No brand deals. No sponsored results.";
+
 export const metadata: Metadata = {
-  title: "Buffi",
-  description: "Material intelligence for the conscious shopper.",
+  title: {
+    default: "Buffi — Know What You're Really Buying",
+    template: "%s · Buffi"
+  },
+  description: siteDescription,
   metadataBase: new URL(appUrl),
   manifest: "/manifest.json",
   appleWebApp: {
@@ -41,19 +47,24 @@ export const metadata: Metadata = {
     apple: "/icons/icon-192.png"
   },
   openGraph: {
-    title: "Buffi",
-    description: "Material intelligence",
+    title: "Buffi — Material Intelligence",
+    description: siteDescription,
+    url: "https://buffi.app",
     type: "website",
+    siteName: "Buffi",
     images: [
       {
         url: "/og-image.png",
-        width: 500,
-        height: 500
+        width: 1200,
+        height: 630,
+        alt: "Buffi product breakdown — material cost, markup, and verdict"
       }
     ]
   },
   twitter: {
     card: "summary_large_image",
+    title: "Buffi — Material Intelligence",
+    description: siteDescription,
     images: ["/og-image.png"]
   }
 };

@@ -309,7 +309,6 @@ export function ProfileScreen() {
           disabled={deleteBusy}
           onClick={async () => {
             await auth?.signOut();
-            router.push("/");
           }}
         >
           ← Log Out
@@ -437,8 +436,8 @@ export function ProfileScreen() {
                         await auth?.signOut();
                       } catch {
                         /* auth user may already be removed server-side */
+                        router.replace("/signin");
                       }
-                      router.push("/");
                     } catch (e) {
                       setDeleteError(e instanceof Error ? e.message : "Could not delete account");
                     } finally {

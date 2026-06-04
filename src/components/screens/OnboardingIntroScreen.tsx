@@ -14,7 +14,7 @@ export function OnboardingIntroScreen() {
 
   function handleContinue() {
     saveObAnswer("buffi_ob_name", name.trim());
-    router.push(`/onboarding/regret${stepQ}`);
+    router.push(`/onboarding/welcome${stepQ}`);
   }
 
   return (
