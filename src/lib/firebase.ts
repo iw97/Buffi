@@ -43,6 +43,3 @@ export const firebaseAuthReady =
         console.warn("[firebase] failed to set browserLocalPersistence:", e);
       })
     : Promise.resolve();
-
-/** localStorage key for email when completing email-link sign-in (e.g. from another device). */
-export const BUFFI_SIGNIN_EMAIL_KEY = "buffiSignInEmail";

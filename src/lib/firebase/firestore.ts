@@ -20,7 +20,13 @@ import {
 import type { Unsubscribe } from "firebase/firestore";
 import type { Timestamp } from "firebase/firestore";
 import { auth, firestore } from "@/lib/firebase";
+import { isFirestorePermissionDenied } from "@/lib/firebase/firestoreErrors";
 import { COLLECTIONS, type UserProfile, type SavedItem, type ScanHistoryEntry } from "./types";
+
+export { getFirestoreErrorCode, isFirestorePermissionDenied } from "@/lib/firebase/firestoreErrors";
+
+const PROFILE_READ_MAX_ATTEMPTS = 3;
+const PROFILE_READ_RETRY_BASE_MS = 500;
 
 function timestampToIso(t: unknown): string {
   if (t && typeof (t as Timestamp).toDate === "function") return (t as Timestamp).toDate().toISOString();
@@ -51,17 +57,33 @@ async function withFirestoreLog<T>(operation: string, fn: () => Promise<T>): Pro
   }
 }
 
-/** Get user profile doc */
+/** Get user profile doc (retries on permission-denied while auth token propagates). */
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   const op = "getUserProfile(users/" + uid + ")";
   if (!requireAuth(op)) return null;
-  return withFirestoreLog(op, async () => {
-    const db = getDb();
-    const ref = doc(db, COLLECTIONS.USERS, uid);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return null;
-    return snap.data() as UserProfile;
-  });
+
+  let lastError: unknown;
+  for (let attempt = 0; attempt < PROFILE_READ_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await withFirestoreLog(op, async () => {
+        const db = getDb();
+        const ref = doc(db, COLLECTIONS.USERS, uid);
+        const snap = await getDoc(ref);
+        if (!snap.exists()) return null;
+        return snap.data() as UserProfile;
+      });
+    } catch (error) {
+      if (!isFirestorePermissionDenied(error) || attempt === PROFILE_READ_MAX_ATTEMPTS - 1) {
+        throw error;
+      }
+      lastError = error;
+      await new Promise((resolve) =>
+        setTimeout(resolve, PROFILE_READ_RETRY_BASE_MS * (attempt + 1))
+      );
+    }
+  }
+
+  throw lastError;
 }
 
 function userFieldMissing(data: Record<string, unknown>, key: string): boolean {
@@ -69,7 +91,8 @@ function userFieldMissing(data: Record<string, unknown>, key: string): boolean {
 }
 
 /**
- * Ensures users/{uid} has required profile + counter fields. Runs on every sign-in (OAuth, magic link, etc.).
+ * @deprecated Login uses POST /api/ensure-user-profile (Admin SDK). Client writes can fail with permission-denied.
+ * Ensures users/{uid} has required profile + counter fields.
  * Uses setDoc(merge: true) so existing values are kept; only fills keys that are missing or undefined.
  */
 export async function ensureUserDocument(

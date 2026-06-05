@@ -1,11 +1,10 @@
 /**
- * Ensure the App Store review demo Firebase Auth user exists.
+ * Ensure the App Store review demo Firebase Auth user exists with password auth.
  *
  * Usage:
  *   npx tsx scripts/create-demo-review-account.ts
  *
  * Requires FIREBASE_SERVICE_ACCOUNT_JSON in .env.local
- * The account is also auto-created on first demo sign-in via /api/demo-sign-in.
  */
 import { config } from "dotenv";
 import { resolve } from "path";
@@ -13,7 +12,7 @@ import { resolve } from "path";
 config({ path: resolve(process.cwd(), ".env.local") });
 
 import { FieldValue } from "firebase-admin/firestore";
-import { DEMO_REVIEW_EMAIL } from "../src/lib/auth/demoAccount";
+import { DEMO_REVIEW_EMAIL, DEMO_REVIEW_PASSWORD } from "../src/lib/auth/demoAccount";
 import { getAdminAuth, getAdminFirestore } from "../src/lib/firebase/admin";
 
 async function main(): Promise<void> {
@@ -26,10 +25,16 @@ async function main(): Promise<void> {
   try {
     const existing = await adminAuth.getUserByEmail(DEMO_REVIEW_EMAIL);
     uid = existing.uid;
-    console.log(`Demo review user already exists: ${DEMO_REVIEW_EMAIL} (${uid})`);
+    await adminAuth.updateUser(uid, {
+      password: DEMO_REVIEW_PASSWORD,
+      emailVerified: true,
+      displayName: "App Review"
+    });
+    console.log(`Updated demo review user: ${DEMO_REVIEW_EMAIL} (${uid})`);
   } catch {
     const created = await adminAuth.createUser({
       email: DEMO_REVIEW_EMAIL,
+      password: DEMO_REVIEW_PASSWORD,
       emailVerified: true,
       displayName: "App Review"
     });
@@ -44,7 +49,9 @@ async function main(): Promise<void> {
         email: DEMO_REVIEW_EMAIL,
         displayName: "App Review",
         shopperType: "All three — I'm done settling",
-        isPro: false,
+        onboardingComplete: true,
+        isPro: true,
+        subscriptionStatus: "review_demo",
         scanCount: 0,
         completedScans: 0,
         savedCount: 0,
@@ -60,8 +67,8 @@ async function main(): Promise<void> {
   }
 
   console.log("\nApp Review credentials:");
-  console.log(`  Email: ${DEMO_REVIEW_EMAIL}`);
-  console.log("  Code:  123456");
+  console.log(`  Email:    ${DEMO_REVIEW_EMAIL}`);
+  console.log(`  Password: ${DEMO_REVIEW_PASSWORD}`);
 }
 
 main().catch((err) => {

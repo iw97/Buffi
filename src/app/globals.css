@@ -1528,6 +1528,31 @@ input[type="range"]::-webkit-slider-thumb:hover {
   margin-top: 40px;
 }
 
+.ob-nav--intro-actions {
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ob-intro-signin {
+  width: 100%;
+  padding: 16px 18px;
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: 2px;
+  color: var(--ivory);
+  font-family: var(--font-sans, sans-serif);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.ob-intro-signin:hover {
+  border-color: var(--ivory-dim);
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .ob-back {
   padding: 16px 20px;
   background: transparent;

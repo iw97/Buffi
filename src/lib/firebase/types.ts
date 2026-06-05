@@ -101,6 +101,8 @@ export interface UserProfile {
   onboardingQuality?: string;
   onboardingAwareness?: string;
   shopperType?: string;
+  /** True when onboarding quiz is done or user is a returning sign-in (magic link). */
+  onboardingComplete?: boolean;
   savedCount?: number;
   scannedCount?: number;
   /** @deprecated Use estimatedMoneySaved — legacy profile field */

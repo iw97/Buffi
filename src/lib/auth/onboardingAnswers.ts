@@ -31,7 +31,7 @@ export function getObAnswer(key: ObKey): string | null {
   return localStorage.getItem(key);
 }
 
-function clearObAnswers(): void {
+export function clearObAnswers(): void {
   OB_KEYS.forEach((k) => localStorage.removeItem(k));
 }
 

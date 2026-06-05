@@ -6,11 +6,8 @@ import { onboardingIntroPath } from "@/lib/auth/onboardingStatus";
  */
 export const LAUNCH_SPLASH_STORAGE_KEY = "buffi_launch_splash_seen";
 
-/** After splash: sign-in, then new users start onboarding via Create account. */
-export const POST_SPLASH_PATH = "/signin";
-
-/** Where sign-in sends brand-new users after auth (onboarding intro). */
-export const POST_SPLASH_SIGNIN_RETURN = onboardingIntroPath("/scan");
+/** After first-install splash: start onboarding at the name step. */
+export const POST_SPLASH_PATH = onboardingIntroPath("/scan");
 
 const SKIP_PREFIXES = [
   "/splash",

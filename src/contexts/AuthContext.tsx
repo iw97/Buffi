@@ -16,53 +16,65 @@ import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  sendSignInLinkToEmail,
-  isSignInWithEmailLink as firebaseIsSignInWithEmailLink,
-  signInWithEmailLink as firebaseSignInWithEmailLink
+  sendPasswordResetEmail,
+  signOut as firebaseSignOut
 } from "firebase/auth";
 import {
   auth,
   firebaseAuthReady,
   isFirebaseConfigured,
 } from "@/lib/firebase";
-import {
-  buildEmailLinkCallbackUrl,
-  clearPersistedLoginEmailForLink,
-  persistLoginEmailForLink
-} from "@/lib/auth/emailLinkCallback";
-import { setUserProfile, getUserProfile, ensureUserDocument } from "@/lib/firebase/firestore";
+import { ensureUserProfileViaApi } from "@/lib/auth/ensureUserProfileClient";
 import type { UserProfile } from "@/lib/firebase/types";
 
-/**
- * Auth state for the app.
- * `loading` is true until Firebase has finished its initial session check (onAuthStateChanged first fire),
- * or until we know auth is unavailable — never infer "logged out" from `user === null` while `loading` is true.
- */
+async function loadProfileFromServer(firebaseUser: User): Promise<{
+  profile: UserProfile | null;
+  profileReady: boolean;
+  profileError: string | null;
+  profileLoading: boolean;
+}> {
+  try {
+    const profile = await ensureUserProfileViaApi(firebaseUser);
+    return {
+      profile,
+      profileReady: true,
+      profileError: null,
+      profileLoading: false
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Could not load your profile";
+    console.error("[auth] ensure-user-profile failed:", message);
+    return {
+      profile: null,
+      profileReady: true,
+      profileError: message,
+      profileLoading: false
+    };
+  }
+}
+
 interface AuthState {
   user: User | null;
   profile: UserProfile | null;
+  profileLoading: boolean;
+  profileReady: boolean;
+  profileError: string | null;
   loading: boolean;
   isConfigured: boolean;
 }
 
 interface AuthActions {
-  /** Reload `profile` from Firestore (e.g. after mutating savedCount). */
   refreshProfile: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
-  /** Send passwordless sign-in / sign-up link to email; caller should save email to localStorage (buffiSignInEmail) and show confirmation. */
-  sendSignInLinkToEmail: (email: string, returnTo?: string) => Promise<void>;
-  /** Complete sign-in from email link (used on /auth/callback). Returns true on success. */
-  completeSignInWithEmailLink: (email: string, linkOrFullUrl: string) => Promise<void>;
-  isSignInWithEmailLink: (url: string) => boolean;
+  sendPasswordResetEmail: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState & AuthActions | null>(null);
 
-/** For testing: when true, act as if user is always logged in (mock user when none). */
 const TESTING_FORCE_LOGGED_IN = false;
 
 const MOCK_USER = {
@@ -77,8 +89,21 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   const router = useRouter();
   const [user, setUser] = useState<User | null>(TESTING_FORCE_LOGGED_IN ? MOCK_USER : null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileReady, setProfileReady] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [loading, setLoading] = useState(!TESTING_FORCE_LOGGED_IN);
   const isConfigured = isFirebaseConfigured();
+
+  const applyProfileLoad = useCallback(
+    (result: Awaited<ReturnType<typeof loadProfileFromServer>>) => {
+      setProfile(result.profile);
+      setProfileReady(result.profileReady);
+      setProfileError(result.profileError);
+      setProfileLoading(result.profileLoading);
+    },
+    []
+  );
 
   useEffect(() => {
     if (!isConfigured) {
@@ -102,7 +127,6 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
           return;
         }
         unsubscribe = onAuthStateChanged(auth, (u) => {
-          console.log("auth state changed", u);
           if (typeof document !== "undefined") {
             if (u) {
               document.cookie = "buffi_auth=1; path=/; max-age=2592000; samesite=lax";
@@ -112,12 +136,19 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
           }
           setUser(TESTING_FORCE_LOGGED_IN && !u ? MOCK_USER : u);
           setProfile(null);
+          setProfileReady(false);
+          setProfileError(null);
           setLoading(false);
-          if (u) {
-            ensureUserDocument(u.uid, u.email ?? null, u.displayName ?? null, u.photoURL ?? null)
-              .then(() => getUserProfile(u.uid).then(setProfile))
-              .catch(() => {});
+
+          if (!u) {
+            setProfileLoading(false);
+            return;
           }
+
+          setProfileLoading(true);
+          void loadProfileFromServer(u).then((result) => {
+            if (!cancelled) applyProfileLoad(result);
+          });
         });
       })
       .catch(() => {
@@ -128,39 +159,28 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
       cancelled = true;
       unsubscribe?.();
     };
-  }, [isConfigured]);
-
-  useEffect(() => {
-    if (!user || !isConfigured) return;
-    getUserProfile(user.uid).then(setProfile).catch(() => setProfile(null));
-  }, [user?.uid, isConfigured]);
+  }, [isConfigured, applyProfileLoad]);
 
   const signInWithGoogle = useCallback(async () => {
     if (!auth || !isConfigured) return;
     const provider = new GoogleAuthProvider();
-    console.log("calling Firebase auth");
     const result = await signInWithPopup(auth, provider);
-    console.log("Firebase auth called", result);
-    const u = result.user;
-    await setUserProfile(u.uid, {
-      displayName: u.displayName ?? null,
-      email: u.email ?? null,
-      photoURL: u.photoURL ?? null,
-      createdAt: new Date().toISOString()
-    });
+    const profile = await ensureUserProfileViaApi(result.user);
+    setProfile(profile);
+    setProfileReady(true);
+    setProfileError(null);
+    setProfileLoading(false);
   }, [isConfigured]);
 
   const signUpWithEmail = useCallback(
     async (email: string, password: string) => {
       if (!auth || !isConfigured) return;
       const result = await createUserWithEmailAndPassword(auth, email, password);
-      const u = result.user;
-      await setUserProfile(u.uid, {
-        displayName: u.displayName ?? null,
-        email: u.email ?? null,
-        photoURL: u.photoURL ?? null,
-        createdAt: new Date().toISOString()
-      });
+      const profile = await ensureUserProfileViaApi(result.user);
+      setProfile(profile);
+      setProfileReady(true);
+      setProfileError(null);
+      setProfileLoading(false);
     },
     [isConfigured]
   );
@@ -168,39 +188,20 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   const signInWithEmail = useCallback(
     async (email: string, password: string) => {
       if (!auth || !isConfigured) return;
-      await signInWithEmailAndPassword(auth, email, password);
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      const profile = await ensureUserProfileViaApi(result.user);
+      setProfile(profile);
+      setProfileReady(true);
+      setProfileError(null);
+      setProfileLoading(false);
     },
     [isConfigured]
   );
 
-  const sendSignInLinkToEmailAction = useCallback(
-    async (email: string, returnTo?: string) => {
+  const sendPasswordResetEmailAction = useCallback(
+    async (email: string) => {
       if (!auth || !isConfigured) return;
-      const trimmed = email.trim();
-      await sendSignInLinkToEmail(auth, trimmed, {
-        url: buildEmailLinkCallbackUrl({
-          email: trimmed,
-          returnTo,
-          mode: "signin"
-        }),
-        handleCodeInApp: true
-      });
-      persistLoginEmailForLink(trimmed);
-    },
-    [isConfigured]
-  );
-
-  const isSignInWithEmailLinkAction = useCallback((url: string) => {
-    if (!auth) return false;
-    return firebaseIsSignInWithEmailLink(auth, url);
-  }, []);
-
-  const completeSignInWithEmailLink = useCallback(
-    async (email: string, linkOrFullUrl: string) => {
-      if (!auth || !isConfigured) return;
-      await firebaseSignInWithEmailLink(auth, email.trim(), linkOrFullUrl);
-      clearPersistedLoginEmailForLink();
-      // ensureUserDocument is triggered by onAuthStateChanged
+      await sendPasswordResetEmail(auth, email.trim());
     },
     [isConfigured]
   );
@@ -214,41 +215,41 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   const refreshProfile = useCallback(async () => {
     const u = user;
     if (!u || !isConfigured) return;
-    try {
-      const p = await getUserProfile(u.uid);
-      setProfile(p);
-    } catch {
-      setProfile(null);
-    }
-  }, [user, isConfigured]);
+    setProfileLoading(true);
+    setProfileError(null);
+    const result = await loadProfileFromServer(u);
+    applyProfileLoad(result);
+  }, [user, isConfigured, applyProfileLoad]);
 
   const value = useMemo(
     () => ({
       user,
       profile,
+      profileLoading,
+      profileReady,
+      profileError,
       loading,
       isConfigured,
       refreshProfile,
       signInWithGoogle,
       signUpWithEmail,
       signInWithEmail,
-      sendSignInLinkToEmail: sendSignInLinkToEmailAction,
-      completeSignInWithEmailLink,
-      isSignInWithEmailLink: isSignInWithEmailLinkAction,
+      sendPasswordResetEmail: sendPasswordResetEmailAction,
       signOut
     }),
     [
       user,
       profile,
+      profileLoading,
+      profileReady,
+      profileError,
       loading,
       isConfigured,
       refreshProfile,
       signInWithGoogle,
       signUpWithEmail,
       signInWithEmail,
-      sendSignInLinkToEmailAction,
-      completeSignInWithEmailLink,
-      isSignInWithEmailLinkAction,
+      sendPasswordResetEmailAction,
       signOut
     ]
   );
@@ -256,17 +257,12 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-/**
- * App auth: `user` is null while signed out and also before the first `onAuthStateChanged` fires — check `loading` first.
- * Shape: `{ user, profile, loading, isConfigured, ...actions }`.
- */
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within FirebaseAuthProvider");
   return ctx;
 }
 
-/** Same values as `useAuth` when inside `FirebaseAuthProvider`; `null` only if the provider is missing. */
 export function useAuthOptional() {
   return useContext(AuthContext);
 }

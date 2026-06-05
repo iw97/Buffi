@@ -7,11 +7,10 @@ import { useAuthOptional } from "@/contexts/AuthContext";
 import { safeReturnPath } from "@/lib/auth/returnTo";
 import { useSignIn } from "@/hooks/useSignIn";
 import { SocialSignInButtons } from "@/components/auth/SocialSignInButtons";
-import { MagicLinkAuthBlock } from "@/components/auth/MagicLinkAuthBlock";
-import { flushOnboardingAnswers } from "@/lib/auth/onboardingAnswers";
+import { EmailPasswordAuthBlock } from "@/components/auth/EmailPasswordAuthBlock";
+import { completeOnboardingSignup } from "@/lib/auth/completeOnboardingSignup";
 import {
   hasLocalOnboardingAnswers,
-  onboardingIntroPath,
   profileHasCompletedOnboarding,
   resolvePostAuthPath
 } from "@/lib/auth/onboardingStatus";
@@ -29,11 +28,34 @@ export function OnboardingAccountScreen() {
   const isConfigured = auth?.isConfigured ?? false;
 
   useEffect(() => {
-    if (!isConfigured || authLoading || !user) return;
-    if (auth?.profile === null) return;
+    const signedInUser = user;
+    if (!isConfigured || authLoading || !signedInUser) return;
     if (profileHasCompletedOnboarding(auth?.profile) || hasLocalOnboardingAnswers()) return;
-    router.replace(onboardingIntroPath(returnTo));
-  }, [isConfigured, authLoading, user, auth?.profile, returnTo, router]);
+
+    let cancelled = false;
+    const { uid, email: authEmail, displayName } = signedInUser;
+
+    async function restoreAndRoute() {
+      const email = authEmail?.trim();
+      if (!email) return;
+
+      try {
+        await completeOnboardingSignup(uid, email, displayName);
+        await auth?.refreshProfile?.();
+        if (cancelled) return;
+        if (profileHasCompletedOnboarding(auth?.profile)) {
+          router.replace(returnTo);
+        }
+      } catch {
+        /* stay on account */
+      }
+    }
+
+    void restoreAndRoute();
+    return () => {
+      cancelled = true;
+    };
+  }, [isConfigured, authLoading, user, auth?.profile, returnTo, router, auth]);
 
   if (isConfigured && authLoading) {
     return (
@@ -66,7 +88,10 @@ export function OnboardingAccountScreen() {
             className="ob-next"
             type="button"
             onClick={async () => {
-              await flushOnboardingAnswers(user.uid, user.displayName);
+              if (user.email) {
+                await completeOnboardingSignup(user.uid, user.email, user.displayName);
+                await auth?.refreshProfile?.();
+              }
               router.push(returnTo);
             }}
           >
@@ -78,11 +103,19 @@ export function OnboardingAccountScreen() {
   }
 
   async function finishSignup(signedInUser: User) {
-    await flushOnboardingAnswers(signedInUser.uid, signedInUser.displayName);
+    if (signedInUser.email) {
+      await completeOnboardingSignup(
+        signedInUser.uid,
+        signedInUser.email,
+        signedInUser.displayName
+      );
+      await auth?.refreshProfile?.();
+    }
     router.push(
       resolvePostAuthPath({
         returnTo,
-        authMode: "signup"
+        authMode: "signup",
+        profile: auth?.profile ?? null
       })
     );
   }
@@ -91,8 +124,8 @@ export function OnboardingAccountScreen() {
     try {
       setError(null);
       await finishSignup(await signInWithGoogle());
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Sign-in failed");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign-in failed");
     }
   };
 
@@ -100,8 +133,8 @@ export function OnboardingAccountScreen() {
     try {
       setError(null);
       await finishSignup(await signInWithApple());
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Sign-in failed");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign-in failed");
     }
   };
 
@@ -132,8 +165,7 @@ export function OnboardingAccountScreen() {
             <div className="auth-divider-line" />
           </div>
 
-          <MagicLinkAuthBlock
-            returnTo={returnTo}
+          <EmailPasswordAuthBlock
             mode="signup"
             onSignedIn={finishSignup}
             footer={
@@ -154,4 +186,3 @@ export function OnboardingAccountScreen() {
     </div>
   );
 }
-

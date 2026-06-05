@@ -21,6 +21,15 @@ export function firebaseAuthUserMessage(error: unknown, fallback: string): strin
         return "That email address doesn’t look valid.";
       case "auth/missing-email":
         return "Enter your email address.";
+      case "auth/wrong-password":
+      case "auth/invalid-credential":
+        return "Incorrect email or password.";
+      case "auth/user-not-found":
+        return "No account found for that email.";
+      case "auth/email-already-in-use":
+        return "An account already exists for that email. Sign in instead.";
+      case "auth/weak-password":
+        return "Password must be at least 6 characters.";
       default:
         break;
     }

@@ -1,18 +1,17 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { User } from "firebase/auth";
 import { useAuthOptional } from "@/contexts/AuthContext";
-import { getUserProfile } from "@/lib/firebase/firestore";
 import { safeReturnPath } from "@/lib/auth/returnTo";
 import { useSignIn } from "@/hooks/useSignIn";
 import { SocialSignInButtons } from "@/components/auth/SocialSignInButtons";
-import { MagicLinkAuthBlock } from "@/components/auth/MagicLinkAuthBlock";
+import { EmailPasswordAuthBlock } from "@/components/auth/EmailPasswordAuthBlock";
 import {
   onboardingIntroPath,
   resolvePostAuthPath
 } from "@/lib/auth/onboardingStatus";
-import { useState } from "react";
 
 export function SignInScreen() {
   const router = useRouter();
@@ -26,6 +25,29 @@ export function SignInScreen() {
 
   const isConfigured = auth?.isConfigured ?? false;
 
+  useEffect(() => {
+    if (!isConfigured || authLoading || !user) return;
+    if (auth?.profileError) return;
+    if (auth?.profileLoading || !auth?.profileReady) return;
+
+    const destination = resolvePostAuthPath({
+      returnTo,
+      profile: auth?.profile ?? null,
+      authMode: "signin"
+    });
+    router.replace(destination);
+  }, [
+    isConfigured,
+    authLoading,
+    user,
+    auth?.profile,
+    auth?.profileLoading,
+    auth?.profileReady,
+    auth?.profileError,
+    returnTo,
+    router
+  ]);
+
   if (isConfigured && authLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-10">
@@ -37,32 +59,32 @@ export function SignInScreen() {
     );
   }
 
-  if (isConfigured && user && auth?.profile === null) {
+  if (isConfigured && user && !auth?.profileError) {
+    if (auth?.profileLoading || !auth?.profileReady) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-10">
+          <div className="analyzing-label">Loading</div>
+          <p className="auth-legal" style={{ color: "var(--text-dim)" }}>
+            Setting up your account…
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-10">
         <div className="analyzing-label">Loading</div>
         <p className="auth-legal" style={{ color: "var(--text-dim)" }}>
-          Checking your account…
+          Signing you in…
         </p>
       </div>
     );
   }
 
-  if (isConfigured && user) {
+  async function finishSignIn(signedInUser: User) {
+    await auth?.refreshProfile?.();
     const destination = resolvePostAuthPath({
       returnTo,
       profile: auth?.profile ?? null,
-      authMode: "signin"
-    });
-    router.replace(destination);
-    return null;
-  }
-
-  async function finishSignIn(signedInUser: User) {
-    const profile = await getUserProfile(signedInUser.uid);
-    const destination = resolvePostAuthPath({
-      returnTo,
-      profile,
       authMode: "signin"
     });
     router.push(destination);
@@ -111,8 +133,7 @@ export function SignInScreen() {
             <div className="auth-divider-line" />
           </div>
 
-          <MagicLinkAuthBlock
-            returnTo="/scan"
+          <EmailPasswordAuthBlock
             mode="signin"
             onSignedIn={finishSignIn}
             footer={
@@ -123,7 +144,7 @@ export function SignInScreen() {
                   className="auth-tab"
                   onClick={() => router.push(onboardingIntroPath(returnTo))}
                 >
-                  Create account
+                  Start onboarding
                 </button>
               </p>
             }

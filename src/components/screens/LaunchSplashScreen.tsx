@@ -2,11 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import {
-  markLaunchSplashSeen,
-  POST_SPLASH_PATH,
-  POST_SPLASH_SIGNIN_RETURN
-} from "@/lib/launchSplash";
+import { markLaunchSplashSeen, POST_SPLASH_PATH } from "@/lib/launchSplash";
 
 const DISPLAY_MS = 2200;
 
@@ -19,8 +15,7 @@ export function LaunchSplashScreen() {
       if (hasNavigated.current) return;
       hasNavigated.current = true;
       markLaunchSplashSeen();
-      const params = new URLSearchParams({ returnTo: POST_SPLASH_SIGNIN_RETURN });
-      router.replace(`${POST_SPLASH_PATH}?${params.toString()}`);
+      router.replace(POST_SPLASH_PATH);
     }, DISPLAY_MS);
 
     return () => window.clearTimeout(timer);

@@ -8,11 +8,16 @@ service cloud.firestore {
     match /productMappings/{document} {
       allow read, write: if false;
     }
+    match /pendingOnboarding/{document} {
+      allow read, write: if false;
+    }
 
-    // users/{uid} — owner read/write. `setDoc` with `{ merge: true }` is a create (new doc) or update (existing); both allowed here.
+    // users/{uid} — owner-only. Client reads require a valid auth token (uid match).
+    // Magic-link sign-in: token may lag briefly; client retries getUserProfile on permission-denied.
     match /users/{userId} {
       allow read: if request.auth != null && request.auth.uid == userId;
       allow create, update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false;
     }
 
     // Marketing waitlist — anonymous read/write for duplicate query + addDoc (legacy client).

@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAuthOptional } from "@/contexts/AuthContext";
 import { onboardingReturnToQuery, safeReturnPath } from "@/lib/auth/returnTo";
 import { saveObAnswer } from "@/lib/auth/onboardingAnswers";
 
 export function OnboardingIntroScreen() {
   const router = useRouter();
+  const auth = useAuthOptional();
   const searchParams = useSearchParams();
   const stepQ = onboardingReturnToQuery(searchParams);
   const returnTo = safeReturnPath(searchParams.get("returnTo"), "/scan");
@@ -15,6 +17,14 @@ export function OnboardingIntroScreen() {
   function handleContinue() {
     saveObAnswer("buffi_ob_name", name.trim());
     router.push(`/onboarding/welcome${stepQ}`);
+  }
+
+  function handleSignIn() {
+    if (auth?.user) {
+      router.push(returnTo);
+      return;
+    }
+    router.push(`/signin?${new URLSearchParams({ returnTo }).toString()}`);
   }
 
   return (
@@ -54,7 +64,7 @@ export function OnboardingIntroScreen() {
           />
         </div>
 
-        <div className="ob-nav">
+        <div className="ob-nav ob-nav--intro-actions">
           <button
             className="ob-next"
             type="button"
@@ -64,20 +74,14 @@ export function OnboardingIntroScreen() {
           >
             Continue →
           </button>
-        </div>
-
-        <p className="auth-legal" style={{ marginTop: 24 }}>
-          Already finished setup?{" "}
           <button
             type="button"
-            className="auth-tab"
-            onClick={() =>
-              router.push(`/signin?${new URLSearchParams({ returnTo }).toString()}`)
-            }
+            className="ob-intro-signin"
+            onClick={handleSignIn}
           >
-            Sign in
+            Already have an account? Sign in
           </button>
-        </p>
+        </div>
       </div>
     </div>
   );

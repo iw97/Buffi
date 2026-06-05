@@ -11,9 +11,9 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_VERCEL_URL: process.env.VERCEL_URL ?? "",
   },
-  // Browsers request /favicon.ico by default; we reuse the OG art until a dedicated .ico exists.
+  // Browsers request /favicon.ico by default; serve the app icon PNG.
   async rewrites() {
-    return [{ source: "/favicon.ico", destination: "/og-image.png" }];
+    return [{ source: "/favicon.ico", destination: "/icons/icon-192.png" }];
   },
 };
 
