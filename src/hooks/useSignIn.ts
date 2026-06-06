@@ -21,6 +21,9 @@ export function useSignIn() {
     const provider = new GoogleAuthProvider();
     try {
       const result = await signInWithPopup(auth, provider);
+      if (result.user.email) {
+        await savePendingOnboardingForEmail(result.user.email);
+      }
       await ensureUserProfileViaApi(result.user);
       return result.user;
     } catch (e) {
@@ -35,6 +38,9 @@ export function useSignIn() {
     provider.addScope("name");
     try {
       const result = await signInWithPopup(auth, provider);
+      if (result.user.email) {
+        await savePendingOnboardingForEmail(result.user.email);
+      }
       await ensureUserProfileViaApi(result.user);
       return result.user;
     } catch (e) {
