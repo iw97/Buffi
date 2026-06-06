@@ -30,7 +30,14 @@ export function OnboardingAccountScreen() {
   useEffect(() => {
     const signedInUser = user;
     if (!isConfigured || authLoading || !signedInUser) return;
-    if (profileHasCompletedOnboarding(auth?.profile) || hasLocalOnboardingAnswers()) return;
+    if (auth?.profileLoading) return;
+
+    if (profileHasCompletedOnboarding(auth?.profile)) {
+      router.replace(returnTo);
+      return;
+    }
+
+    if (hasLocalOnboardingAnswers()) return;
 
     let cancelled = false;
     const { uid, email: authEmail, displayName } = signedInUser;
@@ -55,7 +62,7 @@ export function OnboardingAccountScreen() {
     return () => {
       cancelled = true;
     };
-  }, [isConfigured, authLoading, user, auth?.profile, returnTo, router, auth]);
+  }, [isConfigured, authLoading, user, auth?.profile, auth?.profileLoading, returnTo, router, auth]);
 
   if (isConfigured && authLoading) {
     return (
@@ -69,35 +76,12 @@ export function OnboardingAccountScreen() {
   }
 
   if (isConfigured && user) {
-    const signedInAs = user.email?.trim() || user.displayName?.trim() || "your account";
     return (
-      <div className="min-h-screen">
-        <div className="ob-shell">
-          <div className="ob-step-label" style={{ marginBottom: 12 }}>
-            You&apos;re signed in
-          </div>
-          <h2 className="ob-title">
-            Create your
-            <br />
-            <em>account.</em>
-          </h2>
-          <p className="ob-desc">
-            You&apos;re already signed in as <strong style={{ color: "var(--ivory)" }}>{signedInAs}</strong>.
-          </p>
-          <button
-            className="ob-next"
-            type="button"
-            onClick={async () => {
-              if (user.email) {
-                await completeOnboardingSignup(user.uid, user.email, user.displayName);
-                await auth?.refreshProfile?.();
-              }
-              router.push(returnTo);
-            }}
-          >
-            Continue →
-          </button>
-        </div>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-10">
+        <div className="analyzing-label">Loading</div>
+        <p className="auth-legal" style={{ color: "var(--text-dim)" }}>
+          Setting up your account…
+        </p>
       </div>
     );
   }
