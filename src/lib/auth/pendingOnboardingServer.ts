@@ -57,6 +57,7 @@ export async function applyPendingOnboardingForUser(
       ...patch,
       email: normalized,
       onboardingComplete: true,
+      shopperType: patch.shopperType?.trim() || "completed",
       updatedAt: FieldValue.serverTimestamp()
     },
     { merge: true }

@@ -61,6 +61,7 @@ export async function ensureUserProfileAdmin(
 
   const ref = adminFirestore.collection(COLLECTIONS.USERS).doc(uid);
   const snap = await ref.get();
+  const isNewUser = !snap.exists;
   const existing = (snap.exists ? snap.data() : {}) as Record<string, unknown>;
 
   const email = body?.email ?? claims.email ?? null;
@@ -79,7 +80,9 @@ export async function ensureUserProfileAdmin(
   }
   if (userFieldMissing(existing, "isPro")) mergePayload.isPro = false;
   if (userFieldMissing(existing, "completedScans")) mergePayload.completedScans = 0;
-  if (userFieldMissing(existing, "onboardingComplete")) mergePayload.onboardingComplete = false;
+  if (isNewUser) {
+    mergePayload.onboardingComplete = false;
+  }
   if (userFieldMissing(existing, "scanCount")) mergePayload.scanCount = 0;
   if (userFieldMissing(existing, "scanCountResetAt")) {
     mergePayload.scanCountResetAt = FieldValue.serverTimestamp();
