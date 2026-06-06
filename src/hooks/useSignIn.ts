@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import {
   GoogleAuthProvider,
   OAuthProvider,
@@ -15,6 +16,8 @@ import { savePendingOnboardingForEmail } from "@/lib/auth/pendingOnboardingClien
 import { firebaseAuthUserMessage } from "@/lib/auth/firebaseErrorMessage";
 
 export function useSignIn() {
+  const router = useRouter();
+
   async function handleGoogle(): Promise<User> {
     if (!auth) throw new Error("Auth is not initialized");
     const provider = new GoogleAuthProvider();
@@ -65,7 +68,27 @@ export function useSignIn() {
         await savePendingOnboardingForEmail(trimmed);
       }
       const result = await createUserWithEmailAndPassword(auth, trimmed, password);
-      await ensureUserProfileViaApi(result.user);
+
+      const token = await result.user.getIdToken(false);
+      const res = await fetch("/api/ensure-user-profile", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          email: result.user.email ?? null,
+          displayName: result.user.displayName ?? null,
+          photoURL: result.user.photoURL ?? null,
+          onboardingComplete: true
+        })
+      });
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) {
+        throw new Error(data?.error ?? "Failed to load profile");
+      }
+
+      router.replace("/scan");
       return result.user;
     } catch (e) {
       throw new Error(firebaseAuthUserMessage(e, "Could not create account"));
