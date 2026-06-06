@@ -1,5 +1,6 @@
 import type { User } from "firebase/auth";
 import type { UserProfile } from "@/lib/firebase/types";
+import { firebaseAuthUserMessage } from "@/lib/auth/firebaseErrorMessage";
 
 type EnsureUserProfileResponse = {
   ok?: boolean;
@@ -8,13 +9,30 @@ type EnsureUserProfileResponse = {
 };
 
 /**
+ * Prefer a cached ID token after sign-in; force-refresh only if needed.
+ * Force refresh calls securetoken.googleapis.com and fails when the API key
+ * lacks Token Service API in its Google Cloud restrictions.
+ */
+async function getAuthIdToken(user: User): Promise<string> {
+  try {
+    return await user.getIdToken(false);
+  } catch (first) {
+    try {
+      return await user.getIdToken(true);
+    } catch (second) {
+      throw new Error(firebaseAuthUserMessage(second ?? first, "Could not get sign-in token"));
+    }
+  }
+}
+
+/**
  * Ensure users/{uid} via Admin SDK API (only server writes on login).
  */
 export async function ensureUserProfileViaApi(user: User): Promise<UserProfile> {
   console.log("[auth] auth uid:", user.uid);
   console.log("[auth] creating doc at:", `users/${user.uid}`);
 
-  const token = await user.getIdToken(true);
+  const token = await getAuthIdToken(user);
   const res = await fetch("/api/ensure-user-profile", {
     method: "POST",
     headers: {

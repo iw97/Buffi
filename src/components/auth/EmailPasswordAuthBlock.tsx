@@ -131,24 +131,38 @@ export function EmailPasswordAuthBlock({ mode, onSignedIn, footer }: Props) {
       )}
 
       <div className="auth-email-actions">
-        <button
-          type="button"
-          className="btn-primary"
-          style={{ width: "100%" }}
-          disabled={submitting !== null}
-          onClick={() => void onSignIn()}
-        >
-          {submitting === "signin" ? "Signing in…" : "Sign in"}
-        </button>
-        <button
-          type="button"
-          className="btn-secondary"
-          style={{ width: "100%", marginTop: 10 }}
-          disabled={submitting !== null}
-          onClick={() => void onCreateAccount()}
-        >
-          {submitting === "signup" ? "Creating account…" : "Create account"}
-        </button>
+        {mode === "signup" ? (
+          <button
+            type="button"
+            className="btn-primary"
+            style={{ width: "100%" }}
+            disabled={submitting !== null}
+            onClick={() => void onCreateAccount()}
+          >
+            {submitting === "signup" ? "Creating account…" : "Create account"}
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="btn-primary"
+              style={{ width: "100%" }}
+              disabled={submitting !== null}
+              onClick={() => void onSignIn()}
+            >
+              {submitting === "signin" ? "Signing in…" : "Sign in"}
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ width: "100%", marginTop: 10 }}
+              disabled={submitting !== null}
+              onClick={() => void onCreateAccount()}
+            >
+              {submitting === "signup" ? "Creating account…" : "Create account"}
+            </button>
+          </>
+        )}
       </div>
 
       {error && (

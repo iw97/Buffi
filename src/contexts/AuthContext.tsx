@@ -65,7 +65,7 @@ interface AuthState {
 }
 
 interface AuthActions {
-  refreshProfile: () => Promise<void>;
+  refreshProfile: () => Promise<UserProfile | null>;
   signInWithGoogle: () => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
@@ -212,13 +212,14 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
     router.replace("/signin");
   }, [router]);
 
-  const refreshProfile = useCallback(async () => {
+  const refreshProfile = useCallback(async (): Promise<UserProfile | null> => {
     const u = user;
-    if (!u || !isConfigured) return;
+    if (!u || !isConfigured) return null;
     setProfileLoading(true);
     setProfileError(null);
     const result = await loadProfileFromServer(u);
     applyProfileLoad(result);
+    return result.profile;
   }, [user, isConfigured, applyProfileLoad]);
 
   const value = useMemo(

@@ -80,14 +80,14 @@ export function SignInScreen() {
     );
   }
 
-  async function finishSignIn(signedInUser: User) {
+  async function finishSignIn(_signedInUser: User) {
     await auth?.refreshProfile?.();
-    const destination = resolvePostAuthPath({
-      returnTo,
-      profile: auth?.profile ?? null,
-      authMode: "signin"
-    });
-    router.push(destination);
+    router.replace(
+      resolvePostAuthPath({
+        returnTo,
+        authMode: "signin"
+      })
+    );
   }
 
   const onGoogle = async () => {

@@ -30,7 +30,15 @@ export function firebaseAuthUserMessage(error: unknown, fallback: string): strin
         return "An account already exists for that email. Sign in instead.";
       case "auth/weak-password":
         return "Password must be at least 6 characters.";
+      case "auth/requires-recent-login":
+        return "For security, sign out and sign in again, then try changing your password.";
+      case "auth/requests-to-this-api-securetoken.googleapis.com-method-google.identity.securetoken.v1.securetoken.granttoken-are-blocked.":
+        return "Sign-in token refresh is blocked. In Google Cloud Console → Credentials, open your Firebase API key and add Token Service API and Identity Toolkit API to the key’s API restrictions (or remove API restrictions for local dev).";
       default:
+        if (code.includes("securetoken") && code.includes("blocked")) {
+          return "Sign-in token refresh is blocked. In Google Cloud Console → Credentials, add Token Service API and Identity Toolkit API to your Firebase API key restrictions.";
+        }
+        break;
         break;
     }
   }

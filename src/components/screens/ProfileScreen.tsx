@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { onboardingIntroPath } from "@/lib/auth/onboardingStatus";
+import { userHasEmailPasswordProvider } from "@/lib/auth/authProviders";
+import { ChangePasswordModal } from "@/components/profile/ChangePasswordModal";
 
 /** Set to true to always show the logged-in profile UI (for testing). */
 const TESTING_ALWAYS_SHOW_LOGGED_IN = false;
@@ -46,6 +48,7 @@ export function ProfileScreen() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [switchPlanBusy, setSwitchPlanBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   const closeDeleteFlow = () => {
     if (deleteBusy || switchPlanBusy) return;
@@ -152,6 +155,7 @@ export function ProfileScreen() {
   const completedScans = TESTING_ALWAYS_SHOW_LOGGED_IN
     ? MOCK_DISPLAY.completedScans
     : (profile?.completedScans ?? 0);
+  const canChangePassword = !TESTING_ALWAYS_SHOW_LOGGED_IN && user && userHasEmailPasswordProvider(user);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -260,6 +264,27 @@ export function ProfileScreen() {
             </span>
           </div>
         </button>
+
+        {canChangePassword && (
+          <button
+            className="menu-item"
+            type="button"
+            onClick={() => setChangePasswordOpen(true)}
+          >
+            <div className="menu-item-left">
+              <div className="menu-item-icon" aria-hidden>
+                🔒
+              </div>
+              <div className="menu-item-text">
+                <div className="menu-item-label">Change password</div>
+                <div className="menu-item-sub">Update your sign-in password</div>
+              </div>
+            </div>
+            <span className="menu-item-arrow" aria-hidden>
+              →
+            </span>
+          </button>
+        )}
 
         <div className="menu-section-label">Preferences</div>
 
@@ -452,6 +477,14 @@ export function ProfileScreen() {
           ) : null}
         </div>
       </div>
+
+      {user && (
+        <ChangePasswordModal
+          open={changePasswordOpen}
+          user={user}
+          onClose={() => setChangePasswordOpen(false)}
+        />
+      )}
     </div>
   );
 }

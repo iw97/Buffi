@@ -32,7 +32,8 @@ export function onboardingIntroPath(returnTo = "/scan"): string {
 
 /**
  * Where to send the user immediately after auth completes.
- * Sign-in: incomplete profiles go to the quiz. Sign-up (account step after quiz): go to app.
+ * Sign-in (/signin): always return to the app — returning users should not redo onboarding.
+ * Sign-up (account step after quiz): go to app.
  */
 export function resolvePostAuthPath(options: {
   returnTo?: string | null;
@@ -42,7 +43,7 @@ export function resolvePostAuthPath(options: {
 }): string {
   const returnTo = safeReturnPath(options.returnTo, "/scan");
 
-  if (options.authMode === "signup") {
+  if (options.authMode === "signup" || options.authMode === "signin") {
     return returnTo;
   }
 
