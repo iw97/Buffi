@@ -6,7 +6,6 @@ import {
   PendingScanProvider,
   ScanErrorProvider
 } from "@/contexts/ScanResultContext";
-import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { LaunchSplashGate } from "@/components/LaunchSplashGate";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -15,7 +14,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ScanResultProvider>
         <PendingScanProvider>
           <ScanErrorProvider>
-            <ServiceWorkerRegister />
             <LaunchSplashGate>{children}</LaunchSplashGate>
           </ScanErrorProvider>
         </PendingScanProvider>
