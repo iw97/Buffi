@@ -10,6 +10,7 @@ import { SocialSignInButtons } from "@/components/auth/SocialSignInButtons";
 import { EmailPasswordAuthBlock } from "@/components/auth/EmailPasswordAuthBlock";
 import {
   onboardingIntroPath,
+  profileHasCompletedOnboarding,
   resolvePostAuthPath
 } from "@/lib/auth/onboardingStatus";
 
@@ -29,6 +30,7 @@ export function SignInScreen() {
     if (!isConfigured || authLoading || !user) return;
     if (auth?.profileError) return;
     if (auth?.profileLoading || !auth?.profileReady) return;
+    if (!profileHasCompletedOnboarding(auth?.profile)) return;
 
     const destination = resolvePostAuthPath({
       returnTo,
@@ -70,14 +72,16 @@ export function SignInScreen() {
         </div>
       );
     }
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-10">
-        <div className="analyzing-label">Loading</div>
-        <p className="auth-legal" style={{ color: "var(--text-dim)" }}>
-          Signing you in…
-        </p>
-      </div>
-    );
+    if (profileHasCompletedOnboarding(auth?.profile)) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-10">
+          <div className="analyzing-label">Loading</div>
+          <p className="auth-legal" style={{ color: "var(--text-dim)" }}>
+            Signing you in…
+          </p>
+        </div>
+      );
+    }
   }
 
   function finishSignIn(_signedInUser: User) {

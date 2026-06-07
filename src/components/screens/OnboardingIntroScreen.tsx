@@ -19,10 +19,9 @@ export function OnboardingIntroScreen() {
     router.push(`/onboarding/welcome${stepQ}`);
   }
 
-  function handleSignIn() {
+  async function handleSignIn() {
     if (auth?.user) {
-      router.push(returnTo);
-      return;
+      await auth.signOut();
     }
     router.push(`/signin?${new URLSearchParams({ returnTo }).toString()}`);
   }
@@ -77,7 +76,7 @@ export function OnboardingIntroScreen() {
           <button
             type="button"
             className="ob-intro-signin"
-            onClick={handleSignIn}
+            onClick={() => void handleSignIn()}
           >
             Already have an account? Sign in
           </button>
