@@ -48,14 +48,14 @@ For each value in selectedValues, evaluate the product and return exactly one of
 
 - **Natural fibers only**: pass = no **petroleum-based** synthetics (Part 1 SYNTHETIC list: polyester, nylon, acrylic, etc.); **natural + cellulosic** (cotton, viscose, Tencel, modal, Naia, etc.) all count toward pass; fail = meaningful petroleum synthetic content; unverified = never.
 - **No virgin plastic**: pass = no polyester, nylon, or acrylic present; fail = any of those present; unverified = never.
-- **Cost-per-wear thinker**: pass = cost per wear under $2.00; fail = cost per wear over $5.00; unverified = if price was not available.
+- **An item's cost per each wear**: pass = cost per wear under $2.00; fail = cost per wear over $5.00; unverified = if price was not available.
 - **Avoid fast fashion**: pass = brand is not a known fast fashion retailer; fail = brand is a known fast fashion retailer (Shein, Zara, H&M, Primark, Fashion Nova, Boohoo, PrettyLittleThing, ASOS own brand); unverified = brand unknown or ambiguous.
 - **No animal products**: pass = no wool, silk, cashmere, leather, fur, down; fail = any animal-derived fiber present; unverified = never.
 - **Fair labor**: pass = brand has known fair labor certification (Fair Trade, B Corp, SA8000); fail = brand has known labor violations on record; unverified = most cases — be honest that this cannot be confirmed from label data alone.
-- **Made in USA**: pass = country of manufacture confirmed USA; fail = country confirmed not USA; unverified = country not available.
+- **Local production**: pass = made domestically or brand emphasizes local/community-based production; fail = known offshore mass production with no local production story; unverified = country of manufacture not available.
 - **Capsule wardrobe**: pass = natural and/or cellulosic fibers (not petroleum-heavy), neutral category, versatile construction; fail = very trend-specific or low durability; unverified = insufficient data.
 - **Certified sustainable**: pass = known certification in product data (GOTS, OEKO-TEX, Bluesign, B Corp, **Naia Renew** with stated OEKO-TEX / GRS / TUV Austria context); fail = no certification and brand is known fast fashion; unverified = most cases.
-- **Union-made**: pass = union-made indicated; fail = known non-union; unverified = most cases.
+- **Ethical sourcing**: pass = brand or product shows ethical supply-chain practices (Fair Trade, B Corp, transparent sourcing, certified sustainable materials); fail = known labor violations or opaque fast-fashion supply chain; unverified = most cases — label data alone rarely confirms full sourcing ethics.
 `;
 
 type Finalizable = {

@@ -8,12 +8,12 @@ import { saveObAnswer } from "@/lib/auth/onboardingAnswers";
 const DEFAULT_CHIPS = [
   { label: "Natural fibers only", selected: true },
   { label: "No virgin plastic", selected: false },
-  { label: "Made in USA", selected: false },
-  { label: "Union-made", selected: false },
-  { label: "Cost-per-wear thinker", selected: true },
+  { label: "Local production", selected: false },
+  { label: "An item's cost per each wear", selected: true },
   { label: "Capsule wardrobe", selected: false },
   { label: "No animal products", selected: false },
   { label: "Certified sustainable", selected: false },
+  { label: "Ethical sourcing", selected: false },
   { label: "Avoid fast fashion", selected: true }
 ];
 
