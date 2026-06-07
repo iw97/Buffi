@@ -27,8 +27,10 @@ export function OnboardingGate() {
   const user = auth?.user ?? null;
   const profile = auth?.profile ?? null;
   const isConfigured = auth?.isConfigured ?? false;
+  const authTransitioning = auth?.authTransitioning ?? false;
 
   useEffect(() => {
+    if (authTransitioning) return;
     if (profileError) return;
     if (!isConfigured || loading || !user) return;
     if (pathname.startsWith("/onboarding") || pathname.startsWith("/auth/")) return;
@@ -55,6 +57,7 @@ export function OnboardingGate() {
     console.log('[gate] redirecting to onboarding');
     router.replace(onboardingIntroPath(pathname || "/scan"));
   }, [
+    authTransitioning,
     profileError,
     isConfigured,
     loading,

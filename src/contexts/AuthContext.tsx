@@ -13,8 +13,6 @@ import { useRouter } from "next/navigation";
 import type { User } from "firebase/auth";
 import {
   onAuthStateChanged,
-  signInWithPopup,
-  GoogleAuthProvider,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -63,11 +61,11 @@ interface AuthState {
   profileError: string | null;
   loading: boolean;
   isConfigured: boolean;
+  authTransitioning: boolean;
 }
 
 interface AuthActions {
   refreshProfile: () => Promise<UserProfile | null>;
-  signInWithGoogle: () => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   sendPasswordResetEmail: (email: string) => Promise<void>;
@@ -94,6 +92,7 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   const [profileReady, setProfileReady] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [loading, setLoading] = useState(!TESTING_FORCE_LOGGED_IN);
+  const [authTransitioning, setAuthTransitioning] = useState(false);
   const isConfigured = isFirebaseConfigured();
   const profileFetchId = useRef(0);
 
@@ -130,6 +129,7 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
         }
         unsubscribe = onAuthStateChanged(auth, (u) => {
           console.log('[auth] state changed', u?.uid);
+          setAuthTransitioning(true);
           if (typeof document !== "undefined") {
             if (u) {
               document.cookie = "buffi_auth=1; path=/; max-age=2592000; samesite=lax";
@@ -145,6 +145,7 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
 
           if (!u) {
             setProfileLoading(false);
+            setAuthTransitioning(false);
             return;
           }
 
@@ -156,6 +157,7 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
               console.log('[auth] profile returned:', JSON.stringify(result.profile));
               console.log('[auth] onboardingComplete:', result.profile?.onboardingComplete);
               applyProfileLoad(result);
+              setAuthTransitioning(false);
             }
           });
         });
@@ -169,17 +171,6 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
       unsubscribe?.();
     };
   }, [isConfigured, applyProfileLoad]);
-
-  const signInWithGoogle = useCallback(async () => {
-    if (!auth || !isConfigured) return;
-    const provider = new GoogleAuthProvider();
-    const result = await signInWithPopup(auth, provider);
-    const profile = await ensureUserProfileViaApi(result.user);
-    setProfile(profile);
-    setProfileReady(true);
-    setProfileError(null);
-    setProfileLoading(false);
-  }, [isConfigured]);
 
   const signUpWithEmail = useCallback(
     async (email: string, password: string) => {
@@ -246,8 +237,8 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
       profileError,
       loading,
       isConfigured,
+      authTransitioning,
       refreshProfile,
-      signInWithGoogle,
       signUpWithEmail,
       signInWithEmail,
       sendPasswordResetEmail: sendPasswordResetEmailAction,
@@ -261,8 +252,8 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
       profileError,
       loading,
       isConfigured,
+      authTransitioning,
       refreshProfile,
-      signInWithGoogle,
       signUpWithEmail,
       signInWithEmail,
       sendPasswordResetEmailAction,

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { PaywallTierList } from "@/components/paywall/PaywallTierList";
 import { useStripeCheckout } from "@/hooks/useStripeCheckout";
 import { useAuthOptional } from "@/contexts/AuthContext";
+import { useSignIn } from "@/hooks/useSignIn";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { useScanResult, getStoredScanResult, isValidScanResult, normalizeScanResult } from "@/contexts/ScanResultContext";
 import { addSavedItem, addScanHistoryEntry, incrementScannedCount, removeSavedItem, setUserProfile } from "@/lib/firebase/firestore";
@@ -144,6 +145,7 @@ export function BreakdownScreen() {
   const router = useRouter();
   const { startCheckout, checkoutError } = useStripeCheckout();
   const auth = useAuthOptional();
+  const { handleGoogle: signInWithGoogle } = useSignIn();
   const authLoading = auth?.loading ?? true;
   const isConfigured = auth?.isConfigured ?? false;
   const user = auth?.user ?? null;
@@ -523,7 +525,7 @@ export function BreakdownScreen() {
       return;
     }
     try {
-      await auth.signInWithGoogle();
+      await signInWithGoogle();
       setSavePromptOpen(false);
       await doSave();
     } catch (e) {

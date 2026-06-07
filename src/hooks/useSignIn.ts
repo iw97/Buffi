@@ -11,6 +11,7 @@ import {
   type User
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { ensureUserProfileViaApi } from "@/lib/auth/ensureUserProfileClient";
 import { savePendingOnboardingForEmail } from "@/lib/auth/pendingOnboardingClient";
 import { firebaseAuthUserMessage } from "@/lib/auth/firebaseErrorMessage";
 

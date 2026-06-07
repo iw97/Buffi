@@ -80,8 +80,7 @@ export function SignInScreen() {
     );
   }
 
-  async function finishSignIn(_signedInUser: User) {
-    await auth?.refreshProfile?.();
+  function finishSignIn(_signedInUser: User) {
     const destination = resolvePostAuthPath({
       returnTo,
       authMode: "signin"
@@ -94,7 +93,7 @@ export function SignInScreen() {
     try {
       console.log('[google] button clicked');
       setError(null);
-      await finishSignIn(await handleGoogle());
+      finishSignIn(await handleGoogle());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign-in failed");
     }
@@ -103,7 +102,7 @@ export function SignInScreen() {
   const onApple = async () => {
     try {
       setError(null);
-      await finishSignIn(await handleApple());
+      finishSignIn(await handleApple());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign-in failed");
     }
