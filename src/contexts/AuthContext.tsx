@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState
 } from "react";
 import { useRouter } from "next/navigation";
@@ -94,6 +95,7 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   const [profileError, setProfileError] = useState<string | null>(null);
   const [loading, setLoading] = useState(!TESTING_FORCE_LOGGED_IN);
   const isConfigured = isFirebaseConfigured();
+  const profileFetchId = useRef(0);
 
   const applyProfileLoad = useCallback(
     (result: Awaited<ReturnType<typeof loadProfileFromServer>>) => {
@@ -127,6 +129,7 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
           return;
         }
         unsubscribe = onAuthStateChanged(auth, (u) => {
+          console.log('[auth] state changed', u?.uid);
           if (typeof document !== "undefined") {
             if (u) {
               document.cookie = "buffi_auth=1; path=/; max-age=2592000; samesite=lax";
@@ -146,8 +149,14 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
           }
 
           setProfileLoading(true);
+          const fetchId = ++profileFetchId.current;
+          console.log('[auth] calling ensure-user-profile');
           void loadProfileFromServer(u).then((result) => {
-            if (!cancelled) applyProfileLoad(result);
+            if (!cancelled && profileFetchId.current === fetchId) {
+              console.log('[auth] profile returned:', JSON.stringify(result.profile));
+              console.log('[auth] onboardingComplete:', result.profile?.onboardingComplete);
+              applyProfileLoad(result);
+            }
           });
         });
       })
@@ -213,14 +222,20 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   }, [router]);
 
   const refreshProfile = useCallback(async (): Promise<UserProfile | null> => {
-    const u = user;
+    // Read from Firebase directly so this works even when called from a stale closure
+    // (e.g. finishSignup in OnboardingAccountScreen captures auth before sign-in completes).
+    const u = auth?.currentUser;
     if (!u || !isConfigured) return null;
     setProfileLoading(true);
     setProfileError(null);
+    // Bump the version so any in-flight onAuthStateChanged fetch is discarded.
+    const fetchId = ++profileFetchId.current;
     const result = await loadProfileFromServer(u);
-    applyProfileLoad(result);
+    if (profileFetchId.current === fetchId) {
+      applyProfileLoad(result);
+    }
     return result.profile;
-  }, [user, isConfigured, applyProfileLoad]);
+  }, [isConfigured, applyProfileLoad]);
 
   const value = useMemo(
     () => ({

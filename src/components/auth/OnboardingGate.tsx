@@ -45,10 +45,14 @@ export function OnboardingGate() {
       return;
     }
 
+    console.log('[gate] checking profile:', JSON.stringify(profile));
+    console.log('[gate] should redirect:', shouldGateRedirectToOnboarding({ profileReady, profileError, profile }));
+
     if (!shouldGateRedirectToOnboarding({ profileReady, profileError, profile })) {
       return;
     }
 
+    console.log('[gate] redirecting to onboarding');
     router.replace(onboardingIntroPath(pathname || "/scan"));
   }, [
     profileError,

@@ -82,16 +82,17 @@ export function SignInScreen() {
 
   async function finishSignIn(_signedInUser: User) {
     await auth?.refreshProfile?.();
-    router.replace(
-      resolvePostAuthPath({
-        returnTo,
-        authMode: "signin"
-      })
-    );
+    const destination = resolvePostAuthPath({
+      returnTo,
+      authMode: "signin"
+    });
+    console.log('[google] redirecting to', destination);
+    router.replace(destination);
   }
 
   const onGoogle = async () => {
     try {
+      console.log('[google] button clicked');
       setError(null);
       await finishSignIn(await handleGoogle());
     } catch (e) {
