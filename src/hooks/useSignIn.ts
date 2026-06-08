@@ -42,6 +42,8 @@ export function useSignIn() {
 
   async function handleApple(): Promise<User> {
     if (!auth) throw new Error("Auth is not initialized");
+    if (isSigningIn.current) throw new Error("Sign-in already in progress");
+    isSigningIn.current = true;
     const provider = new OAuthProvider("apple.com");
     provider.addScope("email");
     provider.addScope("name");
@@ -54,6 +56,8 @@ export function useSignIn() {
       return result.user;
     } catch (e) {
       throw new Error(firebaseAuthUserMessage(e, "Apple sign-in failed"));
+    } finally {
+      isSigningIn.current = false;
     }
   }
 

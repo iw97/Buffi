@@ -14,16 +14,7 @@ function AppleIcon() {
 
 export function SocialSignInButtons({ onGoogle, onApple, disabled }: Props) {
   return (
-    <>
-      <button
-        className="btn-oauth btn-google"
-        type="button"
-        onClick={onGoogle}
-        disabled={disabled}
-      >
-        <span aria-hidden>G</span>
-        Continue with Google
-      </button>
+    <div className="auth-oauth-buttons">
       <button
         className="btn-oauth btn-apple"
         type="button"
@@ -33,6 +24,17 @@ export function SocialSignInButtons({ onGoogle, onApple, disabled }: Props) {
         <AppleIcon />
         Continue with Apple
       </button>
-    </>
+      <button
+        className="btn-oauth btn-google"
+        type="button"
+        onClick={onGoogle}
+        disabled={disabled}
+      >
+        <span className="btn-google-mark" aria-hidden>
+          G
+        </span>
+        Continue with Google
+      </button>
+    </div>
   );
 }

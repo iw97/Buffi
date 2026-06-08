@@ -1664,6 +1664,13 @@ input[type="range"]::-webkit-slider-thumb:hover {
   justify-content: center;
   gap: 10px;
   transition: all 0.2s;
+  border-radius: 4px;
+}
+
+.auth-oauth-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .btn-oauth:disabled,
@@ -1682,15 +1689,25 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--ivory);
 }
 
+.btn-google-mark {
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1;
+}
+
 .btn-apple {
-  background: #000;
-  border: 1px solid #000;
-  color: #fff;
+  background: #fff;
+  border: 1px solid #fff;
+  color: #000;
+  font-weight: 600;
 }
 .btn-apple:hover:not(:disabled) {
-  background: #1a1a1a;
-  border-color: #1a1a1a;
-  color: #fff;
+  background: #f2f2f2;
+  border-color: #f2f2f2;
+  color: #000;
+}
+.btn-apple svg {
+  flex-shrink: 0;
 }
 
 .auth-method-tabs {
