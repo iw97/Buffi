@@ -20,10 +20,10 @@ import {
 import type { Unsubscribe } from "firebase/firestore";
 import type { Timestamp } from "firebase/firestore";
 import { auth, firestore } from "@/lib/firebase";
-import { isFirestorePermissionDenied } from "@/lib/firebase/firestoreErrors";
+import { isFirestorePermissionDenied, savedItemsListErrorMessage } from "@/lib/firebase/firestoreErrors";
 import { COLLECTIONS, type UserProfile, type SavedItem, type ScanHistoryEntry } from "./types";
 
-export { getFirestoreErrorCode, isFirestorePermissionDenied } from "@/lib/firebase/firestoreErrors";
+export { getFirestoreErrorCode, isFirestorePermissionDenied, savedItemsListErrorMessage } from "@/lib/firebase/firestoreErrors";
 
 const PROFILE_READ_MAX_ATTEMPTS = 3;
 const PROFILE_READ_RETRY_BASE_MS = 500;
@@ -190,10 +190,14 @@ export async function getSavedItems(uid: string): Promise<SavedItem[]> {
 /** Subscribe to saved items for real-time list */
 export function subscribeSavedItems(
   uid: string,
-  onItems: (items: SavedItem[]) => void
+  onItems: (items: SavedItem[]) => void,
+  onError?: (message: string) => void
 ): Unsubscribe {
   const op = "subscribeSavedItems(savedItems?userId=" + uid + ")";
-  if (!requireAuth(op)) return () => {};
+  if (!requireAuth(op)) {
+    onError?.("Sign in to view saved items.");
+    return () => {};
+  }
   const db = getDb();
   const ref = collection(db, COLLECTIONS.SAVED_ITEMS);
   const q = query(
@@ -208,7 +212,10 @@ export function subscribeSavedItems(
       const items = snap.docs.map((d) => toSavedItem(d.id, d.data()));
       onItems(items);
     },
-    (err) => console.error("[Firestore] error on operation:", op, err)
+    (err) => {
+      console.error("[Firestore] error on operation:", op, err);
+      onError?.(savedItemsListErrorMessage(err));
+    }
   );
 }
 
@@ -218,7 +225,9 @@ export async function addSavedItem(
   item: Omit<SavedItem, "id" | "userId" | "savedAt">
 ): Promise<string> {
   const op = "addSavedItem(savedItems)";
-  if (!requireAuth(op)) return "";
+  if (!requireAuth(op)) {
+    throw new Error("Sign in to save items.");
+  }
   return withFirestoreLog(op, async () => {
     const db = getDb();
     const ref = collection(db, COLLECTIONS.SAVED_ITEMS);

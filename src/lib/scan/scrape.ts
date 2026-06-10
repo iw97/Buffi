@@ -314,7 +314,8 @@ function pickMaterials(
 
 /**
  * JSON-LD material strings only: require % or digit+%+fiber pattern.
- * Never treat Product.description / name as composition (marketing copy).
+ * Product.description is normally marketing copy — except on ethical brands whose
+ * JSON-LD descriptions consistently include technical fiber data (see allowDescription).
  */
 function jsonLdCompositionAcceptable(text: string): boolean {
   const t = text.trim();
@@ -326,6 +327,156 @@ function jsonLdCompositionAcceptable(text: string): boolean {
 
 function clipJsonLdMaterial(s: string): string {
   return s.trim().slice(0, 500);
+}
+
+const DESCRIPTION_COMPOSITION_FIBERS =
+  /recycled polyester|polyester|nylon|wool|cotton|linen|silk|viscose|lyocell|modal|hemp|polyamide|elastane|spandex|cashmere|acrylic|ramie|acetate/i;
+
+/** Brands whose JSON-LD descriptions include real fiber percentages, not just marketing. */
+const ETHICAL_BRANDS_TECHNICAL_DESCRIPTION_SLUGS: readonly string[] = [
+  "patagonia",
+  "reformation",
+  "everlane",
+  "girlfriend collective",
+  "kotn",
+  "eileen fisher",
+  "pact",
+  "thought clothing",
+  "amour vert",
+  "mara hoffman",
+  "whimsy and row",
+  "colorful standard",
+  "organic basics",
+  "tentree",
+  "prana",
+  "outerknown",
+  "finisterre",
+  "nudie jeans"
+];
+
+function isEthicalBrandWithTechnicalDescription(brand?: string, host?: string): boolean {
+  const h = host?.toLowerCase() ?? "";
+  if (
+    h.includes("patagonia.com") ||
+    h.includes("thereformation.com") ||
+    h.includes("everlane.com") ||
+    h.includes("girlfriend.com")
+  ) {
+    return true;
+  }
+  const b = brand?.trim().toLowerCase();
+  if (!b) return false;
+  return ETHICAL_BRANDS_TECHNICAL_DESCRIPTION_SLUGS.some(
+    (slug) => b === slug || b.startsWith(`${slug} `) || b.startsWith(`${slug}/`)
+  );
+}
+
+function descriptionHasCompositionSignals(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (t.includes("%")) return true;
+  return DESCRIPTION_COMPOSITION_FIBERS.test(t);
+}
+
+/** Pull a care-label-like snippet from a long Product.description (e.g. Patagonia JSON-LD). */
+function extractCompositionFromDescriptionText(desc: string): string | undefined {
+  const t = desc.trim();
+  if (!descriptionHasCompositionSignals(t)) return undefined;
+
+  const fiberGroup = `(?:recycled\\s+)?(?:${BROAD_TEXT_FIBERS})`;
+  const pctFiber = new RegExp(
+    `\\d{1,3}(?:-\\d{1,3})?\\s*%\\s*${fiberGroup}(?:\\s+[a-z]+)?`,
+    "i"
+  );
+  const rangeHit = t.match(pctFiber);
+  if (rangeHit?.[0]) return clipJsonLdMaterial(rangeHit[0]);
+
+  const madeWith = t.match(
+    new RegExp(
+      `(?:made with|contains)\\s+(\\d{1,3}(?:-\\d{1,3})?\\s*%\\s*${fiberGroup}[^.,;]{0,40})`,
+      "i"
+    )
+  );
+  if (madeWith?.[1]?.trim()) return clipJsonLdMaterial(madeWith[1].trim());
+
+  if (DESCRIPTION_COMPOSITION_FIBERS.test(t) && t.length <= 120) return clipJsonLdMaterial(t);
+  return undefined;
+}
+
+function extractCompositionFromJsonLdDescriptionFields(node: Record<string, unknown>): string | undefined {
+  const desc = node.description;
+  if (typeof desc === "string" && desc.trim()) {
+    const extracted = extractCompositionFromDescriptionText(desc);
+    if (extracted && jsonLdCompositionAcceptable(extracted)) return extracted;
+  }
+  const offers = node.offers;
+  const offerList: unknown[] = Array.isArray(offers)
+    ? offers
+    : offers != null && typeof offers === "object"
+      ? [offers]
+      : [];
+  for (const o of offerList) {
+    if (!o || typeof o !== "object") continue;
+    const od = (o as { description?: string }).description;
+    if (typeof od !== "string" || !od.trim()) continue;
+    const extracted = extractCompositionFromDescriptionText(od);
+    if (extracted && jsonLdCompositionAcceptable(extracted)) return extracted;
+  }
+  return undefined;
+}
+
+function tryExtractCompositionFromJsonLdScripts(
+  jsonLdScripts: unknown[],
+  $: cheerio.CheerioAPI,
+  description?: string
+): string | undefined {
+  for (const script of jsonLdScripts) {
+    const contentStr = ($(script as AnyNode).html() || "").trim();
+    if (!contentStr) continue;
+    try {
+      for (const node of collectJsonLdNodes(JSON.parse(contentStr))) {
+        const extracted = extractCompositionFromJsonLdDescriptionFields(node);
+        if (extracted) return extracted;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  if (description?.trim()) {
+    const extracted = extractCompositionFromDescriptionText(description);
+    if (extracted && jsonLdCompositionAcceptable(extracted)) return extracted;
+  }
+  return undefined;
+}
+
+function scrapePatagoniaCompositionFromDom($: cheerio.CheerioAPI): string | undefined {
+  const specText = $('[class*="spec"]')
+    .filter((_, el) => {
+      const text = $(el).text();
+      return text.includes("%") || DESCRIPTION_COMPOSITION_FIBERS.test(text);
+    })
+    .first()
+    .text()
+    .trim();
+  if (specText && descriptionHasCompositionSignals(specText)) return specText;
+
+  const fabricDd = $("dt")
+    .filter((_, el) => /fabric/i.test($(el).text()))
+    .first()
+    .next("dd")
+    .text()
+    .trim();
+  if (fabricDd && descriptionHasCompositionSignals(fabricDd)) return fabricDd;
+
+  const materialDd = $("dt")
+    .filter((_, el) => /material/i.test($(el).text()))
+    .first()
+    .next("dd")
+    .text()
+    .trim();
+  if (materialDd && descriptionHasCompositionSignals(materialDd)) return materialDd;
+
+  return undefined;
 }
 
 function getCombinedPageTextForComposition($: cheerio.CheerioAPI): string {
@@ -392,7 +543,10 @@ function parseSchemaOrgOfferPrice(item: Record<string, unknown>): number | undef
   return undefined;
 }
 
-function extractMaterialFromJsonLdNode(node: Record<string, unknown>): string | undefined {
+function extractMaterialFromJsonLdNode(
+  node: Record<string, unknown>,
+  options?: { allowDescription?: boolean }
+): string | undefined {
   const mat = node.material;
   if (typeof mat === "string" && mat.trim() && jsonLdCompositionAcceptable(mat)) return clipJsonLdMaterial(mat);
   if (mat && typeof mat === "object") {
@@ -415,6 +569,9 @@ function extractMaterialFromJsonLdNode(node: Record<string, unknown>): string | 
         if (typeof vn === "string" && vn.trim() && jsonLdCompositionAcceptable(vn)) return clipJsonLdMaterial(vn);
       }
     }
+  }
+  if (options?.allowDescription) {
+    return extractCompositionFromJsonLdDescriptionFields(node);
   }
   return undefined;
 }
@@ -440,12 +597,16 @@ function collectJsonLdNodes(parsed: unknown): Record<string, unknown>[] {
   return [];
 }
 
-function tryExtractMaterialFromJsonLdScript(contentStr: string, pageText?: string): string | undefined {
+function tryExtractMaterialFromJsonLdScript(
+  contentStr: string,
+  pageText?: string,
+  options?: { allowDescription?: boolean }
+): string | undefined {
   try {
     const nodes = collectJsonLdNodes(JSON.parse(contentStr));
     for (const node of nodes) {
       if (!node || typeof node !== "object") continue;
-      const m = extractMaterialFromJsonLdNode(node);
+      const m = extractMaterialFromJsonLdNode(node, options);
       const accepted = acceptMaterialsCandidate(m, "json-ld-node", { pageText });
       if (accepted) return accepted;
     }
@@ -998,6 +1159,17 @@ async function extractGenericProductFromLoadedCheerio(
           $(".product-composition").text().trim(),
         pageTextForComposition
       );
+    } else if (host.includes("patagonia.com")) {
+      brand = brand ?? "Patagonia";
+      name = name ?? (h1Name || $("h1").first().text().trim());
+      if (!materials) {
+        materials = pickMaterials(
+          materials,
+          tryExtractCompositionFromJsonLdScripts(jsonLdScripts, $, description) ||
+            scrapePatagoniaCompositionFromDom($),
+          pageTextForComposition
+        );
+      }
     } else if (host.includes("miumiu.com") || host.includes("prada.com")) {
       brand = brand ?? (host.includes("miumiu.com") ? "Miu Miu" : "Prada");
       name = name ?? $("h1").first().text().trim();
@@ -1087,9 +1259,12 @@ async function extractGenericProductFromLoadedCheerio(
       }
     }
 
-    // JSON-LD: material / additionalProperty / composition-like description
+    // JSON-LD: material / additionalProperty; description on ethical brands with technical copy
     if (!materials) {
-      console.log(LOG_PREFIX, "JSON-LD material extraction pass (tryExtractMaterialFromJsonLdScript)");
+      const allowJsonLdDescription = isEthicalBrandWithTechnicalDescription(brand, host);
+      console.log(LOG_PREFIX, "JSON-LD material extraction pass (tryExtractMaterialFromJsonLdScript)", {
+        allowDescription: allowJsonLdDescription
+      });
       for (let si = 0; si < jsonLdScripts.length; si++) {
         const script = jsonLdScripts[si];
         const contentStr = ($(script).html() || "").trim();
@@ -1097,7 +1272,9 @@ async function extractGenericProductFromLoadedCheerio(
           console.log(LOG_PREFIX, `JSON-LD material pass script[${si}]`, "(empty body, skip)");
           continue;
         }
-        const found = tryExtractMaterialFromJsonLdScript(contentStr, pageTextForComposition);
+        const found = tryExtractMaterialFromJsonLdScript(contentStr, pageTextForComposition, {
+          allowDescription: allowJsonLdDescription
+        });
         console.log(LOG_PREFIX, `JSON-LD material pass script[${si}]`, {
           extracted: found ?? "(none)",
           usedForMaterials: !!found

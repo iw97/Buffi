@@ -13,13 +13,32 @@ export function SavesScreen() {
   const [items, setItems] = useState<SavedItem[]>([]);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [listLoading, setListLoading] = useState(true);
 
   useEffect(() => {
     if (!auth?.user?.uid || !auth?.isConfigured) {
       setItems([]);
+      setLoadError(null);
+      setListLoading(false);
       return;
     }
-    const unsub = subscribeSavedItems(auth.user.uid, setItems);
+
+    setListLoading(true);
+    setLoadError(null);
+
+    const unsub = subscribeSavedItems(
+      auth.user.uid,
+      (nextItems) => {
+        setItems(nextItems);
+        setLoadError(null);
+        setListLoading(false);
+      },
+      (message) => {
+        setLoadError(message);
+        setListLoading(false);
+      }
+    );
     return () => unsub();
   }, [auth?.user?.uid, auth?.isConfigured]);
 
@@ -83,12 +102,39 @@ export function SavesScreen() {
       </div>
 
       <div className="saves-scroll">
+        {loadError && (
+          <div className="saves-empty" style={{ paddingTop: 24 }}>
+            <p className="auth-legal" style={{ color: "var(--red)", textAlign: "center", maxWidth: 320, margin: "0 auto" }}>
+              {loadError}
+            </p>
+            {(auth?.profile?.savedCount ?? 0) > 0 && (
+              <p className="saves-empty-sub" style={{ marginTop: 12 }}>
+                You have {auth?.profile?.savedCount} saved item{(auth?.profile?.savedCount ?? 0) !== 1 ? "s" : ""} — they&apos;ll appear once loading is fixed.
+              </p>
+            )}
+            <button
+              className="btn-primary"
+              type="button"
+              style={{ marginTop: 16 }}
+              onClick={() => window.location.reload()}
+            >
+              Refresh
+            </button>
+          </div>
+        )}
         {listError && (
           <p className="auth-legal" style={{ color: "var(--red)", padding: "0 4px 8px" }}>
             {listError}
           </p>
         )}
-        {items.length === 0 ? (
+        {!loadError && listLoading && (
+          <div className="saves-empty">
+            <p className="auth-legal" style={{ color: "var(--text-dim)" }}>
+              Loading your saves…
+            </p>
+          </div>
+        )}
+        {!loadError && !listLoading && items.length === 0 ? (
           <div className="saves-empty">
             <div className="saves-empty-icon" aria-hidden>🔖</div>
             <p className="saves-empty-text">No saved items yet.</p>
@@ -97,7 +143,7 @@ export function SavesScreen() {
               Scan an item
             </button>
           </div>
-        ) : (
+        ) : !loadError && !listLoading ? (
           items.map((item) => (
             <div key={item.id} className="save-card">
               <div
@@ -135,7 +181,7 @@ export function SavesScreen() {
               </div>
             </div>
           ))
-        )}
+        ) : null}
       </div>
     </div>
   );
