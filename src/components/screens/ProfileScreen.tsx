@@ -33,78 +33,65 @@ export function ProfileScreen() {
   const user = TESTING_ALWAYS_SHOW_LOGGED_IN ? null : (auth?.user ?? null);
   const profile = auth?.profile;
   const loading = auth?.loading ?? true;
-  type DeleteFlowStep = null | "retention" | "confirm";
-  type RetentionOffer = {
-    show: boolean;
-    offerPlan: "monthly" | "yearly" | "weekly";
-    title: string;
-    description: string;
-    cta: string;
-  };
 
-  const [deleteFlowStep, setDeleteFlowStep] = useState<DeleteFlowStep>(null);
-  const [retentionOffer, setRetentionOffer] = useState<RetentionOffer | null>(null);
-  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
-  const [switchPlanBusy, setSwitchPlanBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [portalBusy, setPortalBusy] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
-  const closeDeleteFlow = () => {
-    if (deleteBusy || switchPlanBusy) return;
-    setDeleteFlowStep(null);
-    setRetentionOffer(null);
+  const closeDeleteConfirm = () => {
+    if (deleteBusy) return;
+    setDeleteConfirmOpen(false);
     setDeleteError(null);
-    setDeleteConfirmText("");
   };
 
-  const openDeleteFlow = async () => {
-    if (!user) return;
-    setDeleteError(null);
-    setDeleteConfirmText("");
-    setRetentionOffer(null);
+  const openManageSubscription = async () => {
+    if (!user || portalBusy) return;
+    setPortalBusy(true);
+    setPortalError(null);
     try {
       const token = await user.getIdToken();
-      const res = await fetch("/api/delete-account/preflight", {
+      const res = await fetch("/api/create-portal-session", {
+        method: "POST",
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = (await res.json()) as { retentionOffer?: RetentionOffer | null };
-      if (data.retentionOffer?.show) {
-        setRetentionOffer(data.retentionOffer);
-        setDeleteFlowStep("retention");
-      } else {
-        setDeleteFlowStep("confirm");
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || "Could not open billing portal");
       }
-    } catch {
-      setDeleteFlowStep("confirm");
+      window.location.href = data.url;
+    } catch (e) {
+      setPortalError(e instanceof Error ? e.message : "Could not open billing portal");
+      setPortalBusy(false);
     }
   };
 
-  const switchToRetentionPlan = async () => {
-    if (!user || !retentionOffer) return;
-    setSwitchPlanBusy(true);
+  const confirmDeleteAccount = async () => {
+    if (!user) return;
+    setDeleteBusy(true);
     setDeleteError(null);
     try {
       const token = await user.getIdToken();
-      const res = await fetch("/api/subscription/switch-plan", {
+      const res = await fetch("/api/delete-account", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          plan: retentionOffer.offerPlan,
-          source: "delete_account_retention"
-        })
+        headers: { Authorization: `Bearer ${token}` }
       });
       const data = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok) throw new Error(data.error || "Could not switch plan");
-      await auth?.refreshProfile();
-      closeDeleteFlow();
+      if (!res.ok) {
+        throw new Error(data.error || "Could not delete account");
+      }
+      closeDeleteConfirm();
+      try {
+        await auth?.signOut();
+      } catch {
+        router.replace("/signin");
+      }
     } catch (e) {
-      setDeleteError(e instanceof Error ? e.message : "Could not switch plan");
+      setDeleteError(e instanceof Error ? e.message : "Could not delete account");
     } finally {
-      setSwitchPlanBusy(false);
+      setDeleteBusy(false);
     }
   };
 
@@ -156,6 +143,10 @@ export function ProfileScreen() {
     ? MOCK_DISPLAY.completedScans
     : (profile?.completedScans ?? 0);
   const canChangePassword = !TESTING_ALWAYS_SHOW_LOGGED_IN && user && userHasEmailPasswordProvider(user);
+  const stripeCustomerId =
+    !TESTING_ALWAYS_SHOW_LOGGED_IN && typeof profile?.stripeCustomerId === "string"
+      ? profile.stripeCustomerId.trim()
+      : "";
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -325,156 +316,95 @@ export function ProfileScreen() {
             →
           </span>
         </button>
+
+        {!TESTING_ALWAYS_SHOW_LOGGED_IN && (
+          <>
+            <div className="menu-section-label">Manage account</div>
+            <div className="manage-account-block">
+              {stripeCustomerId ? (
+                <button
+                  className="btn-manage-subscription"
+                  type="button"
+                  disabled={portalBusy || deleteBusy}
+                  onClick={() => void openManageSubscription()}
+                >
+                  {portalBusy ? "Opening…" : "Manage subscription"}
+                </button>
+              ) : (
+                <p className="manage-account-no-sub">No active subscription</p>
+              )}
+              {portalError && (
+                <p className="delete-account-error" role="alert">
+                  {portalError}
+                </p>
+              )}
+              <div className="manage-account-divider" aria-hidden />
+              <button
+                className="btn-delete-account-muted"
+                type="button"
+                disabled={deleteBusy || portalBusy}
+                onClick={() => {
+                  setDeleteError(null);
+                  setDeleteConfirmOpen(true);
+                }}
+              >
+                Delete account
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="profile-logout-area">
         <button
           className="btn-logout"
           type="button"
-          disabled={deleteBusy}
+          disabled={deleteBusy || portalBusy}
           onClick={async () => {
             await auth?.signOut();
           }}
         >
           ← Log Out
         </button>
-
-        {!TESTING_ALWAYS_SHOW_LOGGED_IN && (
-          <button
-            className="btn-delete-account"
-            type="button"
-            disabled={deleteBusy || switchPlanBusy}
-            onClick={() => void openDeleteFlow()}
-          >
-            Delete account
-          </button>
-        )}
       </div>
 
       <div
-        className={`share-modal ${deleteFlowStep ? "open" : ""}`}
+        className={`share-modal ${deleteConfirmOpen ? "open" : ""}`}
         role="dialog"
         aria-modal="true"
-        aria-labelledby={deleteFlowStep === "retention" ? "retention-offer-title" : "delete-account-title"}
-        onClick={closeDeleteFlow}
+        aria-labelledby="delete-account-title"
+        onClick={closeDeleteConfirm}
       >
         <div className="share-modal-inner" onClick={(e) => e.stopPropagation()}>
-          {deleteFlowStep === "retention" && retentionOffer ? (
-            <>
-              <h2 id="retention-offer-title" className="pw-modal-title" style={{ marginTop: 0 }}>
-                {retentionOffer.title}
-              </h2>
-              <p className="pw-modal-sub" style={{ marginTop: 10 }}>
-                {retentionOffer.description}
-              </p>
-              {deleteError && (
-                <p className="delete-account-error" role="alert">
-                  {deleteError}
-                </p>
-              )}
-              <div className="delete-account-modal-actions delete-account-modal-actions--stack">
-                <button
-                  className="btn-primary"
-                  type="button"
-                  disabled={switchPlanBusy || deleteBusy}
-                  onClick={() => void switchToRetentionPlan()}
-                >
-                  {switchPlanBusy ? "Switching…" : retentionOffer.cta}
-                </button>
-                <button
-                  className="btn-secondary"
-                  type="button"
-                  disabled={switchPlanBusy || deleteBusy}
-                  onClick={() => {
-                    setDeleteError(null);
-                    setDeleteFlowStep("confirm");
-                  }}
-                >
-                  No thanks, delete my account
-                </button>
-                <button
-                  className="btn-delete-account-link"
-                  type="button"
-                  disabled={switchPlanBusy || deleteBusy}
-                  onClick={closeDeleteFlow}
-                >
-                  Keep my account
-                </button>
-              </div>
-            </>
-          ) : deleteFlowStep === "confirm" ? (
-            <>
-              <h2 id="delete-account-title" className="pw-modal-title" style={{ marginTop: 0 }}>
-                Delete your account?
-              </h2>
-              <p className="pw-modal-sub" style={{ marginTop: 10 }}>
-                This permanently removes your profile, saved items, and scan history. Active Buffi Pro
-                subscriptions will be canceled. This cannot be undone.
-              </p>
-              <p className="auth-legal" style={{ marginTop: 16 }}>
-                Type <strong>DELETE</strong> to confirm
-              </p>
-              <input
-                className="delete-account-confirm-input"
-                type="text"
-                value={deleteConfirmText}
-                onChange={(e) => setDeleteConfirmText(e.target.value)}
-                placeholder="DELETE"
-                autoComplete="off"
-                disabled={deleteBusy}
-                aria-label="Type DELETE to confirm account deletion"
-              />
-              {deleteError && (
-                <p className="delete-account-error" role="alert">
-                  {deleteError}
-                </p>
-              )}
-              <div className="delete-account-modal-actions">
-                <button
-                  className="btn-secondary"
-                  type="button"
-                  disabled={deleteBusy}
-                  onClick={closeDeleteFlow}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="btn-delete-account-confirm"
-                  type="button"
-                  disabled={deleteBusy || deleteConfirmText.trim() !== "DELETE"}
-                  onClick={async () => {
-                    if (!user || deleteConfirmText.trim() !== "DELETE") return;
-                    setDeleteBusy(true);
-                    setDeleteError(null);
-                    try {
-                      const token = await user.getIdToken();
-                      const res = await fetch("/api/delete-account", {
-                        method: "POST",
-                        headers: { Authorization: `Bearer ${token}` }
-                      });
-                      const data = (await res.json()) as { ok?: boolean; error?: string };
-                      if (!res.ok) {
-                        throw new Error(data.error || "Could not delete account");
-                      }
-                      closeDeleteFlow();
-                      try {
-                        await auth?.signOut();
-                      } catch {
-                        /* auth user may already be removed server-side */
-                        router.replace("/signin");
-                      }
-                    } catch (e) {
-                      setDeleteError(e instanceof Error ? e.message : "Could not delete account");
-                    } finally {
-                      setDeleteBusy(false);
-                    }
-                  }}
-                >
-                  {deleteBusy ? "Deleting…" : "Delete my account"}
-                </button>
-              </div>
-            </>
-          ) : null}
+          <h2 id="delete-account-title" className="pw-modal-title" style={{ marginTop: 0 }}>
+            Delete your account?
+          </h2>
+          <p className="pw-modal-sub" style={{ marginTop: 10 }}>
+            This will permanently delete your account and all saved items. This cannot be undone.
+          </p>
+          {deleteError && (
+            <p className="delete-account-error" role="alert">
+              {deleteError}
+            </p>
+          )}
+          <div className="delete-account-modal-actions">
+            <button
+              className="btn-secondary"
+              type="button"
+              disabled={deleteBusy}
+              onClick={closeDeleteConfirm}
+            >
+              Cancel
+            </button>
+            <button
+              className="btn-delete-account-confirm"
+              type="button"
+              disabled={deleteBusy}
+              onClick={() => void confirmDeleteAccount()}
+            >
+              {deleteBusy ? "Deleting…" : "Delete"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -488,4 +418,3 @@ export function ProfileScreen() {
     </div>
   );
 }
-

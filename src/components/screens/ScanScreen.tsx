@@ -11,6 +11,7 @@ import { TagDetailsStep } from "@/components/scan/TagDetailsStep";
 import { TagConfirmStep, type TagExtraction } from "@/components/scan/TagConfirmStep";
 import type { GarmentCategoryId } from "@/lib/scan/garmentCategories";
 import { onboardingIntroPath } from "@/lib/auth/onboardingStatus";
+import { isFreeScanLimitReached } from "@/lib/scan/freeScanLimit";
 
 const TagCameraScanner = dynamic(
   () => import("@/components/scan/TagCameraScanner").then((m) => ({ default: m.TagCameraScanner })),
@@ -68,8 +69,7 @@ export function ScanScreen() {
   }
 
   function isPaywallBlocking(): boolean {
-    if (isPro) return false;
-    return completedScans >= 2;
+    return isFreeScanLimitReached(completedScans, isPro);
   }
 
   function handleUrlSubmit() {

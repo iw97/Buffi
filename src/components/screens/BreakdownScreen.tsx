@@ -7,7 +7,7 @@ import { useStripeCheckout } from "@/hooks/useStripeCheckout";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { useSignIn } from "@/hooks/useSignIn";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
-import { useScanResult, getStoredScanResult, isValidScanResult, normalizeScanResult } from "@/contexts/ScanResultContext";
+import { useScanResult, getStoredScanResult, isValidScanResult, normalizeScanResult, buildScanFinalizationKey, readStoredScanFinalizationKey, setStoredScanFinalizationKey } from "@/contexts/ScanResultContext";
 import { addSavedItem, addScanHistoryEntry, incrementScannedCount, removeSavedItem, setUserProfile } from "@/lib/firebase/firestore";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import type { ScanAnalysis, AlternativeSuggestion } from "@/lib/scan/types";
@@ -223,7 +223,6 @@ export function BreakdownScreen() {
   const [toast, setToast] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const isPro = auth?.profile?.isPro ?? false;
-  const completedScans = auth?.profile?.completedScans ?? 0;
 
   // When scraper (or Claude) cannot provide a price (e.g. JS-rendered + bot detection),
   // allow user to enter price manually and recompute markup / cost-per-wear client-side.
@@ -250,14 +249,15 @@ export function BreakdownScreen() {
   const showProductImage = imageUrl && !imageError;
 
   const hasFinalizedCurrentScan = useRef(false);
+  const finalizeKey =
+    user && validResult ? buildScanFinalizationKey(user.uid, validResult) : null;
+
   useEffect(() => {
     if (hasFinalizedCurrentScan.current) return;
-    if (!isConfigured || authLoading || !user || !validResult) return;
+    if (!isConfigured || authLoading || !user || !validResult || !finalizeKey) return;
 
-    if (!isPro && completedScans >= 2) {
+    if (readStoredScanFinalizationKey() === finalizeKey) {
       hasFinalizedCurrentScan.current = true;
-      clearResult();
-      router.replace("/paywall");
       return;
     }
 
@@ -265,6 +265,7 @@ export function BreakdownScreen() {
     if (isPro) {
       void addScanHistoryEntry(user.uid, analysisToScanHistoryEntry(validResult));
       void incrementScannedCount(user.uid);
+      setStoredScanFinalizationKey(finalizeKey);
       return;
     }
 
@@ -287,8 +288,10 @@ export function BreakdownScreen() {
           setSavedItemId(firstScanSavedId);
         }
 
+        setStoredScanFinalizationKey(finalizeKey);
         await auth?.refreshProfile();
       } catch (e) {
+        hasFinalizedCurrentScan.current = false;
         setSaveError(e instanceof Error ? e.message : "Could not finalize scan");
       }
     })();
@@ -297,10 +300,8 @@ export function BreakdownScreen() {
     authLoading,
     user,
     validResult,
+    finalizeKey,
     isPro,
-    completedScans,
-    clearResult,
-    router,
     scan,
     auth
   ]);
@@ -560,18 +561,6 @@ export function BreakdownScreen() {
 
   if (isConfigured && !user) {
     return null;
-  }
-
-  const shouldShowPaywall = !!user && !isPro && completedScans >= 2;
-  if (shouldShowPaywall) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-10">
-        <div className="analyzing-label">Redirecting</div>
-        <p className="auth-legal" style={{ color: "var(--text-dim)" }}>
-          Free scans are used up.
-        </p>
-      </div>
-    );
   }
 
   if (waitingForData) {

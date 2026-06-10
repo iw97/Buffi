@@ -5,6 +5,31 @@ import type { GarmentCategoryId } from "@/lib/scan/garmentCategories";
 import type { ScanAnalysis } from "@/lib/scan/types";
 
 export const SCAN_RESULT_STORAGE_KEY = "buffi_scan_result";
+/** Session flag: scan count was finalized for the current breakdown result. */
+export const SCAN_FINALIZED_STORAGE_KEY = "buffi_scan_finalized";
+
+export function buildScanFinalizationKey(uid: string, analysis: ScanAnalysis): string {
+  return `${uid}|${analysis.brand}|${analysis.name}|${analysis.price}|${analysis.verdict}`;
+}
+
+export function readStoredScanFinalizationKey(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return sessionStorage.getItem(SCAN_FINALIZED_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredScanFinalizationKey(key: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (key == null) sessionStorage.removeItem(SCAN_FINALIZED_STORAGE_KEY);
+    else sessionStorage.setItem(SCAN_FINALIZED_STORAGE_KEY, key);
+  } catch {
+    /* ignore */
+  }
+}
 
 /** One-session UX flag: show Zara tag-scan suggestion on /scan after a weak Zara URL composition. */
 const ZARA_URL_TAG_HINT_KEY = "buffi_zara_url_tag_hint";
@@ -65,8 +90,12 @@ export function normalizeScanResult(value: unknown): ScanAnalysis | null {
 function setStoredResult(r: ScanAnalysis | null): void {
   if (typeof window === "undefined") return;
   try {
-    if (r == null) sessionStorage.removeItem(SCAN_RESULT_STORAGE_KEY);
-    else sessionStorage.setItem(SCAN_RESULT_STORAGE_KEY, JSON.stringify(r));
+    if (r == null) {
+      sessionStorage.removeItem(SCAN_RESULT_STORAGE_KEY);
+      sessionStorage.removeItem(SCAN_FINALIZED_STORAGE_KEY);
+    } else {
+      sessionStorage.setItem(SCAN_RESULT_STORAGE_KEY, JSON.stringify(r));
+    }
   } catch {
     /* ignore */
   }
@@ -88,6 +117,7 @@ export function ScanResultProvider({ children }: { children: ReactNode }) {
   }, []);
   const clearResult = useCallback(() => {
     setStoredResult(null);
+    setStoredScanFinalizationKey(null);
     setResultState(null);
   }, []);
   return (

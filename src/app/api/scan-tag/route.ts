@@ -3,6 +3,7 @@ import { getAnthropicClient, parseClaudeJsonResponse } from "@/lib/anthropic";
 import { getAdminAuth, getAdminFirestore } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { CLAUDE_PRIMARY_MODEL } from "@/lib/scan/models";
+import { isFreeScanLimitReached } from "@/lib/scan/freeScanLimit";
 
 const VISION_URL = "https://vision.googleapis.com/v1/images:annotate";
 
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanTagExtrac
     const userData = userSnap.data();
     const isPro = userData?.isPro === true;
     const completedScans = typeof userData?.completedScans === "number" ? userData.completedScans : 0;
-    if (!isPro && completedScans >= 2) {
+    if (isFreeScanLimitReached(completedScans, isPro)) {
       return NextResponse.json(
         { ok: false, code: "scan_limit_reached", message: "Scan limit reached. Upgrade to Buffi Pro to continue scanning." },
         { status: 403 }

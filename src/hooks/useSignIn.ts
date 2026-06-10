@@ -52,7 +52,8 @@ export function useSignIn() {
       if (result.user.email) {
         await savePendingOnboardingForEmail(result.user.email);
       }
-      await ensureUserProfileViaApi(result.user);
+      // Profile creation is handled by AuthContext.onAuthStateChanged.
+      // Calling ensureUserProfileViaApi here races with that fetch.
       return result.user;
     } catch (e) {
       throw new Error(firebaseAuthUserMessage(e, "Apple sign-in failed"));

@@ -3905,6 +3905,32 @@ input[type="range"]::-webkit-slider-thumb:hover {
   line-height: 1.7;
 }
 
+.saved-detail-modal-inner {
+  max-height: 92vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+}
+
+.saved-detail-hero {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-top: 8px;
+}
+
+.saved-detail-hero-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.saved-detail-date {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.02em;
+}
+
 /* ===== Profile ===== */
 .profile-header {
   padding: 56px 28px 28px;
@@ -4197,6 +4223,74 @@ input[type="range"]::-webkit-slider-thumb:hover {
   background: var(--teal-glow);
   border: 1px solid rgba(82, 217, 208, 0.12);
   color: var(--teal);
+}
+
+.manage-account-block {
+  padding: 0 28px 8px;
+}
+
+.btn-manage-subscription {
+  width: 100%;
+  padding: 16px;
+  background: transparent;
+  border: 1px solid var(--border-light);
+  color: var(--ivory);
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.btn-manage-subscription:hover:not(:disabled) {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.btn-manage-subscription:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.manage-account-no-sub {
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.manage-account-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 20px 0 16px;
+}
+
+.btn-delete-account-muted {
+  display: block;
+  width: 100%;
+  padding: 8px 0;
+  background: transparent;
+  border: none;
+  color: rgba(232, 96, 74, 0.55);
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.2s;
+}
+
+.btn-delete-account-muted:hover:not(:disabled) {
+  color: var(--red);
+}
+
+.btn-delete-account-muted:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .profile-logout-area {

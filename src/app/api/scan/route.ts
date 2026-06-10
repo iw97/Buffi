@@ -14,6 +14,7 @@ import {
   productScanToScanAnalysis,
   recordProductScan
 } from "@/lib/firebase/productScansServer";
+import { isFreeScanLimitReached } from "@/lib/scan/freeScanLimit";
 
 /** Allow Bright Data Web Unlocker (~3–8s) plus scrape + Claude without platform timeout. */
 export const maxDuration = 30;
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<ScanResult | 
     const userData = userSnap.data();
     const isPro = userData?.isPro === true;
     const completedScans = typeof userData?.completedScans === "number" ? userData.completedScans : 0;
-    if (!isPro && completedScans >= 2) {
+    if (isFreeScanLimitReached(completedScans, isPro)) {
       return NextResponse.json(
         { ok: false, code: "scan_limit_reached", message: "Scan limit reached. Upgrade to Buffi Pro to continue scanning." },
         { status: 403 }

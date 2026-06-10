@@ -6,11 +6,14 @@ import { useAuthOptional } from "@/contexts/AuthContext";
 import { removeSavedItem, setUserProfile, subscribeSavedItems } from "@/lib/firebase/firestore";
 import type { SavedItem } from "@/lib/firebase/types";
 import { onboardingIntroPath } from "@/lib/auth/onboardingStatus";
+import { SavedItemDetailModal } from "@/components/saves/SavedItemDetailModal";
 
 export function SavesScreen() {
   const router = useRouter();
   const auth = useAuthOptional();
   const [items, setItems] = useState<SavedItem[]>([]);
+  const [selectedItem, setSelectedItem] = useState<SavedItem | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -63,6 +66,23 @@ export function SavesScreen() {
     },
     [auth, items.length, removingId]
   );
+
+  const openItemDetail = useCallback((item: SavedItem) => {
+    setSelectedItem(item);
+    setDetailOpen(true);
+  }, []);
+
+  const closeItemDetail = useCallback(() => {
+    setDetailOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (detailOpen && selectedItem?.id) {
+      const updated = items.find((i) => i.id === selectedItem.id);
+      if (updated) setSelectedItem(updated);
+      else if (!items.some((i) => i.id === selectedItem.id)) closeItemDetail();
+    }
+  }, [items, detailOpen, selectedItem?.id, closeItemDetail]);
 
   const isLoggedIn = !!auth?.user;
   const loading = auth?.loading ?? true;
@@ -148,10 +168,10 @@ export function SavesScreen() {
             <div key={item.id} className="save-card">
               <div
                 className="save-card-main"
-                onClick={() => router.push("/breakdown")}
+                onClick={() => openItemDetail(item)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => e.key === "Enter" && router.push("/breakdown")}
+                onKeyDown={(e) => e.key === "Enter" && openItemDetail(item)}
               >
                 <div className="save-swatch" aria-hidden>
                   👕
@@ -183,6 +203,8 @@ export function SavesScreen() {
           ))
         ) : null}
       </div>
+
+      <SavedItemDetailModal item={selectedItem} open={detailOpen} onClose={closeItemDetail} />
     </div>
   );
 }
