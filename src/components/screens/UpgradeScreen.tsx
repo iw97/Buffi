@@ -36,7 +36,7 @@ export function UpgradeScreen() {
     <div className="min-h-screen flex flex-col p-6" style={{ gap: 16 }}>
       <div className="section-eyebrow">Buffi Pro</div>
       <h1 className="ob-title" style={{ marginBottom: 0 }}>
-        Upgrade to Buffi Pro
+        UNLOCK FULL ACCESS
       </h1>
       <p className="ob-desc" style={{ marginTop: 8 }}>
         Honest breakdowns and unlimited saves — funded by you, not brands.

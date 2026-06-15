@@ -36,7 +36,7 @@ const TIERS: TierDef[] = [
     id: "weekly",
     badge: "Most popular",
     badgeKind: "popular",
-    title: "Weekly — $2.99/week",
+    title: "Weekly — $3.99/week",
     subtitle: "Cancel anytime",
     featured: true,
     tone: "featured"

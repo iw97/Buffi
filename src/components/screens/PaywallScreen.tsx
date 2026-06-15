@@ -36,7 +36,7 @@ export function PaywallScreen() {
     <div className="min-h-screen flex flex-col p-6" style={{ gap: 16 }}>
       <div className="section-eyebrow">Buffi Pro</div>
       <h1 className="ob-title" style={{ marginBottom: 0 }}>
-        Free scans used up.
+        UNLOCK FULL ACCESS
       </h1>
       <p className="ob-desc" style={{ marginTop: 8 }}>
         Upgrade to keep scanning with unlimited breakdowns.
