@@ -19,10 +19,11 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Install CocoaPods dependencies
+      - name: Resolve Swift packages
         run: |
-          cd ios/App
-          pod install
+          xcodebuild -resolvePackageDependencies \
+            -project ios/App/App.xcodeproj \
+            -scheme App
 
       - name: Set up signing
         env:
@@ -50,7 +51,7 @@ jobs:
 
       - name: Build archive
         run: |
-          xcodebuild -workspace ios/App/App.xcworkspace \
+          xcodebuild -project ios/App/App.xcodeproj \
             -scheme App \
             -configuration Release \
             -archivePath $RUNNER_TEMP/App.xcarchive \
@@ -83,7 +84,8 @@ jobs:
           xcodebuild -exportArchive \
             -archivePath $RUNNER_TEMP/App.xcarchive \
             -exportOptionsPlist $RUNNER_TEMP/ExportOptions.plist \
-            -exportPath $RUNNER_TEMP/export
+            -exportPath $RUNNER_TEMP/export \
+            -allowProvisioningUpdates
 
       - name: Upload to App Store Connect
         env:
