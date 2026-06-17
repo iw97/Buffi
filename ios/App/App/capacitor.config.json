@@ -1,0 +1,10 @@
+{
+	"appId": "app.buffi",
+	"appName": "Buffi",
+	"webDir": "public",
+	"server": {
+		"url": "https://buffi.app",
+		"cleartext": false
+	},
+	"packageClassList": []
+}
