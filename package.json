@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@capacitor/cli": "^8.4.0",
+    "@capacitor/core": "^8.4.0",
+    "@capacitor/ios": "^8.4.0",
     "@ericblade/quagga2": "^1.12.1",
     "cheerio": "^1.2.0",
     "dotenv": "^17.4.2",
