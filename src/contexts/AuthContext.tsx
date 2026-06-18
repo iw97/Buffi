@@ -25,6 +25,32 @@ import {
 } from "@/lib/firebase";
 import { ensureUserProfileViaApi } from "@/lib/auth/ensureUserProfileClient";
 import type { UserProfile } from "@/lib/firebase/types";
+import { Capacitor } from "@capacitor/core";
+import { Purchases } from "@revenuecat/purchases-capacitor";
+
+const RC_API_KEY = "appl_qZUBWYrqfzOndevGmIvXQnVrsfY";
+
+function isNative(): boolean {
+  try {
+    return Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
+}
+
+function rcLogIn(uid: string) {
+  if (!isNative()) return;
+  void Purchases.logIn({ appUserID: uid }).catch((e) =>
+    console.warn("[rc] logIn failed", e)
+  );
+}
+
+function rcLogOut() {
+  if (!isNative()) return;
+  void Purchases.logOut().catch((e) =>
+    console.warn("[rc] logOut failed", e)
+  );
+}
 
 async function loadProfileFromServer(firebaseUser: User): Promise<{
   profile: UserProfile | null;
@@ -106,6 +132,16 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
     []
   );
 
+  // Configure RevenueCat once on mount (native only)
+  useEffect(() => {
+    if (!isNative()) return;
+    try {
+      void Purchases.configure({ apiKey: RC_API_KEY });
+    } catch (e) {
+      console.warn("[rc] configure failed", e);
+    }
+  }, []);
+
   useEffect(() => {
     if (!isConfigured) {
       setLoading(false);
@@ -146,8 +182,11 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
           if (!u) {
             setProfileLoading(false);
             setAuthTransitioning(false);
+            rcLogOut();
             return;
           }
+
+          rcLogIn(u.uid);
 
           setProfileLoading(true);
           const fetchId = ++profileFetchId.current;

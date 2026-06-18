@@ -3,10 +3,12 @@
 import { useState, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import { Capacitor } from "@capacitor/core";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { usePendingScan, useScanError, readZaraUrlTagScanHint, setZaraUrlTagScanHint } from "@/contexts/ScanResultContext";
 import { PaywallTierList } from "@/components/paywall/PaywallTierList";
 import { useStripeCheckout } from "@/hooks/useStripeCheckout";
+import { useNativePurchase } from "@/hooks/useNativePurchase";
 import { TagDetailsStep } from "@/components/scan/TagDetailsStep";
 import { TagConfirmStep, type TagExtraction } from "@/components/scan/TagConfirmStep";
 import type { GarmentCategoryId } from "@/lib/scan/garmentCategories";
@@ -32,6 +34,8 @@ export function ScanScreen() {
   const { lastError, setLastError } = useScanError();
   const [paywallOpen, setPaywallOpen] = useState(false);
   const { startCheckout, checkoutError } = useStripeCheckout();
+  const { startNativePurchase, purchaseError: nativePurchaseError } = useNativePurchase();
+  const isNative = Capacitor.isNativePlatform();
   const [urlOpen, setUrlOpen] = useState(false);
   const [urlValue, setUrlValue] = useState("");
   const [showZaraTagHint, setShowZaraTagHint] = useState(false);
@@ -641,12 +645,12 @@ export function ScanScreen() {
             variant="modal"
             onSelectPlan={(plan) => {
               setPaywallOpen(false);
-              void startCheckout(plan);
+              isNative ? void startNativePurchase(plan) : void startCheckout(plan);
             }}
           />
-          {checkoutError && (
+          {(isNative ? nativePurchaseError : checkoutError) && (
             <p className="auth-legal" style={{ color: "var(--red)", textAlign: "center", marginTop: 4 }}>
-              {checkoutError}
+              {isNative ? nativePurchaseError : checkoutError}
             </p>
           )}
           <button type="button" className="share-close" onClick={() => router.push("/upgrade")} style={{ marginTop: 8 }}>

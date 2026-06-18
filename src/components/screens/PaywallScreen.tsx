@@ -1,9 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { Capacitor } from "@capacitor/core";
 import { PaywallTierList } from "@/components/paywall/PaywallTierList";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { useStripeCheckout } from "@/hooks/useStripeCheckout";
+import { useNativePurchase } from "@/hooks/useNativePurchase";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 export function PaywallScreen() {
@@ -16,6 +18,8 @@ export function PaywallScreen() {
   const isConfigured = auth?.isConfigured ?? false;
   const user = auth?.user ?? null;
   const isPro = auth?.profile?.isPro ?? false;
+  const isNative = Capacitor.isNativePlatform();
+  const { startNativePurchase, purchaseError: nativePurchaseError, purchaseLoading } = useNativePurchase();
 
   if (loading) {
     return (
@@ -42,10 +46,20 @@ export function PaywallScreen() {
         Upgrade to keep scanning with unlimited breakdowns.
       </p>
 
-      <PaywallTierList variant="page" onSelectPlan={(plan) => void startCheckout(plan)} />
-      {checkoutError && (
+      <PaywallTierList
+        variant="page"
+        onSelectPlan={(plan) =>
+          isNative ? void startNativePurchase(plan) : void startCheckout(plan)
+        }
+      />
+      {(isNative ? nativePurchaseError : checkoutError) && (
         <p className="auth-legal" style={{ color: "var(--red)", textAlign: "center", marginTop: 4 }}>
-          {checkoutError}
+          {isNative ? nativePurchaseError : checkoutError}
+        </p>
+      )}
+      {purchaseLoading && (
+        <p className="auth-legal" style={{ color: "var(--text-dim)", textAlign: "center", marginTop: 4 }}>
+          Opening purchase…
         </p>
       )}
 

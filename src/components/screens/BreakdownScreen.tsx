@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Capacitor } from "@capacitor/core";
 import { PaywallTierList } from "@/components/paywall/PaywallTierList";
 import { useStripeCheckout } from "@/hooks/useStripeCheckout";
+import { useNativePurchase } from "@/hooks/useNativePurchase";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { useSignIn } from "@/hooks/useSignIn";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
@@ -146,6 +148,8 @@ function analysisToScanHistoryEntry(a: ScanAnalysis) {
 export function BreakdownScreen() {
   const router = useRouter();
   const { startCheckout, checkoutError } = useStripeCheckout();
+  const { startNativePurchase, purchaseError: nativePurchaseError } = useNativePurchase();
+  const isNative = Capacitor.isNativePlatform();
   const auth = useAuthOptional();
   const { handleGoogle: signInWithGoogle } = useSignIn();
   const authLoading = auth?.loading ?? true;
@@ -215,6 +219,7 @@ export function BreakdownScreen() {
   const scan = validResult ? analysisToSavedItem(validResult) : null;
   const [infoOpen, setInfoOpen] = useState<InfoId | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [copyLinkDone, setCopyLinkDone] = useState(false);
   const [premiumOpen, setPremiumOpen] = useState(false);
   const [savePromptOpen, setSavePromptOpen] = useState(false);
 
@@ -471,6 +476,45 @@ export function BreakdownScreen() {
     document.addEventListener("click", close);
     return () => document.removeEventListener("click", close);
   }, []);
+
+  function buildShareText() {
+    const verdict = result ? verdictDisplayLabel(result.verdict) : "";
+    const markup = result ? Math.round(getMarkupMidpoint(result)) : 0;
+    const brand = scan?.brandName ?? "";
+    const name = scan?.itemName ?? "";
+    const cost = result ? getMaterialCostMidpoint(result).toFixed(0) : "0";
+    return `${brand} ${name}\n${verdict} ${markup}% markup · ~$${cost} real cost\n\nbuffi.app`;
+  }
+
+  async function handleSharePlatform() {
+    const text = buildShareText();
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({ title: "Buffi Receipt", text });
+      } catch {
+        // user cancelled or share failed — ignore
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopyLinkDone(true);
+        window.setTimeout(() => setCopyLinkDone(false), 2000);
+      } catch {
+        // clipboard not available
+      }
+    }
+  }
+
+  async function handleCopyLink() {
+    const text = buildShareText();
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyLinkDone(true);
+      window.setTimeout(() => setCopyLinkDone(false), 2000);
+    } catch {
+      // clipboard not available
+    }
+  }
 
   function showToast() {
     setToast(true);
@@ -1180,12 +1224,12 @@ export function BreakdownScreen() {
             variant="modal"
             onSelectPlan={(plan) => {
               setPremiumOpen(false);
-              void startCheckout(plan);
+              isNative ? void startNativePurchase(plan) : void startCheckout(plan);
             }}
           />
-          {checkoutError && (
+          {(isNative ? nativePurchaseError : checkoutError) && (
             <p className="auth-legal" style={{ color: "var(--red)", textAlign: "center", marginTop: 4 }}>
-              {checkoutError}
+              {isNative ? nativePurchaseError : checkoutError}
             </p>
           )}
           <button type="button" className="share-close" onClick={() => router.push("/upgrade")} style={{ marginTop: 8 }}>
@@ -1229,14 +1273,14 @@ export function BreakdownScreen() {
           </div>
 
           <div className="share-platforms">
-            <button className="share-platform-btn" type="button">
+            <button className="share-platform-btn" type="button" onClick={() => void handleSharePlatform()}>
               TikTok
             </button>
-            <button className="share-platform-btn" type="button">
+            <button className="share-platform-btn" type="button" onClick={() => void handleSharePlatform()}>
               Instagram
             </button>
-            <button className="share-platform-btn" type="button">
-              Copy Link
+            <button className="share-platform-btn" type="button" onClick={() => void handleCopyLink()}>
+              {copyLinkDone ? "Copied!" : "Copy Link"}
             </button>
           </div>
 
