@@ -56,7 +56,7 @@
 			<array>
 				<!-- REPLACE_WITH_REVERSED_CLIENT_ID from GoogleService-Info.plist -->
 				<!-- Format: com.googleusercontent.apps.YOUR_CLIENT_ID_WITHOUT_SUFFIX -->
-				<string>REPLACE_WITH_REVERSED_CLIENT_ID</string>
+				<string>com.googleusercontent.apps.645457660698-l5663t838df4m0bcjrhaj6mhm02q22f4</string>
 			</array>
 		</dict>
 	</array>
