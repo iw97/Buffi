@@ -12,7 +12,7 @@ import {
   type User
 } from "firebase/auth";
 import { Capacitor } from "@capacitor/core";
-import { SignInWithApple } from "@capacitor-community/apple-sign-in";
+import { AppleSignIn } from "@/lib/appleSignIn";
 import { GoogleAuth } from "@codetrix-studio/capacitor-google-auth";
 import { auth } from "@/lib/firebase";
 import { ensureUserProfileViaApi } from "@/lib/auth/ensureUserProfileClient";
@@ -71,12 +71,7 @@ export function useSignIn() {
     try {
       if (Capacitor.isNativePlatform()) {
         const { raw, hashed } = await generateNonce();
-        const appleResult = await SignInWithApple.authorize({
-          clientId: "app.buffi",
-          redirectURI: "https://www.buffi.app",
-          scopes: "email name",
-          nonce: hashed,
-        });
+        const appleResult = await AppleSignIn.authorize({ nonce: hashed });
         const provider = new OAuthProvider("apple.com");
         const credential = provider.credential({
           idToken: appleResult.response.identityToken,
