@@ -7,6 +7,7 @@
 		"cleartext": false
 	},
 	"packageClassList": [
+		"SignInWithApple",
 		"InAppReviewPlugin",
 		"PurchasesPlugin"
 	]
