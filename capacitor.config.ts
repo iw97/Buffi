@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'Buffi',
   webDir: 'public',
   server: {
-    url: 'https://buffi.app',
+    url: 'https://buffi.app/splash',
     cleartext: false,
   },
 };
