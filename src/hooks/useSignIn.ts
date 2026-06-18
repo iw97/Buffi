@@ -13,6 +13,7 @@ import {
 } from "firebase/auth";
 import { Capacitor } from "@capacitor/core";
 import { SignInWithApple } from "@capacitor-community/apple-sign-in";
+import { GoogleAuth } from "@codetrix-studio/capacitor-google-auth";
 import { auth } from "@/lib/firebase";
 import { ensureUserProfileViaApi } from "@/lib/auth/ensureUserProfileClient";
 import { savePendingOnboardingForEmail } from "@/lib/auth/pendingOnboardingClient";
@@ -37,17 +38,25 @@ export function useSignIn() {
     if (!auth) throw new Error("Auth is not initialized");
     if (isSigningIn.current) throw new Error("Sign-in already in progress");
     isSigningIn.current = true;
-    const provider = new GoogleAuthProvider();
     try {
-      const result = await signInWithPopup(auth, provider);
-      console.log('[google] popup success', result.user.uid);
-      console.log('[google] is new user:', (result as any)._tokenResponse?.isNewUser);
-      if (result.user.email) {
-        await savePendingOnboardingForEmail(result.user.email);
+      if (Capacitor.isNativePlatform()) {
+        const googleUser = await GoogleAuth.signIn();
+        const credential = GoogleAuthProvider.credential(
+          googleUser.authentication.idToken
+        );
+        const result = await signInWithCredential(auth, credential);
+        if (result.user.email) {
+          await savePendingOnboardingForEmail(result.user.email);
+        }
+        return result.user;
+      } else {
+        const provider = new GoogleAuthProvider();
+        const result = await signInWithPopup(auth, provider);
+        if (result.user.email) {
+          await savePendingOnboardingForEmail(result.user.email);
+        }
+        return result.user;
       }
-      // Profile creation is handled by AuthContext.onAuthStateChanged.
-      // Calling ensureUserProfileViaApi here races with that fetch.
-      return result.user;
     } catch (e) {
       throw new Error(firebaseAuthUserMessage(e, "Google sign-in failed"));
     } finally {
