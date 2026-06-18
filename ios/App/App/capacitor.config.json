@@ -6,5 +6,7 @@
 		"url": "https://buffi.app/splash",
 		"cleartext": false
 	},
-	"packageClassList": []
+	"packageClassList": [
+		"InAppReviewPlugin"
+	]
 }

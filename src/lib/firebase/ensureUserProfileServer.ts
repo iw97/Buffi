@@ -91,6 +91,7 @@ export async function ensureUserProfileAdmin(
   if (userFieldMissing(existing, "scannedCount")) mergePayload.scannedCount = 0;
   if (userFieldMissing(existing, "trapsAvoided")) mergePayload.trapsAvoided = 0;
   if (userFieldMissing(existing, "estimatedMoneySaved")) mergePayload.estimatedMoneySaved = 0;
+  if (userFieldMissing(existing, "hasSeenRatingPrompt")) mergePayload.hasSeenRatingPrompt = false;
 
   console.log("[ensure-user-profile] set merge:true users/", uid);
   await ref.set(mergePayload, { merge: true });

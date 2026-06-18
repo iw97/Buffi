@@ -9,6 +9,7 @@ export const COLLECTIONS = {
   USERS: "users",
   SAVED_ITEMS: "savedItems",
   SCAN_HISTORY: "scanHistory",
+  FEEDBACK: "feedback",
   /** GTIN → URL registry; Admin SDK only, no client access. */
   PRODUCT_MAPPINGS: "productMappings",
   /** Internal product-level scan aggregates + cache; Admin SDK only, no client access. */
@@ -127,6 +128,8 @@ export interface UserProfile {
   completedScans?: number;
   /** Present after `ensureUserDocument`; stored as Firestore `Timestamp`. */
   scanCountResetAt?: Timestamp | string;
+  /** Native App Store rating prompt shown at most once. */
+  hasSeenRatingPrompt?: boolean;
 }
 
 /** A saved scan result (savedItems collection) */

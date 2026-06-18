@@ -11,6 +11,9 @@ service cloud.firestore {
     match /pendingOnboarding/{document} {
       allow read, write: if false;
     }
+    match /feedback/{document} {
+      allow read, write: if false;
+    }
 
     // users/{uid} — owner-only. Client reads require a valid auth token (uid match).
     // Magic-link sign-in: token may lag briefly; client retries getUserProfile on permission-denied.
@@ -42,7 +45,8 @@ service cloud.firestore {
       allow read, write: if
         request.path.split('/')[0] != 'productScans'
         && request.path.split('/')[0] != 'productMappings'
-        && request.path.split('/')[0] != 'users';
+        && request.path.split('/')[0] != 'users'
+        && request.path.split('/')[0] != 'feedback';
     }
   }
 }

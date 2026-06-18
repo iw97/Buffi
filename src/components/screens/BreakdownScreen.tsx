@@ -13,6 +13,8 @@ import { isFirebaseConfigured } from "@/lib/firebase";
 import type { ScanAnalysis, AlternativeSuggestion } from "@/lib/scan/types";
 import { MATERIALS_NOT_DETECTED_TAG } from "@/lib/scan/analyze";
 import { PETROLEUM_SYNTHETIC, PREMIUM_NATURAL, STANDARD_NATURAL, PREMIUM_CELLULOSIC, STANDARD_CELLULOSIC, DEFAULT_WEAR_COUNT } from "@/lib/scan/verdict";
+import { useAppStoreRatingPrompt } from "@/hooks/useAppStoreRatingPrompt";
+import { AppStoreRatingPreScreenModal } from "@/components/rating/AppStoreRatingPreScreenModal";
 type InfoId = "material" | "cpw" | "markup";
 
 const NATURAL_OR_CELLULOSIC = [
@@ -547,6 +549,14 @@ export function BreakdownScreen() {
       setSaveError(e instanceof Error ? e.message : "Sign-up failed");
     }
   }
+
+  const breakdownReady = !waitingForData && !!validResult && !!user;
+  const { preScreenOpen, closePreScreen } = useAppStoreRatingPrompt({
+    uid: user?.uid,
+    profile: auth?.profile,
+    validResult,
+    breakdownReady
+  });
 
   if (isConfigured && authLoading) {
     return (
@@ -1235,6 +1245,8 @@ export function BreakdownScreen() {
           </button>
         </div>
       </div>
+
+      <AppStoreRatingPreScreenModal open={preScreenOpen} user={user} onClose={closePreScreen} />
     </div>
   );
 }
