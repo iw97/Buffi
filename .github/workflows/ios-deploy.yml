@@ -66,6 +66,7 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             PROVISIONING_PROFILE_SPECIFIER="Buffi App Store" \
             CODE_SIGN_IDENTITY="Apple Distribution" \
+            DEVELOPMENT_TEAM=KN424YB7UX \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             archive
 
