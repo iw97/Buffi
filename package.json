@@ -19,6 +19,7 @@
     "dotenv": "^17.4.2",
     "firebase": "^10.14.0",
     "firebase-admin": "^12.7.0",
+    "framer-motion": "^12.40.0",
     "next": "^16.1.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
