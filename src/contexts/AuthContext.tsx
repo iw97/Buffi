@@ -26,7 +26,7 @@ import {
 import { ensureUserProfileViaApi } from "@/lib/auth/ensureUserProfileClient";
 import type { UserProfile } from "@/lib/firebase/types";
 import { Capacitor } from "@capacitor/core";
-import { Purchases } from "@revenuecat/purchases-capacitor";
+import { Purchases, LOG_LEVEL } from "@revenuecat/purchases-capacitor";
 
 const RC_API_KEY = "appl_qZUBWYrqfzOndevGmIvXQnVrsfY";
 
@@ -136,7 +136,7 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (!isNative()) return;
     try {
-      void Purchases.setLogLevel({ level: "DEBUG" });
+      void Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
       void Purchases.configure({ apiKey: RC_API_KEY });
     } catch (e) {
       console.warn("[rc] configure failed", e);
