@@ -1,16 +1,20 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { Capacitor } from "@capacitor/core";
 import { PaywallTierList } from "@/components/paywall/PaywallTierList";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { useStripeCheckout } from "@/hooks/useStripeCheckout";
+import { useNativePurchase } from "@/hooks/useNativePurchase";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 export function UpgradeScreen() {
   const router = useRouter();
   const auth = useAuthOptional();
   useRequireAuth("/upgrade");
+  const isNative = Capacitor.isNativePlatform();
   const { startCheckout, checkoutError } = useStripeCheckout();
+  const { startNativePurchase, purchaseError, purchaseLoading } = useNativePurchase();
 
   const loading = auth?.loading ?? true;
   const isConfigured = auth?.isConfigured ?? false;
@@ -42,10 +46,16 @@ export function UpgradeScreen() {
         Honest breakdowns and unlimited saves — funded by you, not brands.
       </p>
 
-      <PaywallTierList variant="page" onSelectPlan={(plan) => void startCheckout(plan)} />
-      {checkoutError && (
+      <PaywallTierList
+        variant="page"
+        onSelectPlan={(plan) =>
+          isNative ? void startNativePurchase(plan) : void startCheckout(plan)
+        }
+        disabled={purchaseLoading}
+      />
+      {(isNative ? purchaseError : checkoutError) && (
         <p className="auth-legal" style={{ color: "var(--red)", textAlign: "center", marginTop: 4 }}>
-          {checkoutError}
+          {isNative ? purchaseError : checkoutError}
         </p>
       )}
 

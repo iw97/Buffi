@@ -47,9 +47,10 @@ type Props = {
   onSelectPlan: (plan: PaywallPlanId) => void;
   /** Page uses full-width tier cards; modal uses compact spacing inside premium sheet */
   variant?: "page" | "modal";
+  disabled?: boolean;
 };
 
-export function PaywallTierList({ onSelectPlan, variant = "page" }: Props) {
+export function PaywallTierList({ onSelectPlan, variant = "page", disabled = false }: Props) {
   const rootClass = variant === "modal" ? "paywall-tiers paywall-tiers--modal" : "paywall-tiers";
 
   return (
@@ -65,6 +66,7 @@ export function PaywallTierList({ onSelectPlan, variant = "page" }: Props) {
           ]
             .filter(Boolean)
             .join(" ")}
+          disabled={disabled}
           onClick={() => onSelectPlan(tier.id)}
         >
           {tier.badge ? (
