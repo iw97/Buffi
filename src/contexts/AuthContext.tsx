@@ -136,6 +136,7 @@ export function FirebaseAuthProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (!isNative()) return;
     try {
+      void Purchases.setLogLevel({ level: "DEBUG" });
       void Purchases.configure({ apiKey: RC_API_KEY });
     } catch (e) {
       console.warn("[rc] configure failed", e);
