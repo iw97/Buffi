@@ -39,6 +39,14 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // savedItems — owner-only by userId field.
+    match /savedItems/{itemId} {
+      allow read, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == request.auth.uid;
+    }
+
     // TEMPORARY: permissive rules for other collections. Tighten before launch.
     // `users` is excluded so only the rule above applies (owner-only).
     match /{document=**} {

@@ -18,6 +18,7 @@ export function SavesScreen() {
   const [listError, setListError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [listLoading, setListLoading] = useState(true);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     if (!auth?.user?.uid || !auth?.isConfigured) {
@@ -43,7 +44,7 @@ export function SavesScreen() {
       }
     );
     return () => unsub();
-  }, [auth?.user?.uid, auth?.isConfigured]);
+  }, [auth?.user?.uid, auth?.isConfigured, retryKey]);
 
   const handleUnsave = useCallback(
     async (e: MouseEvent, item: SavedItem) => {
@@ -136,7 +137,7 @@ export function SavesScreen() {
               className="btn-primary"
               type="button"
               style={{ marginTop: 16 }}
-              onClick={() => window.location.reload()}
+              onClick={() => setRetryKey(k => k + 1)}
             >
               Refresh
             </button>
