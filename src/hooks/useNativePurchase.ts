@@ -24,6 +24,11 @@ export function useNativePurchase() {
       setPurchaseError(null);
       setPurchaseLoading(true);
       try {
+        const uid = auth?.user?.uid;
+        if (uid) {
+          await Purchases.logIn({ appUserID: uid });
+        }
+
         const productId = PLAN_TO_PRODUCT_ID[plan];
 
         const { current } = await Purchases.getOfferings();

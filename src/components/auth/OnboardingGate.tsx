@@ -96,7 +96,7 @@ export function OnboardingGate() {
     );
   }
 
-  if (user && profileLoading) {
+  if (user && profileLoading && !pathname.startsWith("/upgrade/success")) {
     return (
       <div
         className="min-h-screen flex flex-col items-center justify-center gap-4 p-10"

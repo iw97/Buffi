@@ -46,16 +46,7 @@ export async function applyRCPurchaseEvent(event: RCEvent): Promise<void> {
     isPro: true,
     subscriptionStatus: lifetime ? "lifetime" : "active",
     proExpiresAt,
-    // clear any leftover Stripe subscription id so the profile
-    // doesn't try to open the Stripe portal for an RC subscriber
-    stripeSubscriptionId: stripeSubscriptionId(event),
   });
-}
-
-// Only keep stripeSubscriptionId if it was already set — don't overwrite it
-// with undefined from the RC event; just leave whatever's already there.
-function stripeSubscriptionId(_event: RCEvent): typeof FieldValue.delete | undefined {
-  return undefined;
 }
 
 export async function applyRCExpirationEvent(event: RCEvent): Promise<void> {
