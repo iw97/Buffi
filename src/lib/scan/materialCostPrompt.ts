@@ -14,7 +14,7 @@ export const MATERIAL_COST_AND_TAXONOMY_PROMPT = `
 
 **CELLULOSIC / SEMI-NATURAL** (wood pulp or plant cellulose — NOT petroleum, NOT “synthetic plastic” for % purposes): viscose, rayon, modal, lyocell, Tencel, cupro, acetate, cellulose acetate, triacetate, bamboo viscose, bamboo lyocell, bamboo rayon, Naia, Naia Renew, EcoVero, ECOVERO, Lenzing Modal, Lenzing Viscose.
 
-**SYNTHETIC / PETROLEUM-BASED** (fossil fuels — count toward % synthetic / plastic): polyester, recycled polyester, REPREVE polyester, nylon, recycled nylon, acrylic, elastane, spandex, Lycra, polypropylene, polyurethane, PU, PVC, microfiber (when polyester-based).
+**SYNTHETIC / PETROLEUM-BASED** (fossil fuels — count toward % synthetic / plastic): polyester, recycled polyester, REPREVE polyester, nylon, recycled nylon, acrylic, elastane, spandex, Lycra, LYCRA®, polypropylene, polyurethane, PU, PVC, microfiber (when polyester-based). **Brand-name fiber aliases — always normalize these:** LYCRA® → Elastane; Spandex → Elastane; TENCEL → Lyocell; Refibra → Lyocell; EcoVero → Viscose; Naia → Cellulose acetate; REPREVE → Recycled Polyester. Use the generic fiber name in the materials array, not the brand name.
 
 **CRITICAL RULE:** Never count cellulosic fibers toward the % synthetic (plastic) metric. Only petroleum-based synthetics count as plastic. Example: 88% Naia Renew + 12% polyester = **12% synthetic**, not 100%.
 

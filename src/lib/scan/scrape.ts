@@ -559,9 +559,10 @@ function extractMaterialFromJsonLdNode(
   if (Array.isArray(props)) {
     for (const p of props) {
       if (!p || typeof p !== "object") continue;
-      const po = p as { name?: string; value?: unknown };
+      const po = p as { name?: string; propertyID?: string; propertyId?: string; value?: unknown };
       const propName = typeof po.name === "string" ? po.name : "";
-      if (!/material|composition|fabric/i.test(propName)) continue;
+      const propId = typeof po.propertyID === "string" ? po.propertyID : (typeof po.propertyId === "string" ? po.propertyId : "");
+      if (!/material|composition|fabric/i.test(propName) && !/material|composition|fabric/i.test(propId)) continue;
       const v = po.value;
       if (typeof v === "string" && v.trim() && jsonLdCompositionAcceptable(v)) return clipJsonLdMaterial(v);
       if (v != null && typeof v === "object" && "name" in (v as object)) {
@@ -1487,16 +1488,9 @@ export async function scrapeProductFromUrl(url: string): Promise<{
       };
       console.log(
         LOG_PREFIX,
-        "Zara metadata without composition; returning name/price — no Bright Data or generic HTML fallback",
+        "Zara metadata without composition; continuing to Bright Data for composition",
         cleaned.slice(0, 80)
       );
-      return {
-        brand: zaraPartial.brand,
-        name: zaraPartial.name,
-        price: zaraPartial.price,
-        description: zaraPartial.description,
-        imageUrl: zaraPartial.imageUrl ?? null
-      };
     }
     console.log(LOG_PREFIX, "Zara-specific scrape empty; falling back to generic HTML (no Bright Data)", cleaned.slice(0, 80));
   }
@@ -1584,12 +1578,8 @@ export async function scrapeProductFromUrl(url: string): Promise<{
       "Gap page missing Product JSON-LD (shell/SSR) — forcing Bright Data for product data"
     );
   }
-  if (zaraHost) {
+  if (zaraHost && step2CheerioFoundMaterials) {
     shouldTryBrightData = false;
-    console.log(
-      LOG_PREFIX,
-      "skipping Bright Data for Zara — name inference handles this"
-    );
   }
   debugScrapeMaterials("bright-data-decision", {
     triggered: shouldTryBrightData,
