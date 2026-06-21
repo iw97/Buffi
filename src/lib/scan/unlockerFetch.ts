@@ -22,7 +22,7 @@ export async function fetchWithBrightData(url: string): Promise<string | null> {
         url,
         format: "raw"
       }),
-      signal: AbortSignal.timeout(30000)
+      signal: AbortSignal.timeout(20000)
     });
 
     if (!response.ok) {

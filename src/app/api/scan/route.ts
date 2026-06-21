@@ -17,7 +17,7 @@ import {
 import { isFreeScanLimitReached } from "@/lib/scan/freeScanLimit";
 
 /** Allow Bright Data Web Unlocker (~3–8s) plus scrape + Claude without platform timeout. */
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 function readBearerToken(req: NextRequest): string | null {
   const raw = req.headers.get("authorization") ?? "";
