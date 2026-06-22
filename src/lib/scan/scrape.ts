@@ -1091,9 +1091,8 @@ async function extractGenericProductFromLoadedCheerio(
     if (host.includes("zara.com")) {
       brand = brand ?? "Zara";
       name = name ?? $(".product-detail-info__header-name").first().text().trim();
-      const zaraDomComp =
-        $('[data-qa="product-detail-composition"]').text().trim() ||
-        $(".product-detail-composition").text().trim();
+      // Skip .product-detail-composition: it concatenates section headers without separators, breaking \b matching.
+      const zaraDomComp = $('[data-qa="product-detail-composition"]').text().trim();
       materials = pickMaterials(
         materials,
         parseZaraOuterShellComposition(zaraDomComp) ||
