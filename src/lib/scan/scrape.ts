@@ -1626,6 +1626,18 @@ export async function scrapeProductFromUrl(url: string): Promise<{
   merged = mergeGenericHtmlExtractions(merged, bdExtraction);
 
   if (!merged?.materials?.trim()) {
+    // For Zara: return partial data (name+brand from slug/API) so Claude returns Unknown gracefully
+    // instead of the whole scan erroring out when Bright Data fails or finds no composition.
+    if (zaraHost && zaraPartial && (zaraPartial.name || zaraPartial.brand)) {
+      console.log("[scrape] Zara: no materials after all methods; returning partial for Unknown classification");
+      return {
+        brand: zaraPartial.brand,
+        name: zaraPartial.name ?? merged?.name,
+        price: zaraPartial.price ?? merged?.priceFromJsonLd ?? undefined,
+        description: zaraPartial.description ?? merged?.description,
+        imageUrl: zaraPartial.imageUrl ?? merged?.imageUrl ?? null
+      };
+    }
     console.log("[scrape] all methods exhausted, returning null");
     console.log(LOG_PREFIX, "scrape path taken", "composition not found after all eligible methods", {
       tried: fetchUrls.length,
@@ -1637,6 +1649,17 @@ export async function scrapeProductFromUrl(url: string): Promise<{
   }
 
   if (!merged.name && !merged.brand) {
+    if (zaraHost && zaraPartial && (zaraPartial.name || zaraPartial.brand)) {
+      console.log("[scrape] Zara: materials found but no name/brand from generic extraction; using zaraPartial");
+      return {
+        brand: zaraPartial.brand,
+        name: zaraPartial.name,
+        price: zaraPartial.price ?? merged.priceFromJsonLd ?? undefined,
+        description: zaraPartial.description ?? merged.description,
+        imageUrl: zaraPartial.imageUrl ?? merged.imageUrl ?? null,
+        materials: merged.materials
+      };
+    }
     console.log(LOG_PREFIX, "scrape path taken", "generic HTML path exhausted", {
       tried: fetchUrls.length,
       standardFetchFailed,
@@ -1656,6 +1679,16 @@ export async function scrapeProductFromUrl(url: string): Promise<{
     value: finalMaterials ?? null
   });
   if (!finalMaterials?.trim()) {
+    if (zaraHost && zaraPartial && (zaraPartial.name || zaraPartial.brand)) {
+      console.log("[scrape] Zara: materials rejected by subcomponent filter; returning partial for Unknown");
+      return {
+        brand: zaraPartial.brand,
+        name: zaraPartial.name ?? merged.name,
+        price: zaraPartial.price ?? merged.priceFromJsonLd ?? undefined,
+        description: zaraPartial.description ?? merged.description,
+        imageUrl: zaraPartial.imageUrl ?? merged.imageUrl ?? null
+      };
+    }
     console.log("[scrape] all methods exhausted after subcomponent filter, returning null");
     return null;
   }
