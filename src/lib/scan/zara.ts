@@ -367,21 +367,9 @@ export async function scrapeZaraFromUrl(productPageUrl: string): Promise<ZaraScr
 
   /** True when APIs did not contribute product fields and HTML provided them (SSR/meta). */
   let htmlWasOnlySource = !extraOk && !itxOk;
-  const htmlPart = await scrapeZaraHtml(productPageUrl);
-  if (htmlPart) {
-    name = name || htmlPart.name;
-    materials = materials || htmlPart.materials;
-    description = description || htmlPart.description;
-    imageUrl = htmlPart.imageUrl ?? imageUrl ?? null;
-    if (htmlPart.materials) htmlComposition = true;
-    console.log(LOG, "HTML DOM merge", {
-      hasName: !!name,
-      hasPrice: price != null,
-      hasMaterials: !!materials,
-      hasImage: !!imageUrl,
-      htmlWasOnlySource
-    });
-  }
+  // Direct HTML fetch always returns Akamai bot-challenge page for Zara; skip it.
+  // Bright Data (called in scrapeProductFromUrl) handles the actual page fetch.
+  console.log(LOG, "skipping direct HTML scrape (Akamai-blocked; Bright Data handles page fetch)");
 
   let compositionFrom: "extra_detail" | "itxrest" | "html" | "claude_title" | "none" = "none";
   if (extraDetailComposition) compositionFrom = "extra_detail";
@@ -401,7 +389,7 @@ export async function scrapeZaraFromUrl(productPageUrl: string): Promise<ZaraScr
     extraDetailOk: extraOk,
     itxrestOk: itxOk,
     serpapiOk: false,
-    htmlDomOk: !!htmlPart,
+    htmlDomOk: false,
     compositionSource: compositionFrom,
     scrapeMethod: method,
     priceFromZaraApi: price != null,

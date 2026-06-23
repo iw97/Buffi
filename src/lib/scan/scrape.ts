@@ -1498,32 +1498,38 @@ export async function scrapeProductFromUrl(url: string): Promise<{
   let html = "";
   let fetchOk = false;
   let fetchUrlUsed = cleaned;
-  for (const tryUrl of fetchUrls) {
-    let referHost = host;
-    try {
-      referHost = new URL(tryUrl).hostname;
-    } catch {
-      /* keep host */
-    }
-    try {
-      const res = await fetchWithBrowserRetry(tryUrl, referHost, {
-        signal: AbortSignal.timeout(15000)
-      });
-      if (res.ok) {
-        html = await res.text();
-        fetchOk = true;
-        fetchUrlUsed = tryUrl;
-        break;
+  if (zaraHost) {
+    // Zara direct fetches always return an Akamai bot-challenge page, never real product HTML.
+    // Skip straight to Bright Data below.
+    console.log(LOG_PREFIX, "Zara: skipping direct HTML fetch (Akamai-blocked)");
+  } else {
+    for (const tryUrl of fetchUrls) {
+      let referHost = host;
+      try {
+        referHost = new URL(tryUrl).hostname;
+      } catch {
+        /* keep host */
       }
-      console.log(LOG_PREFIX, "generic HTML fetch non-OK, may try next", {
-        tryUrl: tryUrl.slice(0, 120),
-        status: res.status
-      });
-    } catch (err) {
-      console.log(LOG_PREFIX, "generic HTML fetch error", {
-        tryUrl: tryUrl.slice(0, 120),
-        message: (err as Error).message
-      });
+      try {
+        const res = await fetchWithBrowserRetry(tryUrl, referHost, {
+          signal: AbortSignal.timeout(15000)
+        });
+        if (res.ok) {
+          html = await res.text();
+          fetchOk = true;
+          fetchUrlUsed = tryUrl;
+          break;
+        }
+        console.log(LOG_PREFIX, "generic HTML fetch non-OK, may try next", {
+          tryUrl: tryUrl.slice(0, 120),
+          status: res.status
+        });
+      } catch (err) {
+        console.log(LOG_PREFIX, "generic HTML fetch error", {
+          tryUrl: tryUrl.slice(0, 120),
+          message: (err as Error).message
+        });
+      }
     }
   }
 
