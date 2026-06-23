@@ -3011,6 +3011,11 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--teal);
   border: 1px solid rgba(82, 217, 208, 0.12);
 }
+.fiber-badge.semi-synthetic {
+  background: rgba(232, 160, 64, 0.12);
+  color: var(--amber);
+  border: 1px solid rgba(232, 160, 64, 0.2);
+}
 .fiber-pct {
   font-family: var(--font-mono, monospace);
   font-size: 12px;
@@ -3031,6 +3036,9 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 .fiber-fill.natural {
   background: var(--teal);
+}
+.fiber-fill.semi-synthetic {
+  background: var(--amber);
 }
 
 .values-score-display {

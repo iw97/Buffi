@@ -19,22 +19,19 @@ import { useAppStoreRatingPrompt } from "@/hooks/useAppStoreRatingPrompt";
 import { AppStoreRatingPreScreenModal } from "@/components/rating/AppStoreRatingPreScreenModal";
 type InfoId = "material" | "cpw" | "markup";
 
-const NATURAL_OR_CELLULOSIC = [
-  ...PREMIUM_NATURAL,
-  ...STANDARD_NATURAL,
-  ...PREMIUM_CELLULOSIC,
-  ...STANDARD_CELLULOSIC,
-];
 
-function fiberKind(fiber: string): "synthetic" | "natural" {
+function fiberKind(fiber: string): "synthetic" | "semi-synthetic" | "natural" {
   const lower = fiber.toLowerCase();
   if (PETROLEUM_SYNTHETIC.some((s) => lower.includes(s))) return "synthetic";
-  if (NATURAL_OR_CELLULOSIC.some((c) => lower.includes(c))) return "natural";
+  if ([...PREMIUM_CELLULOSIC, ...STANDARD_CELLULOSIC].some((c) => lower.includes(c))) return "semi-synthetic";
+  if ([...PREMIUM_NATURAL, ...STANDARD_NATURAL].some((n) => lower.includes(n))) return "natural";
   return "natural";
 }
 
-function badgeForKind(kind: "synthetic" | "natural"): string {
-  return kind === "synthetic" ? "Synthetic" : "Natural";
+function badgeForKind(kind: "synthetic" | "semi-synthetic" | "natural"): string {
+  if (kind === "synthetic") return "Synthetic";
+  if (kind === "semi-synthetic") return "Semi-Synthetic";
+  return "Natural";
 }
 
 function markupToBand(markup: number): string {
