@@ -588,7 +588,7 @@ export function ScanScreen() {
             <input
               className="url-input"
               type="url"
-              placeholder="https://zara.com/product..."
+              placeholder="https://gap.com/browse/product..."
               value={urlValue}
               onChange={(e) => setUrlValue(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleUrlSubmit()}

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { UrlScrapeFallbackStep } from "@/components/scan/UrlScrapeFallbackStep";
+import { FiberFallbackStep } from "@/components/scan/FiberFallbackStep";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import {
@@ -62,10 +63,15 @@ export function AnalyzingScreen() {
   const items = useMemo(() => ORDER, []);
   const [flowError, setFlowError] = useState<string | null>(null);
   const [urlFallback, setUrlFallback] = useState<{ brand: string; name: string } | null>(null);
+  const [fiberFallback, setFiberFallback] = useState<{
+    brand: string;
+    price?: number;
+    isZara: boolean;
+  } | null>(null);
   const hasNavigated = useRef(false);
 
   useEffect(() => {
-    if (urlFallback) return;
+    if (urlFallback || fiberFallback) return;
     if (hasNavigated.current) {
       console.log("[scan flow] effect skipped – already navigated");
       return;
@@ -189,11 +195,21 @@ export function AnalyzingScreen() {
           console.log("[scan flow] success – writing scanResult then navigating");
           const analysis = data.analysis as ScanAnalysis;
           const scannedUrl = typeof pending?.url === "string" ? pending.url.trim() : "";
-          if (scannedUrl && isZaraProductPageUrl(scannedUrl) && isZaraCompositionInsufficient(analysis)) {
-            setZaraUrlTagScanHint(true);
-          } else {
-            setZaraUrlTagScanHint(false);
+          const zaraUrl = scannedUrl ? isZaraProductPageUrl(scannedUrl) : false;
+
+          // For URL scans that come back with Unknown composition, show the fiber entry
+          // step instead of sending the user to a useless breakdown screen.
+          if (pending?.url && isZaraCompositionInsufficient(analysis)) {
+            setResult(analysis); // store so "skip" can navigate straight to /breakdown
+            setFiberFallback({
+              brand: analysis.brand || "",
+              price: analysis.price > 0 ? analysis.price : undefined,
+              isZara: zaraUrl
+            });
+            return;
           }
+
+          setZaraUrlTagScanHint(zaraUrl && isZaraCompositionInsufficient(analysis));
           setResult(analysis);
           hasNavigated.current = true;
           router.replace("/breakdown");
@@ -221,10 +237,10 @@ export function AnalyzingScreen() {
 
     run();
     return () => controller.abort();
-  }, [pending, urlFallback, setPending, setResult, setLastError, router, isConfigured, authLoading, user]);
+  }, [pending, urlFallback, fiberFallback, setPending, setResult, setLastError, router, isConfigured, authLoading, user]);
 
   useEffect(() => {
-    if (urlFallback) return;
+    if (urlFallback || fiberFallback) return;
     const timers: Array<number> = [];
     items.forEach(({ id, delayMs }) => {
       const start = window.setTimeout(() => {
@@ -239,7 +255,7 @@ export function AnalyzingScreen() {
       timers.push(start);
     });
     return () => timers.forEach((t) => window.clearTimeout(t));
-  }, [items, urlFallback]);
+  }, [items, urlFallback, fiberFallback]);
 
   function handleUrlFallbackBack() {
     setUrlFallback(null);
@@ -260,6 +276,37 @@ export function AnalyzingScreen() {
         ...(payload.price != null && { price: payload.price })
       }
     });
+  }
+
+  function handleFiberFallbackSubmit(composition: string) {
+    if (!fiberFallback) return;
+    const brand = fiberFallback.brand;
+    const price = fiberFallback.price;
+    setFiberFallback(null);
+    hasNavigated.current = false;
+    setPending({
+      tag: {
+        composition,
+        ...(brand && { brand }),
+        ...(price != null && { price })
+      }
+    });
+  }
+
+  function handleFiberFallbackScanTag() {
+    const isZara = fiberFallback?.isZara ?? false;
+    setFiberFallback(null);
+    setPending(null);
+    if (isZara) setZaraUrlTagScanHint(true);
+    hasNavigated.current = true;
+    router.replace("/scan");
+  }
+
+  function handleFiberFallbackSkip() {
+    setFiberFallback(null);
+    hasNavigated.current = true;
+    router.replace("/breakdown");
+    setTimeout(() => setPending(null), 0);
   }
 
   if (isConfigured && authLoading) {
@@ -293,6 +340,28 @@ export function AnalyzingScreen() {
           name={urlFallback.name}
           onBack={handleUrlFallbackBack}
           onSubmit={handleUrlFallbackSubmit}
+        />
+      </div>
+    );
+  }
+
+  if (fiberFallback) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <div className="scan-header">
+          <div>
+            <div className="wordmark">
+              Buffi<span>.</span>
+            </div>
+            <div className="header-tag">Material Intelligence</div>
+          </div>
+        </div>
+        <FiberFallbackStep
+          brand={fiberFallback.brand}
+          isZara={fiberFallback.isZara}
+          onSubmitFibers={handleFiberFallbackSubmit}
+          onScanTag={handleFiberFallbackScanTag}
+          onSkip={handleFiberFallbackSkip}
         />
       </div>
     );
