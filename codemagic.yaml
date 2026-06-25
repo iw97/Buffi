@@ -1,0 +1,31 @@
+workflows:
+  ios-app-store:
+    name: iOS App Store
+    max_build_duration: 60
+    integrations:
+      app_store_connect: Codemagic
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: app.buffi
+      node: latest
+    scripts:
+      - name: Install dependencies
+        script: npm install
+      - name: Capacitor sync
+        script: npx cap sync ios
+      - name: Set up code signing
+        script: xcode-project use-profiles
+      - name: Build iOS
+        script: |
+          xcode-project build-ipa \
+            --project "ios/App/App.xcodeproj" \
+            --scheme "App" \
+            --config "Release"
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
+        submit_to_app_store: false
