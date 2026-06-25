@@ -45,6 +45,10 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Buffi uses your camera to scan clothing care labels so we can identify the fabric composition.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Buffi can read a photo of a clothing label from your library to identify the fabric composition.</string>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>CFBundleURLTypes</key>

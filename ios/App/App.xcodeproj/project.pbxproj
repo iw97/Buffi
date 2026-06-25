@@ -7,34 +7,36 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		03089D06E9BE4AE69282BE7D /* AppleSignInPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8F1A821923B46B0B1D95AB2 /* AppleSignInPlugin.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
-		03089D06E9BE4AE69282BE7D /* AppleSignInPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8F1A821923B46B0B1D95AB2 /* AppleSignInPlugin.swift */; };
-		B1C2D3E4F5A6B7C8 /* GoogleSignInPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6C7D8 /* GoogleSignInPlugin.swift */; };
-		9670BCF8F63B44D4B04872EC /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35BACC5BDFFB4488B282E76B /* ViewController.swift */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
+		8FF0CF7E2FEC75EB006DE168 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 8FF0CF7D2FEC75EB006DE168 /* GoogleSignIn */; };
+		8FF0CF802FEC75EB006DE168 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 8FF0CF7F2FEC75EB006DE168 /* GoogleSignInSwift */; };
+		9670BCF8F63B44D4B04872EC /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35BACC5BDFFB4488B282E76B /* ViewController.swift */; };
+		B1C2D3E4F5A6B7C8 /* GoogleSignInPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D2E3F4A5B6C7D8 /* GoogleSignInPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
+		35BACC5BDFFB4488B282E76B /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		F8F1A821923B46B0B1D95AB2 /* AppleSignInPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInPlugin.swift; sourceTree = "<group>"; };
-		C1D2E3F4A5B6C7D8 /* GoogleSignInPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleSignInPlugin.swift; sourceTree = "<group>"; };
-		35BACC5BDFFB4488B282E76B /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		504EC30C1FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		504EC30E1FED79650016851F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		504EC3111FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A1B2C3D4E5F6A7B8 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		A1B2C3D4E5F6A7B8 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
+		C1D2E3F4A5B6C7D8 /* GoogleSignInPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleSignInPlugin.swift; sourceTree = "<group>"; };
+		F8F1A821923B46B0B1D95AB2 /* AppleSignInPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -42,7 +44,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8FF0CF802FEC75EB006DE168 /* GoogleSignInSwift in Frameworks */,
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
+				8FF0CF7E2FEC75EB006DE168 /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -103,6 +107,8 @@
 			name = App;
 			packageProductDependencies = (
 				4D22ABE82AF431CB00220026 /* CapApp-SPM */,
+				8FF0CF7D2FEC75EB006DE168 /* GoogleSignIn */,
+				8FF0CF7F2FEC75EB006DE168 /* GoogleSignInSwift */,
 			);
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
@@ -134,6 +140,7 @@
 			mainGroup = 504EC2FB1FED79650016851F;
 			packageReferences = (
 				D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */,
+				8FF0CF7C2FEC75EB006DE168 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			productRefGroup = 504EC3051FED79650016851F /* Products */;
 			projectDirPath = "";
@@ -386,11 +393,32 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		8FF0CF7C2FEC75EB006DE168 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.2.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		4D22ABE82AF431CB00220026 /* CapApp-SPM */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */;
 			productName = "CapApp-SPM";
+		};
+		8FF0CF7D2FEC75EB006DE168 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8FF0CF7C2FEC75EB006DE168 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		8FF0CF7F2FEC75EB006DE168 /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8FF0CF7C2FEC75EB006DE168 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
