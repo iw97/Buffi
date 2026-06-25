@@ -12,7 +12,7 @@ export const APP_FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: "Can I get a refund?",
-    a: "Yes! Please email us at heybuffi@gmail.com within 7 days of your billing date, and we'll take care of you."
+    a: "Refund requests are handled by Apple per their standard policy. You can request a refund directly through Apple at reportaproblem.apple.com."
   },
   {
     q: "Can I cancel anytime?",
