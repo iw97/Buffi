@@ -63,7 +63,7 @@ jobs:
             -configuration Release \
             -archivePath $RUNNER_TEMP/App.xcarchive \
             -destination 'generic/platform=iOS' \
-            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CURRENT_PROJECT_VERSION=$(( ${{ github.run_number }} * 10 + ${{ github.run_attempt }} )) \
             archive
 
       - name: Export IPA
