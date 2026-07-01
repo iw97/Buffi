@@ -178,6 +178,17 @@ export function ProfileScreen() {
             <div className="profile-stat-key">Scanned</div>
           </div>
         </div>
+
+        {!isPro && (
+          <button
+            type="button"
+            className="btn-primary"
+            style={{ marginTop: 20 }}
+            onClick={() => router.push("/paywall")}
+          >
+            Unlock Full Access
+          </button>
+        )}
       </div>
 
       <section className="profile-impact" aria-labelledby="profile-impact-heading">

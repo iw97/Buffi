@@ -72,8 +72,8 @@ export default function TermsPage() {
 
         <h2>4a. Subscriptions and Refunds</h2>
         <p>
-          4a. Subscriptions and Refunds Auto-renewable subscriptions are charged
-          to your payment method at confirmation of purchase. Subscriptions
+          Subscriptions and Refunds Auto-renewable subscriptions are charged to
+          your payment method at confirmation of purchase. Subscriptions
           automatically renew at the end of each billing period unless cancelled
           at least 24 hours before renewal. For iOS purchases made through
           Apple&apos;s App Store: refund requests must be submitted to Apple
