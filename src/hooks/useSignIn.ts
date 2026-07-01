@@ -9,6 +9,7 @@ import {
   signInWithEmailAndPassword,
   signInWithCredential,
   signInWithPopup,
+  updateProfile,
   type User
 } from "firebase/auth";
 import { Capacitor } from "@capacitor/core";
@@ -29,6 +30,39 @@ async function generateNonce(): Promise<{ raw: string; hashed: string }> {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
   return { raw, hashed };
+}
+
+type NativeAppleResponse = {
+  email?: string;
+  givenName?: string;
+  familyName?: string;
+};
+
+async function finalizeAppleSignIn(
+  user: User,
+  nativeApple?: NativeAppleResponse | null
+): Promise<User> {
+  let displayName = user.displayName?.trim() || "";
+  if (!displayName && nativeApple) {
+    displayName = [nativeApple.givenName, nativeApple.familyName].filter(Boolean).join(" ").trim();
+  }
+
+  const email = user.email ?? nativeApple?.email ?? null;
+
+  if (displayName && !user.displayName) {
+    await updateProfile(user, { displayName });
+  }
+
+  await ensureUserProfileViaApi(user, {
+    email,
+    displayName: displayName || null
+  });
+
+  if (email) {
+    await savePendingOnboardingForEmail(email);
+  }
+
+  return user;
 }
 
 export function useSignIn() {
@@ -78,19 +112,13 @@ export function useSignIn() {
           rawNonce: raw,
         });
         const result = await signInWithCredential(auth, credential);
-        if (result.user.email) {
-          await savePendingOnboardingForEmail(result.user.email);
-        }
-        return result.user;
+        return finalizeAppleSignIn(result.user, appleResult.response);
       } else {
         const provider = new OAuthProvider("apple.com");
         provider.addScope("email");
         provider.addScope("name");
         const result = await signInWithPopup(auth, provider);
-        if (result.user.email) {
-          await savePendingOnboardingForEmail(result.user.email);
-        }
-        return result.user;
+        return finalizeAppleSignIn(result.user);
       }
     } catch (e) {
       throw new Error(firebaseAuthUserMessage(e, "Apple sign-in failed"));

@@ -52,7 +52,8 @@ export async function ensureUserProfileAdmin(
     email?: string | null;
     displayName?: string | null;
     photoURL?: string | null;
-  }
+  },
+  options?: { signInProvider?: string | null }
 ): Promise<Record<string, unknown>> {
   const adminFirestore = getAdminFirestore();
   if (!adminFirestore) {
@@ -65,8 +66,10 @@ export async function ensureUserProfileAdmin(
   const existing = (snap.exists ? snap.data() : {}) as Record<string, unknown>;
 
   const email = body?.email ?? claims.email ?? null;
-  const displayName = body?.displayName ?? claims.name ?? "";
+  const displayName =
+    body?.displayName?.trim() || claims.name?.trim() || (existing.displayName as string | undefined)?.trim() || "";
   const photoURL = body?.photoURL ?? claims.picture ?? "";
+  const isAppleSignIn = options?.signInProvider === "apple.com";
 
   const mergePayload: Record<string, unknown> = {
     email,
@@ -80,7 +83,9 @@ export async function ensureUserProfileAdmin(
   }
   if (userFieldMissing(existing, "isPro")) mergePayload.isPro = false;
   if (userFieldMissing(existing, "completedScans")) mergePayload.completedScans = 0;
-  if (isNewUser) {
+  if (isAppleSignIn) {
+    mergePayload.onboardingComplete = true;
+  } else if (isNewUser) {
     mergePayload.onboardingComplete = false;
   }
   if (userFieldMissing(existing, "scanCount")) mergePayload.scanCount = 0;

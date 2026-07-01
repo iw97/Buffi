@@ -37,6 +37,11 @@ export function OnboardingAccountScreen() {
       return;
     }
 
+    if (signedInUser.providerData.some((p) => p.providerId === "apple.com")) {
+      router.replace(returnTo);
+      return;
+    }
+
     if (hasLocalOnboardingAnswers()) return;
 
     let cancelled = false;
@@ -87,6 +92,21 @@ export function OnboardingAccountScreen() {
   }
 
   async function finishSignup(signedInUser: User) {
+    const isApple = signedInUser.providerData.some((p) => p.providerId === "apple.com");
+
+    if (isApple) {
+      if (signedInUser.email && hasLocalOnboardingAnswers()) {
+        await completeOnboardingSignup(
+          signedInUser.uid,
+          signedInUser.email,
+          signedInUser.displayName
+        );
+      }
+      await auth?.refreshProfile?.();
+      router.replace(returnTo);
+      return;
+    }
+
     if (signedInUser.email) {
       await completeOnboardingSignup(
         signedInUser.uid,

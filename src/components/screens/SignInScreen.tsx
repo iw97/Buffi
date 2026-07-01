@@ -84,20 +84,19 @@ export function SignInScreen() {
     }
   }
 
-  function finishSignIn(_signedInUser: User) {
+  async function finishSignIn(_signedInUser: User) {
+    await auth?.refreshProfile?.();
     const destination = resolvePostAuthPath({
       returnTo,
       authMode: "signin"
     });
-    console.log('[google] redirecting to', destination);
     router.replace(destination);
   }
 
   const onGoogle = async () => {
     try {
-      console.log('[google] button clicked');
       setError(null);
-      finishSignIn(await handleGoogle());
+      await finishSignIn(await handleGoogle());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign-in failed");
     }
@@ -106,7 +105,7 @@ export function SignInScreen() {
   const onApple = async () => {
     try {
       setError(null);
-      finishSignIn(await handleApple());
+      await finishSignIn(await handleApple());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign-in failed");
     }

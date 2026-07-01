@@ -55,6 +55,9 @@ export async function POST(req: NextRequest) {
         email: body.email,
         displayName: body.displayName,
         photoURL: body.photoURL
+      },
+      {
+        signInProvider: decoded.firebase?.sign_in_provider ?? null
       }
     );
 

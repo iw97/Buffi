@@ -28,7 +28,14 @@ async function getAuthIdToken(user: User): Promise<string> {
 /**
  * Ensure users/{uid} via Admin SDK API (only server writes on login).
  */
-export async function ensureUserProfileViaApi(user: User): Promise<UserProfile> {
+export async function ensureUserProfileViaApi(
+  user: User,
+  overrides?: {
+    email?: string | null;
+    displayName?: string | null;
+    photoURL?: string | null;
+  }
+): Promise<UserProfile> {
   console.log("[auth] auth uid:", user.uid);
   console.log("[auth] creating doc at:", `users/${user.uid}`);
 
@@ -40,9 +47,9 @@ export async function ensureUserProfileViaApi(user: User): Promise<UserProfile> 
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      email: user.email ?? null,
-      displayName: user.displayName ?? null,
-      photoURL: user.photoURL ?? null
+      email: overrides?.email ?? user.email ?? null,
+      displayName: overrides?.displayName ?? user.displayName ?? null,
+      photoURL: overrides?.photoURL ?? user.photoURL ?? null
     })
   });
 

@@ -52,6 +52,35 @@ export function PaywallScreen() {
           isNative ? void startNativePurchase(plan) : void startCheckout(plan)
         }
       />
+
+      <p className="auth-legal" style={{ marginTop: 12 }}>
+        By subscribing you agree to our{" "}
+        <a
+          href="https://buffi.app/terms"
+          className="ob-welcome-legal-link"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Terms of Use
+        </a>{" "}
+        and{" "}
+        <a
+          href="https://buffi.app/privacy"
+          className="ob-welcome-legal-link"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Privacy Policy
+        </a>
+        .
+      </p>
+      {isNative ? (
+        <p className="auth-legal" style={{ marginTop: 8 }}>
+          Subscription automatically renews unless cancelled at least 24 hours before the end of the
+          current period. Manage or cancel in your Apple ID settings.
+        </p>
+      ) : null}
+
       {(isNative ? nativePurchaseError : checkoutError) && (
         <p className="auth-legal" style={{ color: "var(--red)", textAlign: "center", marginTop: 4 }}>
           {isNative ? nativePurchaseError : checkoutError}

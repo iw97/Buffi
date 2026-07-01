@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { onboardingReturnToQuery, safeReturnPath } from "@/lib/auth/returnTo";
@@ -13,6 +13,15 @@ export function OnboardingIntroScreen() {
   const stepQ = onboardingReturnToQuery(searchParams);
   const returnTo = safeReturnPath(searchParams.get("returnTo"), "/scan");
   const [name, setName] = useState("");
+
+  useEffect(() => {
+    const signedInUser = auth?.user;
+    if (!signedInUser) return;
+    const isApple = signedInUser.providerData.some((p) => p.providerId === "apple.com");
+    if (!isApple) return;
+    if (auth?.profileLoading || !auth?.profileReady) return;
+    router.replace(returnTo);
+  }, [auth?.user, auth?.profileLoading, auth?.profileReady, returnTo, router]);
 
   function handleContinue() {
     saveObAnswer("buffi_ob_name", name.trim());
