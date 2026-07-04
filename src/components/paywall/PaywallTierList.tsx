@@ -7,21 +7,32 @@ export type { PaywallPlanId };
 type TierDef = {
   id: PaywallPlanId;
   badge: string | null;
-  badgeKind?: "popular" | "value";
+  badgeKind?: "popular" | "value" | "launch";
   title: string;
   subtitle: string;
   featured: boolean;
   tone: "featured" | "standard" | "muted";
+  launchPricing?: {
+    originalPrice: string;
+    currentPrice: string;
+    note: string;
+  };
 };
 
 const TIERS: TierDef[] = [
   {
     id: "lifetime",
-    badge: null,
-    title: "Lifetime — $149",
+    badge: "Launch pricing",
+    badgeKind: "launch",
+    title: "Lifetime",
     subtitle: "Pay once, use forever",
     featured: false,
-    tone: "standard"
+    tone: "standard",
+    launchPricing: {
+      originalPrice: "$149",
+      currentPrice: "$99",
+      note: "Limited time — price increases at launch"
+    }
   },
   {
     id: "yearly",
@@ -73,14 +84,32 @@ export function PaywallTierList({ onSelectPlan, variant = "page", disabled = fal
             <span
               className={[
                 "paywall-tier-badge",
-                tier.badgeKind === "value" ? "paywall-tier-badge--value" : "paywall-tier-badge--popular"
+                tier.badgeKind === "launch"
+                  ? "paywall-tier-badge--launch"
+                  : tier.badgeKind === "value"
+                    ? "paywall-tier-badge--value"
+                    : "paywall-tier-badge--popular"
               ].join(" ")}
             >
               {tier.badge}
             </span>
           ) : null}
-          <span className="paywall-tier-title">{tier.title}</span>
-          <span className="paywall-tier-sub">{tier.subtitle}</span>
+          {tier.launchPricing ? (
+            <>
+              <span className="paywall-tier-title paywall-tier-title--with-launch">{tier.title}</span>
+              <span className="paywall-tier-price-line">
+                <span className="paywall-tier-price-original">{tier.launchPricing.originalPrice}</span>
+                <span className="paywall-tier-price-current">{tier.launchPricing.currentPrice}</span>
+              </span>
+              <span className="paywall-tier-sub">{tier.subtitle}</span>
+              <span className="paywall-tier-launch-note">{tier.launchPricing.note}</span>
+            </>
+          ) : (
+            <>
+              <span className="paywall-tier-title">{tier.title}</span>
+              <span className="paywall-tier-sub">{tier.subtitle}</span>
+            </>
+          )}
         </button>
       ))}
     </div>

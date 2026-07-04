@@ -2053,6 +2053,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s, transform 0.15s;
   font-family: var(--font-sans, sans-serif);
+  overflow: visible;
 }
 
 .paywall-tier:hover {
@@ -2106,6 +2107,19 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: #0a0a0a;
 }
 
+.paywall-tier-badge--launch {
+  right: 10px;
+  top: -11px;
+  background: #52d9d0;
+  color: #080807;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  transform: rotate(3deg);
+  z-index: 1;
+}
+
 .paywall-tier-title {
   display: block;
   font-size: 14px;
@@ -2114,6 +2128,45 @@ input[type="range"]::-webkit-slider-thumb:hover {
   text-transform: uppercase;
   color: var(--ivory);
   padding-right: 72px;
+}
+
+.paywall-tier-title--with-launch {
+  padding-right: 0;
+  margin-bottom: 2px;
+}
+
+.paywall-tier-price-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.paywall-tier-price-original {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-dim);
+  text-decoration: line-through;
+  letter-spacing: 0.3px;
+}
+
+.paywall-tier-price-current {
+  font-family: var(--font-sans, sans-serif);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--ivory);
+}
+
+.paywall-tier-launch-note {
+  display: block;
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.4px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  margin-top: 2px;
 }
 
 .paywall-tier-sub {
