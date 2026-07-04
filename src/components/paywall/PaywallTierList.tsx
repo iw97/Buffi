@@ -7,9 +7,10 @@ export type { PaywallPlanId };
 type TierDef = {
   id: PaywallPlanId;
   badge: string | null;
-  badgeKind?: "popular" | "value" | "launch";
+  badgeKind?: "launch";
   title: string;
   subtitle: string;
+  inlineLabel?: string;
   featured: boolean;
   tone: "featured" | "standard" | "muted";
   launchPricing?: {
@@ -31,26 +32,25 @@ const TIERS: TierDef[] = [
     launchPricing: {
       originalPrice: "$149",
       currentPrice: "$99",
-      note: "Limited time — price increases at launch"
+      note: "Limited time offer"
     }
   },
   {
     id: "yearly",
-    badge: "Best value",
-    badgeKind: "value",
+    badge: null,
     title: "Yearly — $49.99/year",
-    subtitle: "Best value — $4.17/month",
-    featured: false,
-    tone: "standard"
+    subtitle: "$4.17/month",
+    inlineLabel: "Best value",
+    featured: true,
+    tone: "featured"
   },
   {
     id: "weekly",
-    badge: "Most popular",
-    badgeKind: "popular",
+    badge: null,
     title: "Weekly — $3.99/week",
     subtitle: "Cancel anytime",
-    featured: true,
-    tone: "featured"
+    featured: false,
+    tone: "standard"
   }
 ];
 
@@ -81,18 +81,7 @@ export function PaywallTierList({ onSelectPlan, variant = "page", disabled = fal
           onClick={() => onSelectPlan(tier.id)}
         >
           {tier.badge ? (
-            <span
-              className={[
-                "paywall-tier-badge",
-                tier.badgeKind === "launch"
-                  ? "paywall-tier-badge--launch"
-                  : tier.badgeKind === "value"
-                    ? "paywall-tier-badge--value"
-                    : "paywall-tier-badge--popular"
-              ].join(" ")}
-            >
-              {tier.badge}
-            </span>
+            <span className="paywall-tier-badge paywall-tier-badge--launch">{tier.badge}</span>
           ) : null}
           {tier.launchPricing ? (
             <>
@@ -107,6 +96,9 @@ export function PaywallTierList({ onSelectPlan, variant = "page", disabled = fal
           ) : (
             <>
               <span className="paywall-tier-title">{tier.title}</span>
+              {tier.inlineLabel ? (
+                <span className="paywall-tier-inline-label">{tier.inlineLabel}</span>
+              ) : null}
               <span className="paywall-tier-sub">{tier.subtitle}</span>
             </>
           )}

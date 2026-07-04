@@ -2116,7 +2116,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   font-weight: 700;
   letter-spacing: 1.4px;
   text-transform: uppercase;
-  transform: rotate(3deg);
+  transform: none;
   z-index: 1;
 }
 
@@ -2167,6 +2167,18 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--text-dim);
   line-height: 1.5;
   margin-top: 2px;
+}
+
+.paywall-tier-inline-label {
+  display: block;
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--teal);
+  margin-top: -2px;
+  margin-bottom: 2px;
 }
 
 .paywall-tier-sub {
