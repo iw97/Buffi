@@ -173,6 +173,8 @@ const BROAD_TEXT_CONTEXT_RADIUS = 80;
 const BROAD_TEXT_FIBERS =
   "cotton|polyester|linen|silk|wool|nylon|viscose|lyocell|modal|cashmere|elastane|spandex|leather|acetate|ramie|hemp|polyamide|acrylic";
 
+const BROAD_PCT = `\\d{1,3}(?:-\\d{1,3})?`;
+
 function normalizeCompositionSearchText(text: string): string {
   return text.toLowerCase().replace(/\s+/g, " ").trim();
 }
@@ -197,7 +199,7 @@ function subcomponentAppearsAsLabel(text: string, word: string): boolean {
 /** Sub-component modifier: "100% polyester lining" or "polyester lining:" — not "Lining: 100% cupro". */
 function subcomponentAppearsAsModifier(text: string, word: string): boolean {
   const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  if (new RegExp(`\\d{1,3}\\s*%\\s*(?:${BROAD_TEXT_FIBERS})\\s+${escaped}\\b`, "i").test(text)) {
+  if (new RegExp(`\\d{1,3}(?:-\\d{1,3})?\\s*%\\s*(?:${BROAD_TEXT_FIBERS})\\s+${escaped}\\b`, "i").test(text)) {
     return true;
   }
   if (
@@ -257,7 +259,7 @@ function isGussetFalsePositiveInPageAtCandidate(candidate: string, pageText: str
     searchTargets.push(candNorm);
   } else {
     const fiberHit = candidate.match(
-      new RegExp(`\\d{1,3}\\s*%\\s*(?:${BROAD_TEXT_FIBERS})`, "i")
+      new RegExp(`${BROAD_PCT}\\s*%\\s*(?:${BROAD_TEXT_FIBERS})`, "i")
     );
     if (fiberHit?.[0]) searchTargets.push(normalizeCompositionSearchText(fiberHit[0]));
   }
@@ -488,19 +490,61 @@ function getCombinedPageTextForComposition($: cheerio.CheerioAPI): string {
   return `${bodyText}\n${scriptText}`.replace(/\s+/g, " ");
 }
 
+export function scoreCompositionMatch(text: string): number {
+  const separators = (text.match(/[,\/]/g) || []).length;
+  const length = text.length;
+  const hasRange = /\d+-\d+%/.test(text) ? 2 : 0;
+  return separators * 3 + length * 0.1 + hasRange;
+}
+
+function startsWithMainGarmentLabel(text: string): boolean {
+  return /^(?:body|shell|main\s+fabric|content|outer|face)\s*:/i.test(text.trim());
+}
+
+function startsWithSubcomponentLabel(text: string): boolean {
+  const t = text.trim();
+  if (startsWithMainGarmentLabel(t)) return false;
+  if (new RegExp(`^(?:${COMPOSITION_SECTION_LABELS})\\s*:`, "i").test(t)) return true;
+  return /^(?:side\s+pocket|back\s+pocket)\b/i.test(t);
+}
+
+function stripMainGarmentLabel(text: string): string {
+  return text.replace(/^(?:body|shell|main\s+fabric|content|outer|face)\s*:\s*/i, "").trim();
+}
+
+/** Nike-style "Body: 67-81% cotton/19-33% polyester" — main garment component only. */
+function extractBodyComponentComposition(pageText: string): string | undefined {
+  const fiber = `(?:${BROAD_TEXT_FIBERS})`;
+  const pctFiber = `${BROAD_PCT}\\s*%\\s*${fiber}`;
+  const re = new RegExp(
+    `\\bbody\\s*:\\s*(${pctFiber}(?:\\s*[,/]\\s*${pctFiber}){0,5})`,
+    "i"
+  );
+  const m = pageText.match(re);
+  if (!m?.[1]) return undefined;
+  return m[1].replace(/\s+/g, " ").trim();
+}
+
 function extractCompositionFromBroadText($: cheerio.CheerioAPI, combined?: string): string | undefined {
   const pageText = combined ?? getCombinedPageTextForComposition($);
   if (!pageText.trim()) return undefined;
 
+  const bodyComp = extractBodyComponentComposition(pageText);
+  if (bodyComp && looksLikeCompositionText(bodyComp) && !isGussetFalsePositive(bodyComp)) {
+    debugScrapeMaterials("broad-text-scan-body", { match: bodyComp });
+    return bodyComp.slice(0, 400);
+  }
+
+  const fiber = `(?:${BROAD_TEXT_FIBERS})`;
+  const pctFiber = `${BROAD_PCT}\\s*%\\s*${fiber}`;
   const patterns = [
-    // Multi-fiber care labels: "76% Polyamide, 24% Elastane"
-    new RegExp(
-      `(\\d{1,3}\\s*%\\s*(?:${BROAD_TEXT_FIBERS}))(?:\\s*[,/]\\s*\\d{1,3}\\s*%\\s*(?:${BROAD_TEXT_FIBERS})){0,5}`,
-      "gi"
-    ),
-    // Single fiber fragment: "100% Cotton"
-    new RegExp(`\\d{1,3}\\s*%\\s*(?:${BROAD_TEXT_FIBERS})`, "gi")
+    // Multi-fiber care labels: "67-81% cotton/19-33% polyester" or "76% Polyamide, 24% Elastane"
+    new RegExp(`(${pctFiber}(?:\\s*[,/]\\s*${pctFiber}){1,5})`, "gi"),
+    // Single or multi-fiber fragment
+    new RegExp(`(${pctFiber}(?:\\s*[,/]\\s*${pctFiber}){0,5})`, "gi")
   ];
+
+  const candidates: { text: string; score: number }[] = [];
 
   for (const re of patterns) {
     for (const m of pageText.matchAll(re)) {
@@ -518,13 +562,31 @@ function extractCompositionFromBroadText($: cheerio.CheerioAPI, combined?: strin
 
       if (isGussetFalsePositive(context)) continue;
 
-      const candidate = matchText.replace(/\s+/g, " ").trim();
+      let candidate = stripMainGarmentLabel(matchText.replace(/\s+/g, " ").trim());
       if (!looksLikeCompositionText(candidate)) continue;
-      return candidate.slice(0, 400);
+
+      let score = scoreCompositionMatch(candidate);
+      if (startsWithSubcomponentLabel(context) || startsWithSubcomponentLabel(matchText)) {
+        score -= 15;
+      }
+      if (/\bbody\s*:/i.test(context)) {
+        score += 5;
+      }
+
+      candidates.push({ text: candidate, score });
     }
   }
 
-  return undefined;
+  if (candidates.length === 0) return undefined;
+
+  candidates.sort((a, b) => b.score - a.score);
+  const best = candidates[0]!;
+  debugScrapeMaterials("broad-text-scan-best", {
+    match: best.text,
+    score: best.score,
+    candidateCount: candidates.length
+  });
+  return best.text.slice(0, 400);
 }
 
 /** First numeric price from schema.org Product offers (array or single Offer). */
