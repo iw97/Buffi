@@ -122,7 +122,7 @@ export function SavesScreen() {
         <div className="saves-count">{items.length} item{items.length !== 1 ? "s" : ""}</div>
       </div>
 
-      <div className="saves-scroll">
+      <div className="saves-scroll saved-items-list">
         {loadError && (
           <div className="saves-empty" style={{ paddingTop: 24 }}>
             <p className="auth-legal" style={{ color: "var(--red)", textAlign: "center", maxWidth: 320, margin: "0 auto" }}>

@@ -63,7 +63,7 @@ export function ScanScreen() {
 
   if (isConfigured && authLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-10">
+      <div className="screen-no-scroll flex flex-col items-center justify-center gap-4 p-10">
         <div className="analyzing-label">Loading</div>
         <p className="auth-legal" style={{ color: "var(--text-dim)" }}>
           Checking your account…
@@ -293,7 +293,7 @@ export function ScanScreen() {
 
   if (tagExtractResult != null) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="screen-no-scroll flex flex-col">
         <div className="scan-header">
           <div>
             <div className="wordmark">Buffi<span>.</span></div>
@@ -311,7 +311,7 @@ export function ScanScreen() {
 
   if (tagStepComposition !== null) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="screen-no-scroll flex flex-col">
         <div className="scan-header">
           <div>
             <div className="wordmark">Buffi<span>.</span></div>
@@ -328,7 +328,7 @@ export function ScanScreen() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="screen-no-scroll flex flex-col">
       <div className="scan-header">
         <div>
           <div className="wordmark">

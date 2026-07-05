@@ -8,7 +8,7 @@ export default function NavLayout({ children }: { children: React.ReactNode }) {
       <Suspense fallback={null}>
         <OnboardingGate />
       </Suspense>
-      <div className="min-h-screen pb-[84px]">{children}</div>
+      <div className="nav-main-content">{children}</div>
       <BottomNav />
     </div>
   );

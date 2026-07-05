@@ -23,7 +23,7 @@ export function PaywallScreen() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="screen-no-scroll flex items-center justify-center">
         <p className="auth-legal">Loading…</p>
       </div>
     );
@@ -37,8 +37,7 @@ export function PaywallScreen() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col p-6" style={{ gap: 16 }}>
-      <div className="section-eyebrow">Buffi Pro</div>
+    <div className="screen-no-scroll flex flex-col p-6" style={{ gap: 16 }}>
       <h1 className="ob-title" style={{ marginBottom: 0 }}>
         UNLOCK FULL ACCESS
       </h1>

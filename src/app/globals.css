@@ -41,6 +41,12 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+*::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
 }
 
 html {
@@ -102,6 +108,47 @@ body {
 
 .app-shell--no-nav {
   overflow-x: hidden;
+}
+
+.nav-main-content {
+  min-height: 100vh;
+  padding-bottom: 84px;
+}
+
+/* Fixed viewport — no scroll (scan, paywall) */
+.screen-no-scroll {
+  overflow: hidden;
+  height: 100dvh;
+  max-height: 100dvh;
+}
+
+.nav-main-content:has(.screen-no-scroll) {
+  overflow: hidden;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: unset;
+  box-sizing: border-box;
+}
+
+.nav-main-content:has(.screen-no-scroll) > .screen-no-scroll {
+  height: 100%;
+  max-height: 100%;
+}
+
+/* Saved items list — keep scrollbar visible */
+.saved-items-list {
+  scrollbar-width: thin;
+  -ms-overflow-style: auto;
+}
+
+.saved-items-list::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+}
+
+.saved-items-list::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 999px;
 }
 
 /* ===== Marketing / Landing (full-width, no app-shell) ===== */
