@@ -7,6 +7,7 @@ import {
   ScanErrorProvider
 } from "@/contexts/ScanResultContext";
 import { LaunchSplashGate } from "@/components/LaunchSplashGate";
+import { CapacitorBackButtonHandler } from "@/components/CapacitorBackButtonHandler";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -14,6 +15,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ScanResultProvider>
         <PendingScanProvider>
           <ScanErrorProvider>
+            <CapacitorBackButtonHandler />
             <LaunchSplashGate>{children}</LaunchSplashGate>
           </ScanErrorProvider>
         </PendingScanProvider>

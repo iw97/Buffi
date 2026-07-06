@@ -93,7 +93,40 @@ export function slugToProductName(slug: string): string {
     .join(" ");
 }
 
+/** Map retailer hostnames to display brand names (most specific hosts first). */
+const KNOWN_BRAND_HOSTS: { test: (host: string) => boolean; brand: string }[] = [
+  { test: (h) => h.includes("oldnavy.gap.com"), brand: "Old Navy" },
+  { test: (h) => h.includes("bananarepublic.gap.com"), brand: "Banana Republic" },
+  { test: (h) => h.includes("hm.com"), brand: "H&M" },
+  { test: (h) => h.includes("zara.com"), brand: "Zara" },
+  { test: (h) => h.includes("uniqlo.com"), brand: "Uniqlo" },
+  { test: (h) => h.includes("gap.com"), brand: "Gap" },
+  { test: (h) => h.includes("macys.com"), brand: "Macy's" },
+  { test: (h) => h.includes("nordstrom.com"), brand: "Nordstrom" }
+];
+
+function brandFromKnownHostname(host: string): string | null {
+  const lower = host.toLowerCase();
+  for (const { test, brand } of KNOWN_BRAND_HOSTS) {
+    if (test(lower)) return brand;
+  }
+  return null;
+}
+
+/** Brand-specific product names when URL slugs are not human-readable. */
+function productNameFromKnownBrandUrl(host: string, pathname: string): string | null {
+  const lower = host.toLowerCase();
+  if (lower.includes("hm.com")) {
+    const productIdMatch = pathname.match(/productpage\.(\d+)/);
+    return productIdMatch ? `H&M Product ${productIdMatch[1]}` : "H&M Product";
+  }
+  return null;
+}
+
 export function brandFromHostname(hostname: string): string {
+  const known = brandFromKnownHostname(hostname);
+  if (known) return known;
+
   const host = hostname.replace(/^www\./i, "").toLowerCase();
   const parts = host.split(".").filter(Boolean);
   const skip = new Set(["www", "shop", "store", "m", "mobile", "www2"]);
@@ -130,9 +163,11 @@ export function parseProductFromUrl(url: string): { brand: string; name: string 
   try {
     const normalized = url.trim().startsWith("http") ? url.trim() : `https://${url.trim()}`;
     const parsed = new URL(normalized);
+    const host = parsed.hostname.toLowerCase();
     const brand = brandFromHostname(parsed.hostname);
+    const knownName = productNameFromKnownBrandUrl(host, parsed.pathname);
     const slug = productSlugFromPathname(parsed.pathname);
-    const name = slug ? slugToProductName(slug) : "";
+    const name = knownName ?? (slug ? slugToProductName(slug) : "");
     if (!brand && !name) return null;
     return {
       brand: brand || "Unknown",
