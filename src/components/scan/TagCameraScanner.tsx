@@ -125,44 +125,22 @@ export function TagCameraScanner({ open, onCaptured, onCancel, onError, onChoose
         inset: 0,
         zIndex: 300,
         background: "var(--black)",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "stretch",
-        justifyContent: "stretch",
         boxSizing: "border-box",
-        minHeight: "100dvh",
-        paddingTop: "max(env(safe-area-inset-top), 16px)",
-        paddingBottom: "max(env(safe-area-inset-bottom), 16px)",
-        paddingLeft: "max(env(safe-area-inset-left), 16px)",
-        paddingRight: "max(env(safe-area-inset-right), 16px)"
+        minHeight: "100dvh"
       }}
     >
-      <video
-        ref={videoRef}
-        playsInline
-        muted
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          objectFit: "cover"
-        }}
-      />
-      <canvas ref={canvasRef} style={{ display: "none" }} width={1} height={1} />
-
       <div
         style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          padding: "16px 20px",
+          position: "relative",
+          zIndex: 10,
+          paddingTop: "max(env(safe-area-inset-top), 16px)",
+          paddingLeft: 16,
+          paddingRight: 16,
+          paddingBottom: 12,
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "flex-start",
-          background: "linear-gradient(to bottom, rgba(0,0,0,0.55), transparent)",
-          pointerEvents: "none"
+          alignItems: "center",
+          background: "transparent"
         }}
       >
         <button
@@ -174,7 +152,6 @@ export function TagCameraScanner({ open, onCaptured, onCancel, onError, onChoose
           }}
           className="btn-secondary"
           style={{
-            pointerEvents: "auto",
             minWidth: 88,
             padding: "8px 14px",
             fontSize: 13,
@@ -196,7 +173,6 @@ export function TagCameraScanner({ open, onCaptured, onCancel, onError, onChoose
             }}
             className="btn-secondary"
             style={{
-              pointerEvents: "auto",
               minWidth: 88,
               padding: "8px 14px",
               fontSize: 13,
@@ -212,14 +188,30 @@ export function TagCameraScanner({ open, onCaptured, onCancel, onError, onChoose
         )}
       </div>
 
+      <video
+        ref={videoRef}
+        playsInline
+        muted
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          zIndex: 0
+        }}
+      />
+      <canvas ref={canvasRef} style={{ display: "none" }} width={1} height={1} />
+
       <div
         style={{
           position: "absolute",
           left: 0,
           right: 0,
           bottom: 0,
-          paddingBottom: 28,
+          zIndex: 10,
           paddingTop: 24,
+          paddingBottom: "max(env(safe-area-inset-bottom), 16px)",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -281,6 +273,7 @@ export function TagCameraScanner({ open, onCaptured, onCancel, onError, onChoose
           style={{
             position: "absolute",
             inset: 0,
+            zIndex: 20,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
