@@ -128,7 +128,13 @@ export function TagCameraScanner({ open, onCaptured, onCancel, onError, onChoose
         display: "flex",
         flexDirection: "column",
         alignItems: "stretch",
-        justifyContent: "stretch"
+        justifyContent: "stretch",
+        boxSizing: "border-box",
+        minHeight: "100dvh",
+        paddingTop: "max(env(safe-area-inset-top), 16px)",
+        paddingBottom: "max(env(safe-area-inset-bottom), 16px)",
+        paddingLeft: "max(env(safe-area-inset-left), 16px)",
+        paddingRight: "max(env(safe-area-inset-right), 16px)"
       }}
     >
       <video
@@ -212,7 +218,7 @@ export function TagCameraScanner({ open, onCaptured, onCancel, onError, onChoose
           left: 0,
           right: 0,
           bottom: 0,
-          paddingBottom: "max(28px, env(safe-area-inset-bottom))",
+          paddingBottom: 28,
           paddingTop: 24,
           display: "flex",
           flexDirection: "column",
