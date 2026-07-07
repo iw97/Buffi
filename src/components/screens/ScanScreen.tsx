@@ -293,7 +293,7 @@ export function ScanScreen() {
 
   if (tagExtractResult != null) {
     return (
-      <div className="screen-no-scroll flex flex-col">
+      <div className="screen-tag-form flex flex-col">
         <div className="scan-header">
           <div>
             <div className="wordmark">Buffi<span>.</span></div>
@@ -311,7 +311,7 @@ export function ScanScreen() {
 
   if (tagStepComposition !== null) {
     return (
-      <div className="screen-no-scroll flex flex-col">
+      <div className="screen-tag-form flex flex-col">
         <div className="scan-header">
           <div>
             <div className="wordmark">Buffi<span>.</span></div>

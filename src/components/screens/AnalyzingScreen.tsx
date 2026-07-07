@@ -326,7 +326,7 @@ export function AnalyzingScreen() {
 
   if (urlFallback && pending?.url) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="screen-tag-form flex flex-col">
         <div className="scan-header">
           <div>
             <div className="wordmark">
@@ -347,7 +347,7 @@ export function AnalyzingScreen() {
 
   if (fiberFallback) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="screen-tag-form flex flex-col">
         <div className="scan-header">
           <div>
             <div className="wordmark">
