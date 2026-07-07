@@ -388,7 +388,7 @@ export function ScanScreen() {
             buying.
           </h1>
           <p>
-            Scan any tag or paste a URL.
+            Scan the tag inside your clothes or paste a product URL.
             <br />
             We&apos;ll show you the receipt.
           </p>

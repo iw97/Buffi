@@ -5,13 +5,13 @@ import LandingHowItWorks from "@/components/marketing/LandingHowItWorks";
 import { WaitlistCtaLink } from "@/components/marketing/WaitlistCtaLink";
 
 const description =
-  "Scan any clothing tag or product URL. Buffi shows you the real material cost, markup percentage, and whether the price is worth it. No brand deals. No sponsored results.";
+  "Scan the tag inside your clothes or paste a product URL. Buffi shows you the real material cost, markup percentage, and whether the price is worth it. No brand deals. No sponsored results.";
 
 export const metadata: Metadata = {
   title: "Buffi — Know What You're Really Buying",
   description,
   alternates: {
-    canonical: "https://buffi.app/"
+    canonical: "https://buffi.app/",
   },
   openGraph: {
     title: "Buffi — Material Intelligence",
@@ -23,16 +23,16 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Buffi product breakdown — material cost, markup, and verdict"
-      }
-    ]
+        alt: "Buffi product breakdown — material cost, markup, and verdict",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Buffi — Material Intelligence",
     description,
-    images: ["/og-image.png"]
-  }
+    images: ["/og-image.png"],
+  },
 };
 
 export default function MarketingLandingPage() {
@@ -44,8 +44,9 @@ export default function MarketingLandingPage() {
           Know what you&apos;re <em>really</em> buying.
         </h1>
         <p className="landing-sub">
-          Scan any tag or paste a product URL. We&apos;ll show you the receipt
-          — materials, markup, and whether it&apos;s worth it.
+          Scan the tag inside your clothes or paste a product URL. We&apos;ll
+          show you the receipt — materials, markup, and whether it&apos;s worth
+          it.
         </p>
         <WaitlistCtaLink className="landing-cta">
           Join the waitlist →
