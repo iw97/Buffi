@@ -1606,6 +1606,12 @@ export async function scrapeProductFromUrl(url: string): Promise<{
     console.log(LOG_PREFIX, "generic HTML fetch did not return OK body", { tried: fetchUrls.length });
   }
 
+  // H&M's product pages sit behind much heavier bot-protection than their category pages —
+  // Bright Data reliably takes 20-55s+ here (sometimes returning H&M's homepage instead of
+  // the product) and blows through the request timeout before a normal failure can surface.
+  // Skip it so scraping fails fast and the client's manual-entry fallback kicks in quickly.
+  const hmHost = host.includes("hm.com");
+
   const gapHost = isGapFamilyHost(host);
   let gapShellPage = false;
   if (fetchOk && html.trim()) {
@@ -1633,6 +1639,7 @@ export async function scrapeProductFromUrl(url: string): Promise<{
     zaraHost,
     gapHost,
     gapShellPage,
+    hmHost,
     standardFetchFailed,
     hasMaterialsFromGeneric: !!cheerioExtraction?.materials?.trim()
   });
@@ -1648,11 +1655,16 @@ export async function scrapeProductFromUrl(url: string): Promise<{
   if (zaraHost && step2CheerioFoundMaterials) {
     shouldTryBrightData = false;
   }
+  if (hmHost) {
+    shouldTryBrightData = false;
+    console.log(LOG_PREFIX, "H&M host — skipping Bright Data, failing fast to manual entry");
+  }
   debugScrapeMaterials("bright-data-decision", {
     triggered: shouldTryBrightData,
     zaraHost,
     gapHost,
     gapShellPage,
+    hmHost,
     step2CheerioFoundMaterials
   });
 
