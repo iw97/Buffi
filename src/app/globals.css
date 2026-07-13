@@ -2087,6 +2087,19 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--ivory);
 }
 
+/* Full upgrade / unlock paywall page */
+.upgrade-screen {
+  box-sizing: border-box;
+  min-height: 100dvh;
+  gap: 16px;
+  padding-top: max(env(safe-area-inset-top), 24px);
+  padding-right: 24px;
+  padding-bottom: max(env(safe-area-inset-bottom), 24px);
+  padding-left: 24px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Paywall tier picker (full page + premium modal) */
 .paywall-tiers {
   width: 100%;

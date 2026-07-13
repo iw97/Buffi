@@ -184,7 +184,7 @@ export function ProfileScreen() {
             type="button"
             className="btn-primary"
             style={{ marginTop: 20 }}
-            onClick={() => router.push("/paywall")}
+            onClick={() => router.push("/upgrade")}
           >
             Unlock Full Access
           </button>

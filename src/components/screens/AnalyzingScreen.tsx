@@ -165,7 +165,7 @@ export function AnalyzingScreen() {
           if (res.status === 403 && (data as { code?: string }).code === "scan_limit_reached") {
             setPending(null);
             hasNavigated.current = true;
-            router.replace("/paywall");
+            router.replace("/upgrade");
             return;
           }
 

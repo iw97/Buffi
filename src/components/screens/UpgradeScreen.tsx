@@ -37,13 +37,13 @@ export function UpgradeScreen() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col p-6" style={{ gap: 16 }}>
+    <div className="upgrade-screen flex flex-col">
       <div className="section-eyebrow">Buffi Pro</div>
       <h1 className="ob-title" style={{ marginBottom: 0 }}>
         UNLOCK FULL ACCESS
       </h1>
       <p className="ob-desc" style={{ marginTop: 8 }}>
-        Honest breakdowns and unlimited saves — funded by you, not brands.
+        Buffi is funded entirely by you, not by brands. Join shoppers who decided to take their power back.
       </p>
 
       <PaywallTierList

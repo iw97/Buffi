@@ -137,7 +137,7 @@ export function ScanScreen() {
 
       if (!res.ok) {
         if (res.status === 403 && (data as { code?: string } | null)?.code === "scan_limit_reached") {
-          router.push("/paywall");
+          router.push("/upgrade");
           return;
         }
         setTagOcrFailure({
