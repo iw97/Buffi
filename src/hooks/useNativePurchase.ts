@@ -3,15 +3,49 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Purchases, PURCHASES_ERROR_CODE } from "@revenuecat/purchases-capacitor";
+import type { PurchasesOffering, PurchasesPackage } from "@revenuecat/purchases-capacitor";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import type { PaywallPlanId } from "@/lib/paywall/planIds";
 
+/** Map paywall plan ids to RevenueCat's standard offering package slots. */
+const PLAN_TO_RC_PACKAGE_SLOT: Record<
+  PaywallPlanId,
+  keyof Pick<PurchasesOffering, "weekly" | "monthly" | "annual" | "lifetime">
+> = {
+  weekly: "weekly",
+  yearly: "annual",
+  lifetime: "lifetime",
+  monthly: "monthly"
+};
+
+/** Standard RC package identifiers (fallback if offering slot accessors are null). */
+const PLAN_TO_RC_PACKAGE_ID: Record<PaywallPlanId, string> = {
+  weekly: "$rc_weekly",
+  yearly: "$rc_annual",
+  lifetime: "$rc_lifetime",
+  monthly: "$rc_monthly"
+};
+
+/** Store product ids — last-resort match if package id lookup fails. */
 const PLAN_TO_PRODUCT_ID: Record<PaywallPlanId, string> = {
   weekly: "app.buffi.weekly",
   yearly: "app.buffi.yearly",
   lifetime: "app.buffi.lifetime",
-  monthly: "app.buffi.monthly",
+  monthly: "app.buffi.monthly"
 };
+
+function findPackageForPlan(offering: PurchasesOffering, plan: PaywallPlanId): PurchasesPackage | null {
+  const fromSlot = offering[PLAN_TO_RC_PACKAGE_SLOT[plan]];
+  if (fromSlot) return fromSlot;
+
+  const packageId = PLAN_TO_RC_PACKAGE_ID[plan];
+  const productId = PLAN_TO_PRODUCT_ID[plan];
+  return (
+    offering.availablePackages.find(
+      (p) => p.identifier === packageId || p.product.identifier === productId
+    ) ?? null
+  );
+}
 
 export function useNativePurchase() {
   const auth = useAuthOptional();
@@ -29,16 +63,12 @@ export function useNativePurchase() {
           await Purchases.logIn({ appUserID: uid });
         }
 
-        const productId = PLAN_TO_PRODUCT_ID[plan];
-
         const { current } = await Purchases.getOfferings();
         if (!current) {
           throw new Error("No offerings available. Check your RevenueCat dashboard configuration.");
         }
 
-        const pkg = current.availablePackages.find(
-          (p) => p.product.identifier === productId
-        );
+        const pkg = findPackageForPlan(current, plan);
         if (!pkg) {
           throw new Error(`Plan "${plan}" not found in current offering.`);
         }

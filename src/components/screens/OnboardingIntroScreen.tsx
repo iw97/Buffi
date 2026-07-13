@@ -51,7 +51,7 @@ export function OnboardingIntroScreen() {
         <div className="ob-step-label">Step 1 of 7</div>
         <p className="ob-desc" style={{ marginBottom: 28 }}>
           Most people have no idea what their clothes are actually made of — or
-          what they actually cost to make. Buffi changes that.
+          whether the price is actually worth it. Buffi changes that.
         </p>
 
         <h2 className="ob-title">

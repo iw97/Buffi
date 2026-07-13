@@ -349,18 +349,21 @@ export function ProfileScreen() {
                   {portalError}
                 </p>
               )}
-              <div className="manage-account-divider" aria-hidden />
-              <button
-                className="btn-delete-account-muted"
-                type="button"
-                disabled={deleteBusy || portalBusy}
-                onClick={() => {
-                  setDeleteError(null);
-                  setDeleteConfirmOpen(true);
-                }}
-              >
-                Delete account
-              </button>
+              <div className="danger-zone">
+                <div className="danger-zone-divider" aria-hidden />
+                <div className="danger-zone-label">Danger zone</div>
+                <button
+                  className="btn-delete-account-muted"
+                  type="button"
+                  disabled={deleteBusy || portalBusy}
+                  onClick={() => {
+                    setDeleteError(null);
+                    setDeleteConfirmOpen(true);
+                  }}
+                >
+                  Delete account
+                </button>
+              </div>
             </div>
           </>
         )}

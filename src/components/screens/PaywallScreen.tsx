@@ -42,7 +42,7 @@ export function PaywallScreen() {
         UNLOCK FULL ACCESS
       </h1>
       <p className="ob-desc" style={{ marginTop: 8 }}>
-        Upgrade to keep scanning with unlimited breakdowns.
+        Buffi is funded entirely by you, not by brands. Join shoppers who decided to take their power back.
       </p>
 
       <PaywallTierList

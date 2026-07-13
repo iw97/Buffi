@@ -4516,6 +4516,25 @@ input[type="range"]::-webkit-slider-thumb:hover {
   margin: 20px 0 16px;
 }
 
+.danger-zone {
+  margin-top: 20px;
+}
+
+.danger-zone-divider {
+  height: 1px;
+  background: rgba(232, 96, 74, 0.45);
+  margin-bottom: 12px;
+}
+
+.danger-zone-label {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: #e8604a;
+  margin-bottom: 10px;
+}
+
 .btn-delete-account-muted {
   display: block;
   width: 100%;

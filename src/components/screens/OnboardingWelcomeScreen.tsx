@@ -44,7 +44,7 @@ export function OnboardingWelcomeScreen() {
               cost to make, and whether the price is actually worth it.
             </p>
             <p>
-              No brand deals. No sponsored results. Just the receipt.
+              No brand deals or sponsored results. Just the receipt.
             </p>
           </div>
         </div>
