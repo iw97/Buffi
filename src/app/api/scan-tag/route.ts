@@ -5,6 +5,9 @@ import { FieldValue } from "firebase-admin/firestore";
 import { CLAUDE_PRIMARY_MODEL } from "@/lib/scan/models";
 import { isFreeScanLimitReached } from "@/lib/scan/freeScanLimit";
 
+/** Allow Vision OCR + Claude extraction without platform timeout. */
+export const maxDuration = 60;
+
 const VISION_URL = "https://vision.googleapis.com/v1/images:annotate";
 
 function readBearerToken(req: NextRequest): string | null {
