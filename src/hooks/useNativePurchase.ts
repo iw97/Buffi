@@ -2,7 +2,6 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Capacitor } from "@capacitor/core";
 import { Purchases, PURCHASES_ERROR_CODE } from "@revenuecat/purchases-capacitor";
 import type { PurchasesOffering, PurchasesPackage } from "@revenuecat/purchases-capacitor";
 import { useAuthOptional } from "@/contexts/AuthContext";
@@ -19,7 +18,7 @@ const PLAN_TO_RC_PACKAGE_SLOT: Record<
   monthly: "monthly"
 };
 
-/** Standard RC package identifiers. */
+/** Standard RC package identifiers (fallback if offering slot accessors are null). */
 const PLAN_TO_RC_PACKAGE_ID: Record<PaywallPlanId, string> = {
   weekly: "$rc_weekly",
   yearly: "$rc_annual",
@@ -27,7 +26,7 @@ const PLAN_TO_RC_PACKAGE_ID: Record<PaywallPlanId, string> = {
   monthly: "$rc_monthly"
 };
 
-/** App Store / Play product ids configured in RevenueCat. */
+/** Store product ids — last-resort match if package id lookup fails. */
 const PLAN_TO_PRODUCT_ID: Record<PaywallPlanId, string> = {
   weekly: "app.buffi.weekly",
   yearly: "app.buffi.yearly",
@@ -35,26 +34,17 @@ const PLAN_TO_PRODUCT_ID: Record<PaywallPlanId, string> = {
   monthly: "app.buffi.monthly"
 };
 
-/**
- * Resolve the RC package for a plan.
- * Prefer exact Store product id so we never purchase the wrong package
- * when offering convenience slots are misconfigured.
- */
 function findPackageForPlan(offering: PurchasesOffering, plan: PaywallPlanId): PurchasesPackage | null {
-  const productId = PLAN_TO_PRODUCT_ID[plan];
-  const packageId = PLAN_TO_RC_PACKAGE_ID[plan];
-  const slotKey = PLAN_TO_RC_PACKAGE_SLOT[plan];
-
-  const byProduct = offering.availablePackages.find((p) => p.product.identifier === productId);
-  if (byProduct) return byProduct;
-
-  const byPackageId = offering.availablePackages.find((p) => p.identifier === packageId);
-  if (byPackageId) return byPackageId;
-
-  const fromSlot = offering[slotKey];
+  const fromSlot = offering[PLAN_TO_RC_PACKAGE_SLOT[plan]];
   if (fromSlot) return fromSlot;
 
-  return null;
+  const packageId = PLAN_TO_RC_PACKAGE_ID[plan];
+  const productId = PLAN_TO_PRODUCT_ID[plan];
+  return (
+    offering.availablePackages.find(
+      (p) => p.identifier === packageId || p.product.identifier === productId
+    ) ?? null
+  );
 }
 
 export function useNativePurchase() {
@@ -68,16 +58,11 @@ export function useNativePurchase() {
       setPurchaseError(null);
       setPurchaseLoading(true);
       try {
-        if (!Capacitor.isNativePlatform()) {
-          throw new Error("In-app purchases are only available in the Buffi iOS app.");
-        }
-
         const uid = auth?.user?.uid;
         if (uid) {
           await Purchases.logIn({ appUserID: uid });
         }
 
-        const expectedProductId = PLAN_TO_PRODUCT_ID[plan];
         const { current } = await Purchases.getOfferings();
         if (!current) {
           throw new Error("No offerings available. Check your RevenueCat dashboard configuration.");
@@ -85,54 +70,10 @@ export function useNativePurchase() {
 
         const pkg = findPackageForPlan(current, plan);
         if (!pkg) {
-          const available = current.availablePackages
-            .map((p) => `${p.identifier}:${p.product.identifier}`)
-            .join(", ");
-          console.error("[useNativePurchase] package not found", { plan, available });
           throw new Error(`Plan "${plan}" not found in current offering.`);
         }
 
-        // Refuse mismatched slot packages for lifetime (non-consumables skip the sheet when already owned
-        // of the *wrong* product too — better to fail loudly than fake success).
-        if (plan === "lifetime" && pkg.product.identifier !== expectedProductId) {
-          console.error("[useNativePurchase] lifetime package product mismatch", {
-            expected: expectedProductId,
-            got: pkg.product.identifier,
-            packageId: pkg.identifier,
-            packageType: pkg.packageType
-          });
-          throw new Error(
-            `Lifetime package is linked to "${pkg.product.identifier}" instead of "${expectedProductId}". Check RevenueCat offerings.`
-          );
-        }
-
-        console.log("[useNativePurchase] purchasing", {
-          plan,
-          packageId: pkg.identifier,
-          productId: pkg.product.identifier,
-          packageType: pkg.packageType
-        });
-
-        const result = await Purchases.purchasePackage({ aPackage: pkg });
-
-        // Guard against stub/mock completions and wrong-product completions.
-        if (!result?.productIdentifier) {
-          throw new Error("Purchase did not return a product. Please try again.");
-        }
-        if (
-          result.productIdentifier !== expectedProductId &&
-          result.productIdentifier !== pkg.product.identifier
-        ) {
-          throw new Error(`Unexpected product purchased: ${result.productIdentifier}`);
-        }
-        if (!result.transaction?.transactionIdentifier) {
-          throw new Error("Purchase did not complete a store transaction. Please try again.");
-        }
-
-        console.log("[useNativePurchase] purchase ok", {
-          productIdentifier: result.productIdentifier,
-          transactionIdentifier: result.transaction.transactionIdentifier
-        });
+        await Purchases.purchasePackage({ aPackage: pkg });
 
         // Purchase confirmed client-side. The RC webhook will update Firestore
         // in the background; UpgradeSuccessScreen polls refreshProfile to catch it.
@@ -143,25 +84,13 @@ export function useNativePurchase() {
           // user tapped cancel — not an error
           return;
         }
-        if (err.code === PURCHASES_ERROR_CODE.PRODUCT_ALREADY_PURCHASED_ERROR) {
-          setPurchaseError("You already own this plan. Restoring access…");
-          try {
-            await Purchases.restorePurchases();
-            await auth?.refreshProfile?.();
-            router.push("/upgrade/success");
-          } catch (restoreErr) {
-            console.error("[useNativePurchase] restore failed", restoreErr);
-            setPurchaseError("You already own this plan. Pull to refresh or restart the app if Pro isn’t unlocked.");
-          }
-          return;
-        }
         console.error("[useNativePurchase]", e);
         setPurchaseError(err.message ?? "Purchase failed. Please try again.");
       } finally {
         setPurchaseLoading(false);
       }
     },
-    [auth, router]
+    [router]
   );
 
   // Call after purchase to force-sync the profile from Firestore
