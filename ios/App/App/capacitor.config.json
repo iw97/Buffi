@@ -19,6 +19,7 @@
 	"packageClassList": [
 		"InAppReviewPlugin",
 		"AppPlugin",
+		"CAPBrowserPlugin",
 		"GoogleAuth",
 		"PurchasesPlugin"
 	]

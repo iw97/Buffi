@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminFirestore } from "@/lib/firebase/admin";
+import { COLLECTIONS } from "@/lib/firebase/types";
 import { deleteUserAccountServer } from "@/lib/firebase/deleteUserAccountServer";
+import { sendAccountDeletedEmail } from "@/lib/email/sendAccountDeletedEmail";
 
 function readBearerToken(req: NextRequest): string | null {
   const raw = req.headers.get("authorization") ?? "";
@@ -31,7 +33,37 @@ export async function POST(req: NextRequest): Promise<NextResponse<{ ok?: boolea
   }
 
   try {
+    const userSnap = await db.collection(COLLECTIONS.USERS).doc(uid).get();
+    const profile = userSnap.data() ?? {};
+    let email =
+      typeof profile.email === "string" && profile.email.trim()
+        ? profile.email.trim()
+        : "";
+    if (!email) {
+      try {
+        const authUser = await adminAuth.getUser(uid);
+        email = authUser.email?.trim() || "(unknown)";
+      } catch {
+        email = "(unknown)";
+      }
+    }
+    const isPro = profile.isPro === true;
+    const stripeCustomerId =
+      typeof profile.stripeCustomerId === "string" && profile.stripeCustomerId.trim()
+        ? profile.stripeCustomerId.trim()
+        : "(none)";
+    const deletedAt = new Date().toISOString();
+
     await deleteUserAccountServer(db, adminAuth, uid);
+
+    void sendAccountDeletedEmail({
+      uid,
+      email,
+      isPro,
+      stripeCustomerId,
+      deletedAt
+    });
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("[delete-account] failed for", uid, e);

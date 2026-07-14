@@ -4490,6 +4490,41 @@ input[type="range"]::-webkit-slider-thumb:hover {
   padding: 0 28px 8px;
 }
 
+.manage-account-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.manage-account-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.manage-account-status--active {
+  color: var(--teal);
+}
+
+.manage-account-status--active .manage-account-status-dot {
+  background: var(--teal);
+  box-shadow: 0 0 0 3px rgba(82, 217, 208, 0.18);
+}
+
+.manage-account-status--inactive {
+  color: var(--text-dim);
+}
+
+.manage-account-status--inactive .manage-account-status-dot {
+  background: var(--text-dim);
+}
+
 .btn-manage-subscription {
   width: 100%;
   padding: 16px;
@@ -4512,6 +4547,15 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .btn-manage-subscription:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.manage-account-subtext {
+  margin: 10px 0 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  letter-spacing: 0.4px;
+  line-height: 1.45;
+  color: var(--text-dim);
 }
 
 .manage-account-no-sub {
@@ -4648,6 +4692,15 @@ input[type="range"]::-webkit-slider-thumb:hover {
   color: var(--red);
   font-size: 12px;
   line-height: 1.5;
+}
+
+.delete-account-sub-warning {
+  margin-top: 14px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0.2px;
+  color: var(--text-dim);
 }
 
 .delete-account-modal-actions {

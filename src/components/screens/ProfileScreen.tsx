@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Capacitor } from "@capacitor/core";
+import { Browser } from "@capacitor/browser";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { onboardingIntroPath } from "@/lib/auth/onboardingStatus";
 import { userHasEmailPasswordProvider } from "@/lib/auth/authProviders";
@@ -48,10 +50,19 @@ export function ProfileScreen() {
   };
 
   const openManageSubscription = async () => {
-    if (!user || portalBusy) return;
+    if (portalBusy) return;
     setPortalBusy(true);
     setPortalError(null);
     try {
+      if (Capacitor.isNativePlatform()) {
+        await Browser.open({
+          url: "https://apps.apple.com/account/subscriptions"
+        });
+        return;
+      }
+
+      // Web: Stripe customer portal when available
+      if (!user) return;
       const token = await user.getIdToken();
       const res = await fetch("/api/create-portal-session", {
         method: "POST",
@@ -63,7 +74,8 @@ export function ProfileScreen() {
       }
       window.location.href = data.url;
     } catch (e) {
-      setPortalError(e instanceof Error ? e.message : "Could not open billing portal");
+      setPortalError(e instanceof Error ? e.message : "Could not open subscription management");
+    } finally {
       setPortalBusy(false);
     }
   };
@@ -143,10 +155,6 @@ export function ProfileScreen() {
     ? MOCK_DISPLAY.completedScans
     : (profile?.completedScans ?? 0);
   const canChangePassword = !TESTING_ALWAYS_SHOW_LOGGED_IN && user && userHasEmailPasswordProvider(user);
-  const stripeCustomerId =
-    !TESTING_ALWAYS_SHOW_LOGGED_IN && typeof profile?.stripeCustomerId === "string"
-      ? profile.stripeCustomerId.trim()
-      : "";
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -332,18 +340,24 @@ export function ProfileScreen() {
           <>
             <div className="menu-section-label">Manage account</div>
             <div className="manage-account-block">
-              {stripeCustomerId ? (
-                <button
-                  className="btn-manage-subscription"
-                  type="button"
-                  disabled={portalBusy || deleteBusy}
-                  onClick={() => void openManageSubscription()}
-                >
-                  {portalBusy ? "Opening…" : "Manage subscription"}
-                </button>
-              ) : (
-                <p className="manage-account-no-sub">No active subscription</p>
-              )}
+              <div
+                className={`manage-account-status ${isPro ? "manage-account-status--active" : "manage-account-status--inactive"}`}
+              >
+                <span className="manage-account-status-dot" aria-hidden />
+                <span>{isPro ? "Active subscription" : "No active subscription"}</span>
+              </div>
+
+              <button
+                className="btn-manage-subscription"
+                type="button"
+                disabled={portalBusy || deleteBusy}
+                onClick={() => void openManageSubscription()}
+              >
+                {portalBusy ? "Opening…" : "Manage subscription"}
+              </button>
+              <p className="manage-account-subtext">
+                Change or cancel your plan in your Apple ID settings
+              </p>
               {portalError && (
                 <p className="delete-account-error" role="alert">
                   {portalError}
@@ -395,6 +409,11 @@ export function ProfileScreen() {
           </h2>
           <p className="pw-modal-sub" style={{ marginTop: 10 }}>
             This will permanently delete your account and all saved items. This cannot be undone.
+          </p>
+          <p className="delete-account-sub-warning">
+            If you have an active Buffi subscription, cancel it in Settings → Apple ID →
+            Subscriptions to avoid future charges. Deleting your account does not automatically
+            cancel your subscription.
           </p>
           {deleteError && (
             <p className="delete-account-error" role="alert">
