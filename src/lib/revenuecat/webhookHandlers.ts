@@ -84,6 +84,7 @@ export async function dispatchRCEvent(event: RCEvent): Promise<void> {
     case "RENEWAL":
     case "NON_RENEWING_PURCHASE":
     case "PRODUCT_CHANGE":
+    case "UNCANCELLATION":
       await applyRCPurchaseEvent(event);
       return;
 
