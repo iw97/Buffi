@@ -145,6 +145,14 @@ export function ProfileScreen() {
   const initial = TESTING_ALWAYS_SHOW_LOGGED_IN ? MOCK_DISPLAY.initial : displayName.charAt(0).toUpperCase();
   const email = TESTING_ALWAYS_SHOW_LOGGED_IN ? MOCK_DISPLAY.email : (user!.email ?? profile?.email ?? "");
   const isPro = TESTING_ALWAYS_SHOW_LOGGED_IN ? true : (profile?.isPro ?? false);
+  const subscriptionStatus = TESTING_ALWAYS_SHOW_LOGGED_IN
+    ? "active"
+    : (profile?.subscriptionStatus ?? null);
+  const isLifetime = subscriptionStatus === "lifetime";
+  /** iOS only — pro weekly/yearly subscribers can upgrade to lifetime via Apple IAP. */
+  const showLifetimeUpgrade =
+    Capacitor.isNativePlatform() && isPro && !isLifetime;
+  const showLifetimeOwned = Capacitor.isNativePlatform() && isPro && isLifetime;
   const trapsAvoided = TESTING_ALWAYS_SHOW_LOGGED_IN
     ? MOCK_DISPLAY.trapsAvoided
     : (profile?.trapsAvoided ?? 0);
@@ -358,6 +366,22 @@ export function ProfileScreen() {
               <p className="manage-account-subtext">
                 Change or cancel your plan in your Apple ID settings
               </p>
+              {showLifetimeUpgrade && (
+                <div className="manage-account-lifetime">
+                  <p className="manage-account-lifetime-prompt">Want lifetime access?</p>
+                  <button
+                    type="button"
+                    className="manage-account-lifetime-link"
+                    disabled={deleteBusy || portalBusy}
+                    onClick={() => router.push("/upgrade?lifetimeUpgrade=1")}
+                  >
+                    Upgrade once, own it forever →
+                  </button>
+                </div>
+              )}
+              {showLifetimeOwned && (
+                <p className="manage-account-lifetime-owned">You have lifetime access.</p>
+              )}
               {portalError && (
                 <p className="delete-account-error" role="alert">
                   {portalError}

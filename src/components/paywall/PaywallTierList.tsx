@@ -59,14 +59,22 @@ type Props = {
   /** Page uses full-width tier cards; modal uses compact spacing inside premium sheet */
   variant?: "page" | "modal";
   disabled?: boolean;
+  /** When set, only show these plan cards (e.g. lifetime upgrade for existing subscribers). */
+  onlyPlans?: PaywallPlanId[];
 };
 
-export function PaywallTierList({ onSelectPlan, variant = "page", disabled = false }: Props) {
+export function PaywallTierList({
+  onSelectPlan,
+  variant = "page",
+  disabled = false,
+  onlyPlans
+}: Props) {
   const rootClass = variant === "modal" ? "paywall-tiers paywall-tiers--modal" : "paywall-tiers";
+  const tiers = onlyPlans ? TIERS.filter((t) => onlyPlans.includes(t.id)) : TIERS;
 
   return (
     <div className={rootClass}>
-      {TIERS.map((tier) => (
+      {tiers.map((tier) => (
         <button
           key={tier.id}
           type="button"
