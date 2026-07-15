@@ -5,10 +5,13 @@ import { COLLECTIONS } from "@/lib/firebase/types";
 // RevenueCat webhook event — only the fields we use
 export interface RCEvent {
   type: string;
-  app_user_id: string;
-  product_id: string;
-  expiration_at_ms: number | null;
-  environment: "PRODUCTION" | "SANDBOX";
+  app_user_id?: string;
+  product_id?: string;
+  expiration_at_ms?: number | null;
+  environment?: "PRODUCTION" | "SANDBOX";
+  /** TRANSFER events use these instead of app_user_id */
+  transferred_from?: string[];
+  transferred_to?: string[];
 }
 
 export interface RCWebhookPayload {
@@ -25,7 +28,7 @@ async function mergeUserAdmin(uid: string, patch: Record<string, unknown>): Prom
   );
 }
 
-function isLifetimeProduct(productId: string): boolean {
+function isLifetimeProduct(productId: string | undefined): boolean {
   return productId === "app.buffi.lifetime";
 }
 
@@ -59,6 +62,22 @@ export async function applyRCExpirationEvent(event: RCEvent): Promise<void> {
   });
 }
 
+async function applyRCTransferEvent(event: RCEvent): Promise<void> {
+  const toIds = event.transferred_to ?? [];
+  // Prefer the Firebase UID (not RevenueCat anonymous IDs like $RCAnonymousID:…)
+  const realUid = toIds.find((id) => typeof id === "string" && !id.startsWith("$RC"));
+  if (!realUid) {
+    console.warn("[rc webhook] TRANSFER has no non-anonymous transferred_to id", toIds);
+    return;
+  }
+
+  await mergeUserAdmin(realUid, {
+    isPro: true,
+    subscriptionStatus: "active",
+  });
+  console.log("[rc webhook] TRANSFER applied isPro to:", realUid);
+}
+
 export async function dispatchRCEvent(event: RCEvent): Promise<void> {
   switch (event.type) {
     case "INITIAL_PURCHASE":
@@ -66,6 +85,10 @@ export async function dispatchRCEvent(event: RCEvent): Promise<void> {
     case "NON_RENEWING_PURCHASE":
     case "PRODUCT_CHANGE":
       await applyRCPurchaseEvent(event);
+      return;
+
+    case "TRANSFER":
+      await applyRCTransferEvent(event);
       return;
 
     case "EXPIRATION":
@@ -76,7 +99,6 @@ export async function dispatchRCEvent(event: RCEvent): Promise<void> {
     // don't revoke isPro until EXPIRATION fires.
     case "CANCELLATION":
     case "BILLING_ISSUE":
-    case "TRANSFER":
     case "SUBSCRIBER_ALIAS":
     default:
       return;

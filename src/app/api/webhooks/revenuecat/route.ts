@@ -26,12 +26,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const event = payload?.event;
-  if (!event?.type || !event?.app_user_id) {
+  if (!event?.type || (!event?.app_user_id && event?.type !== "TRANSFER")) {
     console.error("[rc webhook] malformed payload", JSON.stringify(payload));
     return NextResponse.json({ error: "Malformed event" }, { status: 400 });
   }
 
-  console.log("[rc webhook]", event.type, event.app_user_id, event.product_id, event.environment);
+  console.log(
+    "[rc webhook]",
+    event.type,
+    event.app_user_id ?? event.transferred_to?.join(",") ?? "(no user)",
+    event.product_id ?? "(no product)",
+    event.environment
+  );
 
   try {
     await dispatchRCEvent(event);
